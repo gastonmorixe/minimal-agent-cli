@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# generated output
+dist/
+coverage/
+tmp/
+*.log
+
+# private / local-only
+private/
+research/
+work/
+PROGRESS.md
+.swarm/
+
+# editor / OS
+.DS_Store
+*.swp
+*.swo

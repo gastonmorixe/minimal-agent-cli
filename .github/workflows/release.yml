@@ -1,0 +1,65 @@
+name: Release
+
+# Stable proprietary releases only. The pushed v* tag must match package.json.
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        env:
+          HUSKY: "0"
+        run: bun install --frozen-lockfile
+      - name: Run check
+        run: bun run check
+      - name: Validate tag matches package.json
+        id: meta
+        run: |
+          set -euo pipefail
+          VERSION="$(jq -r '.version' package.json)"
+          TAG="${GITHUB_REF#refs/tags/}"
+          LABEL="${TAG#v}"
+          if [[ -z "${VERSION}" || "${VERSION}" == "null" ]]; then
+            echo "could not read version from package.json" >&2
+            exit 1
+          fi
+          if [[ "${LABEL}" == *"-nightly."* ]]; then
+            echo "minimal-agent-cli does not publish nightlies; refusing ${TAG}" >&2
+            exit 1
+          fi
+          if [[ "${LABEL}" != "${VERSION}" ]]; then
+            echo "stable tag ${TAG} does not match package.json version ${VERSION}" >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "name=minimal-agent-cli ${TAG}" >> "${GITHUB_OUTPUT}"
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          generate_release_notes: true
+          prerelease: false
