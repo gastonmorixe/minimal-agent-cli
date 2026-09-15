@@ -6,7 +6,7 @@ This package is the Program 3A standalone scaffold from MA-394837. It owns comma
 
 ## Development
 
-Requires Bun 1.3.14 or newer. The product itself runs on Bun. Architecture checks additionally require Node 22.18.0 or newer because they execute TypeScript source with Node's built-in type stripping. Set `NODE=/path/to/node` to select a compatible executable.
+Requires Bun 1.4.2 or newer. The product itself runs on Bun. Architecture checks additionally require Node 22.18.0 or newer because they execute TypeScript source with Node's built-in type stripping. Set `NODE=/path/to/node` to select a compatible executable.
 
 The architecture checker also imports the explicitly unstable `typescript/unstable/ast` and `typescript/unstable/sync` surfaces. TypeScript is therefore pinned exactly to 7.0.2. Updating TypeScript or the architecture-check Node baseline may require coordinated checker changes.
 
