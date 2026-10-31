@@ -1,0 +1,176 @@
+import { afterEach, beforeEach, describe, expect, it } from "bun:test"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import {
+  defaultAuthStore,
+  resetDefaultAuthStoreForTests,
+} from "@minimal-agent/core/host/auth-store"
+import { clearModelRegistry, clearProviderRegistry } from "@minimal-agent/core/host/model-registry"
+import {
+  clearProviderPlugins,
+  registerProviderPlugin,
+} from "@minimal-agent/core/host/provider-plugin"
+import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { registerTestProvider } from "@minimal-agent/core/testing/provider-fixture"
+
+import { runListModelsLiveCommand } from "./list-models-live.ts"
+
+describe("list-models-live", () => {
+  // Never touch the real ~/.minimal-agent/auth.jsonc.
+  let authDir = ""
+  const savedAuthFile = process.env.MINIMAL_AGENT_AUTH_FILE
+  beforeEach(() => {
+    authDir = mkdtempSync(join(tmpdir(), "ma-list-auth-"))
+    process.env.MINIMAL_AGENT_AUTH_FILE = join(authDir, "auth.jsonc")
+    resetDefaultAuthStoreForTests()
+  })
+
+  afterEach(() => {
+    if (savedAuthFile === undefined) delete process.env.MINIMAL_AGENT_AUTH_FILE
+    else process.env.MINIMAL_AGENT_AUTH_FILE = savedAuthFile
+    rmSync(authDir, { recursive: true, force: true })
+    clearModelRegistry()
+    clearProviderRegistry()
+    clearProviderPlugins()
+    resetDefaultAuthStoreForTests()
+  })
+
+  it("merges live rows and never calls foreign hooks when filtered", async () => {
+    let otherHookCalls = 0
+    let targetHookCalls = 0
+    registerTestProvider({
+      id: "target",
+      displayName: "Target",
+      models: [{ id: "target-auto", displayName: "Auto" }],
+    })
+    registerProviderPlugin({
+      id: "other",
+      displayName: "Other",
+      shortCode: "ot",
+      register() {},
+      publicModelList: true,
+      async listLiveModels() {
+        otherHookCalls++
+        throw new Error("Models API 401: OAuth access token has been revoked.")
+      },
+    })
+    registerProviderPlugin({
+      id: "target",
+      displayName: "Target",
+      shortCode: "tgt",
+      register() {},
+      publicModelList: true,
+      async listLiveModels() {
+        targetHookCalls++
+        return [{ id: "target-live", displayName: "Live Only", createdAt: "2026-01-01" }]
+      },
+    })
+
+    let out = ""
+    let err = ""
+    await runListModelsLiveCommand("target", {
+      output: { write: (s) => (out += s) },
+      error: { write: (s) => (err += s) },
+    })
+    const stripped = stripAnsi(out + err)
+
+    expect(targetHookCalls).toBe(1)
+    expect(otherHookCalls).toBe(0)
+    expect(stripped).toContain("target-auto")
+    expect(stripped).toContain("target-live")
+    expect(stripped).not.toContain("live model list unavailable")
+    expect(stripped).not.toContain("revoked")
+  })
+
+  it("lists a publicModelList provider without a stored credential", async () => {
+    let sawAuthKind: string | undefined
+    registerProviderPlugin({
+      id: "pub",
+      displayName: "Public Gateway",
+      shortCode: "pub",
+      register() {},
+      publicModelList: true,
+      async listLiveModels(auth) {
+        sawAuthKind = auth.kind
+        return [{ id: "pub-live-model", displayName: "Pub Live", createdAt: "2026-02-02" }]
+      },
+    })
+
+    let out = ""
+    await runListModelsLiveCommand("pub", { output: { write: (s) => (out += s) } })
+    const stripped = stripAnsi(out)
+
+    expect(sawAuthKind).toBe("custom")
+    expect(stripped).toContain("pub-live-model")
+    expect(stripped).toContain("Pub Live")
+    expect(stripped).toContain("1 models available")
+  })
+
+  it("skips auth-required live catalogs without a credential", async () => {
+    let hookCalled = false
+    registerProviderPlugin({
+      id: "priv",
+      displayName: "Private Provider",
+      shortCode: "prv",
+      register() {},
+      async listLiveModels() {
+        hookCalled = true
+        return [{ id: "priv-live-model" }]
+      },
+    })
+
+    let out = ""
+    await runListModelsLiveCommand("priv", { output: { write: (s) => (out += s) } })
+    const stripped = stripAnsi(out)
+
+    expect(hookCalled).toBe(false)
+    expect(stripped).not.toContain("priv-live-model")
+    expect(stripped).toContain('no models registered for provider "priv"')
+  })
+
+  it("enriches live rows from matching static registry entries only", async () => {
+    registerTestProvider({
+      id: "live",
+      displayName: "Live",
+      models: [
+        {
+          id: "live-model",
+          displayName: "Static Name",
+          capabilities: { contextWindow: 1_050_000, maxOutputTokens: 128_000 },
+        },
+      ],
+    })
+    registerProviderPlugin({
+      id: "live",
+      displayName: "Live",
+      shortCode: "li",
+      register() {},
+      apiKeyAuth: {
+        serviceId: "live",
+        displayName: "Live",
+        buildCredential: (key) => ({
+          serviceId: "live",
+          displayName: "Live",
+          secrets: { apiKey: key },
+        }),
+        readApiKey: (secrets) => (typeof secrets.apiKey === "string" ? secrets.apiKey : null),
+      },
+      async listLiveModels() {
+        return [{ id: "live-model", displayName: "Live Name", createdAt: "2026-01-01" }]
+      },
+    })
+    defaultAuthStore().set("live", "Live", { apiKey: "dummy" })
+
+    let out = ""
+    await runListModelsLiveCommand(undefined, {
+      columns: 220,
+      output: { write: (s) => (out += s) },
+    })
+    const stripped = stripAnsi(out)
+    expect(stripped).toContain("live-model")
+    expect(stripped).toContain("Live Name")
+    expect(stripped).toContain("ctx 1.05M")
+    expect(stripped).toContain("cutoff:2026-01-01")
+  })
+})
