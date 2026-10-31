@@ -22,11 +22,15 @@ import {
   parseCompactArgs,
 } from "@minimal-agent/core/host/compact-contract"
 import {
+  GLOBAL_STATUS_BUS,
+  type StatusBus,
+  type StatusHandle,
+} from "@minimal-agent/core/host/status-bus"
+import {
   type CommandContext,
   type CommandNoticeBlock,
   type ResolvedCommand,
 } from "@minimal-agent/core/plugin-api/types/plugin"
-import { GLOBAL_STATUS_BUS, type StatusBus, type StatusHandle } from "../bus/status.ts"
 
 /** Minimal agent surface the host command needs. */
 export interface CompactAgentLike {

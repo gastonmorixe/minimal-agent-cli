@@ -1,6 +1,5 @@
 /**
- * Host-side implementation of {@link AskUserPort}'s `ask` method for the
- * live-area REPL.
+ * Host-side implementation of {@link AskUserFn} for the live-area REPL.
  *
  * The agent's preflight pipeline produces a {@link PreflightIssue} and
  * hands it to a host-provided `askUser` callback. This module builds
@@ -30,7 +29,7 @@
  */
 
 import type { Hooks } from "@minimal-agent/core/host-kit/hooks"
-import type { AskUserPort } from "@minimal-agent/core/sdk/ports"
+import type { PreflightIssue } from "@minimal-agent/core/sdk/provider"
 
 import type { EditorKeyPayload } from "./editor-controller.ts"
 import { ChoiceModal } from "./ui/choice-modal.ts"
@@ -87,14 +86,23 @@ const MIN_WIDTH = 40
 const FALLBACK_WIDTH = 80
 
 /**
- * Build an {@link AskUserPort}'s `ask` method bound to a specific editor +
- * hooks bus. The returned function may be called many times in a session :
- * each call opens its OWN modal, registers its OWN listener, and tears down
+ * The host's `askUser` callback, as `AgentCore.run()` and the REPL's
+ * `askUser` options take it. Same shape as core's internal preflight
+ * `AskUserFn`. It takes a {@link PreflightIssue}, not the SDK port's
+ * `AskUserRequest`: the preflight pipeline passes no `askId`, so the
+ * port's `ask` type does not fit here.
+ */
+export type AskUserFn = (issue: PreflightIssue) => Promise<string | null>
+
+/**
+ * Build an {@link AskUserFn} bound to a specific editor + hooks bus.
+ * The returned function may be called many times in a session : each
+ * call opens its OWN modal, registers its OWN listener, and tears down
  * before resolving. Concurrent calls are not supported (the second
  * call's modal would paint over the first); the agent loop is
  * single-flight so this isn't a real-world concern.
  */
-export function createAskUserHost(opts: CreateAskUserOpts): AskUserPort["ask"] {
+export function createAskUserHost(opts: CreateAskUserOpts): AskUserFn {
   const { editor, hooks } = opts
   const out = opts.output ?? (process.stdout as AskUserHostOutput)
   const cap = opts.maxWidth ?? Number.POSITIVE_INFINITY

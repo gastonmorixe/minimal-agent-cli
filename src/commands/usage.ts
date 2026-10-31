@@ -9,10 +9,9 @@
  *   - One-shot: an explicit period arg (`usage month`) OR a non-TTY stdout
  *     (piped / redirected) prints that period (default: all time) and exits.
  *
- * The data engine is `usage-stats.ts`; the renderer is `usage-render` (now
- * the CLI's `terminal-kit`; pending S34 this host code reads it through the
- * temporary `src/internal/terminal-render` bridge), also used by the
- * `/usage` live-area overlay.
+ * The data engine is `usage-stats.ts`; the renderer is the CLI's
+ * `terminal-kit/usage-render.ts`, also used by the `/usage` live-area
+ * overlay.
  *
  * @module commands/usage
  */
@@ -27,7 +26,7 @@ import {
   type UsagePeriod,
 } from "@minimal-agent/core/host/usage-stats"
 import { ansiStyle as c } from "@minimal-agent/core/plugin-api/utils/ansi"
-import { renderUsageReport } from "../internal/terminal-render/usage-render.ts"
+import { renderUsageReport } from "../terminal-kit/usage-render.ts"
 import { type CommandOutput, writeCommandRows } from "../ui/command-output.ts"
 
 export interface RunUsageOptions {
