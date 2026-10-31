@@ -25,10 +25,11 @@ terminal client is being moved out of `minimal-agent-core` into this repo
   `git+ssh` URL and pinned to a commit. `core-public-contract.ts` is now `exported`: every
   contract subpath, including `./plugin-api`, resolves from the installed
   package. `core-dependency.test.ts` enforces the pin and smoke-tests the
-  public subpaths. CI and release rewrite GitHub URLs to the `SUBMODULES_PAT`
-  token before `bun install`, because core is private. The `git+ssh` form
-  matters: Bun fetches `git+https` GitHub URLs as API tarballs, which ignore
-  git credentials.
+  public subpaths. Core is private, so CI and release clone it with a
+  read-only deploy key on minimal-agent-core (secret `CORE_DEPLOY_KEY`, no
+  personal access token), with GitHub's SSH host key pinned. The `git+ssh`
+  form matters: Bun fetches `git+https` GitHub URLs as API tarballs, which
+  ignore git credentials.
 
 - 2026-08-07 (commit `1309859`): Standalone scaffold. Bun package with
   package/tooling/CI/release workflows, commit hooks, injected I/O smoke tests,
