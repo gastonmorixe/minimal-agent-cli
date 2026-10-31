@@ -17,7 +17,9 @@
     "bun": ">=1.4.2",
     "node": ">=22.18.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@minimal-agent/core": "git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#ce7f8024c67e7cb1396f93ebe042dc6a293352e4"
+  },
   "scripts": {
     "start": "bun run src/index.ts",
     "test": "bun run architecture:preflight && bun test",

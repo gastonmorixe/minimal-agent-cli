@@ -16,7 +16,7 @@ bun run check
 bun run start -- --help
 ```
 
-The package has zero runtime dependencies. It must consume only declared public package exports and must never import sibling repositories or `minimal-agent-core/src/**`.
+The package has one runtime dependency, `@minimal-agent/core`, installed from git and pinned to a commit or tag. It must consume only declared public package exports and must never import sibling repositories or `minimal-agent-core/src/**`.
 
 Current scaffold behavior:
 
