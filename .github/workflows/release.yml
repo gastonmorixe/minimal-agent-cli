@@ -29,6 +29,18 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
+      - name: Allow reading private core
+        env:
+          TOKEN: ${{ secrets.SUBMODULES_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN}" ]; then
+            echo "::error::Set the SUBMODULES_PAT secret (read access to minimal-agent-core). bun install needs it for the @minimal-agent/core git dependency."
+            exit 1
+          fi
+          # Bun may fetch a GitHub dependency as a tarball or with git. Cover both.
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+          echo "GITHUB_TOKEN=${TOKEN}" >> "${GITHUB_ENV}"
       - name: Install dependencies
         env:
           HUSKY: "0"

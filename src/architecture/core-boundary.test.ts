@@ -147,12 +147,12 @@ describe("CLI core architecture boundary", () => {
     expect(result.output.match(/legacy-transport-contract/g)).toHaveLength(1)
   })
 
-  test("permits planned public core subpaths and plugin API", async () => {
+  test("permits public core subpaths and plugin API", async () => {
     const result = await inspect(`
       import type { AgentEvent, EventSink } from "@minimal-agent/core/sdk/events"
       import type { LifecyclePort } from "@minimal-agent/core/sdk/lifecycle"
       import type { SessionPersistence } from "@minimal-agent/core/sdk/ports"
-      import type { Plugin } from "@minimal-agent/plugin-api"
+      import type { Plugin } from "@minimal-agent/core/plugin-api"
     `)
     expect(result).toEqual({ exitCode: 0, output: "" })
   })
@@ -227,13 +227,11 @@ describe("CLI core architecture boundary", () => {
     expect({ exitCode, stderr }).toEqual({ exitCode: 0, stderr: "" })
   })
 
-  test("publishes the planned machine-readable contract without invented names", () => {
-    expect(CORE_PUBLIC_CONTRACT.status).toBe("planned-not-exported")
-    expect(CORE_PUBLIC_CONTRACT.resolvableFromCurrentCorePackage).toBeFalse()
-    expect(CORE_PUBLIC_CONTRACT.packages).toEqual([
-      "@minimal-agent/core",
-      "@minimal-agent/plugin-api",
-    ])
+  test("publishes the exported machine-readable contract without invented names", () => {
+    expect(CORE_PUBLIC_CONTRACT.status).toBe("exported")
+    expect(CORE_PUBLIC_CONTRACT.resolvableFromCurrentCorePackage).toBeTrue()
+    expect(CORE_PUBLIC_CONTRACT.packages).toEqual(["@minimal-agent/core"])
+    expect(CORE_PUBLIC_CONTRACT.coreSubpaths).toContain("./plugin-api")
     expect(CORE_PUBLIC_CONTRACT.events).toEqual(["AgentEvent", "EventSink"])
     expect(CORE_PUBLIC_CONTRACT.ports).toContain("SessionPersistence")
     expect(CORE_PUBLIC_CONTRACT.engine).toEqual(["AgentCore"])

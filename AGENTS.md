@@ -6,7 +6,7 @@
 
 - CLI-owned concerns: argument parsing, stdout/stderr projection, terminal UI, interactive input, local startup orchestration, plugin root discovery, and process exit behavior.
 - Core-owned concerns: agent loop, canonical model/provider contracts, durable session records and repair, auth/network implementations, and SDK ports.
-- Shared contracts belong in published package exports, normally `@minimal-agent/plugin-api` or a future explicit `@minimal-agent/core/*` public subpath.
+- Shared contracts belong in published package exports: the `@minimal-agent/core/*` subpaths listed in `src/architecture/core-public-contract.ts`. The plugin contract is `@minimal-agent/core/plugin-api/*`.
 
 ## Boundary rule
 
@@ -16,7 +16,9 @@ Only consume declared public package exports. In particular, do not expose or im
 
 ## Dependencies
 
-Runtime dependencies stay empty by policy. Use Bun's standard library and local TypeScript. Add a dependency only with explicit product approval and a matching test.
+Runtime dependencies stay empty by policy, with one approved exception: `@minimal-agent/core`. Use Bun's standard library and local TypeScript. Add any other dependency only with explicit product approval and a matching test.
+
+`@minimal-agent/core` installs from git and is pinned to a full commit SHA or a release tag, never a branch. `src/architecture/core-dependency.test.ts` enforces the pin and proves every contract subpath resolves. To bump core, change the SHA or tag in `package.json` and run `bun install`. For live development against a local core checkout, use the umbrella `bun run link:dev` (and `bun run link:reset` to return to the pin). All repos are private, so CI configures git with the `SUBMODULES_PAT` secret before `bun install`.
 
 ## Quality gate
 

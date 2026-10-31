@@ -1,15 +1,22 @@
 /**
- * Target identifiers for Program 3B design and import ratchets.
+ * The core contract the CLI may consume.
  *
- * These are not resolvable package exports yet. The current core package is
- * still named `minimal-agent` and has no `exports` map. Production CLI code
- * must not import these subpaths until core publishes the matching contract.
+ * `@minimal-agent/core` publishes these subpaths through its package
+ * `exports` map. The CLI installs core from git (see `package.json`) and
+ * imports only these subpaths. The plugin contract lives under
+ * `./plugin-api` and its `./plugin-api/*` subpaths.
  */
 export const CORE_PUBLIC_CONTRACT = {
-  status: "planned-not-exported",
-  resolvableFromCurrentCorePackage: false,
-  packages: ["@minimal-agent/core", "@minimal-agent/plugin-api"],
-  coreSubpaths: ["./sdk/events", "./sdk/lifecycle", "./sdk/ports", "./sdk/agent-core"],
+  status: "exported",
+  resolvableFromCurrentCorePackage: true,
+  packages: ["@minimal-agent/core"],
+  coreSubpaths: [
+    "./sdk/events",
+    "./sdk/lifecycle",
+    "./sdk/ports",
+    "./sdk/agent-core",
+    "./plugin-api",
+  ],
   events: ["AgentEvent", "EventSink"],
   lifecycle: ["LifecyclePort", "PolicyDecision", "NOOP_LIFECYCLE"],
   ports: [
