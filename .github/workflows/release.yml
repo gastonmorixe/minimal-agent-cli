@@ -35,12 +35,16 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TOKEN}" ]; then
-            echo "::error::Set the SUBMODULES_PAT secret (read access to minimal-agent-core). bun install needs it for the @minimal-agent/core git dependency."
+            echo "::error::Set the SUBMODULES_PAT secret (read access to minimal-agent-core). bun install needs it to clone the @minimal-agent/core git dependency."
             exit 1
           fi
-          # Bun may fetch a GitHub dependency as a tarball or with git. Cover both.
-          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
-          echo "GITHUB_TOKEN=${TOKEN}" >> "${GITHUB_ENV}"
+          # Bun clones the git+ssh core URL with git, HTTPS first as
+          # https://git@github.com/..., then SSH. Rewrite every form to the token.
+          base="https://x-access-token:${TOKEN}@github.com/"
+          git config --global url."${base}".insteadOf "https://github.com/"
+          git config --global --add url."${base}".insteadOf "https://git@github.com/"
+          git config --global --add url."${base}".insteadOf "ssh://git@github.com/"
+          git config --global --add url."${base}".insteadOf "git@github.com:"
       - name: Install dependencies
         env:
           HUSKY: "0"

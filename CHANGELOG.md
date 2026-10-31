@@ -21,12 +21,14 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
-- 2026-10-31: Runtime dependency on `@minimal-agent/core`, installed from git
-  and pinned to a commit. `core-public-contract.ts` is now `exported`: every
+- 2026-10-31: Runtime dependency on `@minimal-agent/core`, installed from a
+  `git+ssh` URL and pinned to a commit. `core-public-contract.ts` is now `exported`: every
   contract subpath, including `./plugin-api`, resolves from the installed
   package. `core-dependency.test.ts` enforces the pin and smoke-tests the
-  public subpaths. CI and release configure git with `SUBMODULES_PAT` before
-  `bun install`, because core is private.
+  public subpaths. CI and release rewrite GitHub URLs to the `SUBMODULES_PAT`
+  token before `bun install`, because core is private. The `git+ssh` form
+  matters: Bun fetches `git+https` GitHub URLs as API tarballs, which ignore
+  git credentials.
 
 - 2026-08-07 (commit `1309859`): Standalone scaffold. Bun package with
   package/tooling/CI/release workflows, commit hooks, injected I/O smoke tests,

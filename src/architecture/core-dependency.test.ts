@@ -12,9 +12,16 @@ import { CORE_PUBLIC_CONTRACT } from "./core-public-contract.ts"
 
 const REPO_ROOT = join(import.meta.dir, "..", "..")
 
-/** A git URL pinned to a full commit SHA or a release tag, never a branch. */
+/**
+ * A git URL pinned to a full commit SHA or a release tag, never a branch.
+ *
+ * The URL must be `git+ssh`. Bun turns a `git+https://github.com/...` URL into
+ * a GitHub API tarball download that ignores git credentials, so a private
+ * core fails to install in CI. For `git+ssh` Bun runs `git clone` (HTTPS first,
+ * then SSH), which honors the credentials CI configures.
+ */
 const PINNED_CORE_URL =
-  /^git\+https:\/\/github\.com\/gastonmorixe\/minimal-agent-core\.git#(?:[0-9a-f]{40}|v\d+\.\d+\.\d+)$/u
+  /^git\+ssh:\/\/git@github\.com\/gastonmorixe\/minimal-agent-core\.git#(?:[0-9a-f]{40}|v\d+\.\d+\.\d+)$/u
 
 describe("core dependency", () => {
   test("is the only runtime dependency and is pinned", () => {
