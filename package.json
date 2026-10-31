@@ -18,11 +18,12 @@
     "node": ">=22.18.0"
   },
   "dependencies": {
-    "@minimal-agent/core": "git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#363df712274de4b51623082500dff89791619a5a"
+    "@minimal-agent/core": "git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#89e29cf3d70fdcb70431dde7dcd6cea74ce2f040"
   },
   "scripts": {
     "start": "bun run src/index.ts",
     "test": "bun run architecture:preflight && bun test",
+    "test:e2e": "E2E=1 bun test",
     "architecture:preflight": "bun run src/architecture/node-preflight.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",

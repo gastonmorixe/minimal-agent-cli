@@ -1,0 +1,18 @@
+# `bun test` scans from the project root by default, which would descend into
+# gitignored, vendored trees (research clones under private/, scratch dirs)
+# that ship their own test suites and dependencies. Those are not our code and
+# must never run in our gate. Exclude them so `bun test` (and the `check`
+# pipeline) only sees first-party source under src/.
+[test]
+# No test may end the test process (a real process.exit would stop the run
+# early with that exit code). See src/test-utils/guard-process-exit.ts.
+preload = ["./src/test-utils/guard-process-exit.ts"]
+pathIgnorePatterns = [
+  "**/node_modules/**",
+  "private/**",
+  "research/**",
+  "work/**",
+  "docs/internal/**",
+  ".swarm/**",
+  "tmp/**",
+]
