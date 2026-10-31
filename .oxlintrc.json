@@ -27,6 +27,7 @@
     "typescript/no-unnecessary-boolean-literal-compare": "off",
     "no-await-in-loop": "off",
     "no-control-regex": "off",
+    "no-underscore-dangle": "off",
     "tsdoc/syntax": "error",
     "jsdoc-js/require-jsdoc": [
       "error",
