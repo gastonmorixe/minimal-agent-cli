@@ -21,6 +21,16 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-10-31: `src/architecture/flag-ownership.test.ts` (spec S26). No flag
+  name is defined both in core config and in the CLI flag specs. Core's
+  migration manifest classifies both sides: core config is the installed
+  core's `src/config/` (plus files the manifest keeps there), and the CLI
+  flag specs are this repo's `src/` plus the installed core files the
+  manifest sends to the CLI. Core files are read through the installed
+  `@minimal-agent/core` package, so the check holds after the group move.
+  Core is pinned to main `57181d5`, which splits the system-prompt override
+  keys (core config) from their CLI flags.
+
 - 2026-10-31: Runtime dependency on `@minimal-agent/core`, installed from a
   `git+ssh` URL and pinned to a commit. `core-public-contract.ts` is now `exported`: every
   contract subpath, including `./plugin-api`, resolves from the installed
