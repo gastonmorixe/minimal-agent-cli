@@ -22,7 +22,9 @@
   },
   "rules": {
     "typescript/no-floating-promises": "error",
+    "typescript/no-unnecessary-type-assertion": "off",
     "no-await-in-loop": "off",
+    "no-control-regex": "off",
     "tsdoc/syntax": "error",
     "jsdoc-js/require-jsdoc": [
       "error",
