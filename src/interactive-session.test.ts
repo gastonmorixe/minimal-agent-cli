@@ -10,12 +10,18 @@
  * singletons.
  */
 
-import { describe, expect, it } from "bun:test"
+import { afterEach, describe, expect, it } from "bun:test"
 
 import type { AuthResult } from "@minimal-agent/core/host/auth"
+import {
+  clearModelRegistry,
+  type ModelEntry,
+  registerModel,
+} from "@minimal-agent/core/host/model-registry"
 import type { BuildAgentCoreDeps } from "@minimal-agent/core/host-kit/build-agent-core"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
+import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
 import type { Message } from "@minimal-agent/core/sdk/messages"
 import type { SendOptions, StreamedResponse } from "@minimal-agent/core/sdk/transport-types"
 import {
@@ -23,6 +29,23 @@ import {
   type ReflectionCheckpointContext,
   TranscriptRouter,
 } from "./interactive-session.ts"
+
+function fakeModel(id: string): ModelEntry {
+  return {
+    id,
+    providerId: "interactive-session-test-prov",
+    surfaceId: "custom",
+    displayName: id,
+    capabilities: defaultCapabilities(),
+    pricing: {
+      inputUSD: 0,
+      outputUSD: 0,
+      cacheWriteUSD: 0,
+      cacheReadUSD: 0,
+      webSearchPerCallUSD: 0,
+    },
+  }
+}
 
 const AUTH: AuthResult = { type: "api-key", token: "test-token" }
 
@@ -67,7 +90,12 @@ async function createSession(sendFn: BuildAgentCoreDeps["sendFn"]): Promise<Inte
 }
 
 describe("InteractiveSession", () => {
+  afterEach(() => {
+    clearModelRegistry()
+  })
+
   it("creates through real host wiring and exposes public facade behavior", async () => {
+    registerModel(fakeModel("other-model"))
     const loader = {
       getPromptBlockAsync: async () => null,
       getExtraTools: () => [],

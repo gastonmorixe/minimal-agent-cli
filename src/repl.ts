@@ -24,6 +24,8 @@ import {
   parseModelNotFoundError,
   parseModelUnavailableError,
 } from "@minimal-agent/core/host/model-error"
+import { findModel, findModelForProvider } from "@minimal-agent/core/host/model-registry"
+import { findProviderPlugin } from "@minimal-agent/core/host/provider-plugin"
 import { GLOBAL_STATUS_BUS, StatusBus } from "@minimal-agent/core/host/status-bus"
 import { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
@@ -312,6 +314,35 @@ export interface ReplEditor {
 }
 
 /**
+ * Switch the agent to a model picked after a model error. A live provider
+ * catalog can list ids the static registry does not know, and the
+ * validated `setModel` throws on those, so first let the provider plugin
+ * register the id ad hoc (the same step startup takes for `--model`).
+ * Throws with the setter's own message when the id still cannot be used.
+ */
+function switchToPickedModel(
+  setModel: (model: string) => void,
+  picked: string,
+  providerId: string | undefined,
+): void {
+  const base = picked.replace(/\[(1|2)m\]/gi, "")
+  if (providerId && !findModelForProvider(base, providerId)) {
+    findProviderPlugin(providerId)?.registerAdHocModel?.(base)
+  }
+  setModel(picked)
+}
+
+/**
+ * Provider the agent's current model belongs to: the host-given id, else
+ * the registry entry of the current model.
+ */
+function currentProviderId(agent: ReplAgentLike, given: string | undefined): string | undefined {
+  if (given) return given
+  const model = agent.getModel?.()
+  return model ? findModel(model.replace(/\[(1|2)m\]/gi, ""))?.providerId : undefined
+}
+
+/**
  * Run an interactive read-eval-print loop with full tool execution.
  *
  * Reads lines from stdin, sends each non-empty line to the agent via
@@ -360,6 +391,14 @@ export async function runRepl(
     auth?: AuthResult
     /** Override for testing: defaults to the provider plugins' live catalogs. */
     listModels?: (auth: AuthResult) => Promise<ModelInfo[]>
+    /** Override for testing: defaults to the interactive {@link promptModelPicker}. */
+    pickModel?: typeof promptModelPicker
+    /**
+     * Provider of the running session. Scopes the recovery picker to that
+     * provider's live models and lets a picked live-only id be registered
+     * ad hoc. When omitted, it comes from the current model's registry entry.
+     */
+    providerId?: string
     /**
      * Enable the persistent live-area UI: the multiline input is pinned to
      * the bottom of the terminal and stays visible while the agent works.
@@ -704,25 +743,32 @@ export async function runRepl(
         const modelErr =
           parseModelNotFoundError(msg) ?? parseModelUnavailableError(msg, agent.getModel?.())
         if (modelErr && opts?.auth && agent.setModel) {
-          const lister = opts.listModels ?? (() => listLiveModelsForPicker())
+          const providerId = currentProviderId(agent, opts.providerId)
+          const lister = opts.listModels ?? (() => listLiveModelsForPicker(providerId))
+          let models: ModelInfo[] | null = null
           try {
-            const models = await lister(opts.auth)
-            const picked = await promptModelPicker(
-              models,
-              agent.getModel?.() ?? modelErr,
-              errOutput,
-            )
-            if (picked) {
-              agent.setModel(picked)
-              errOutput.write(`  ${c.boldGreen("ok")} model set to ${c.cyan(picked)}\n`)
-            } else {
-              errOutput.write(
-                `  ${c.dim("kept current model")} ${c.cyan(agent.getModel?.() ?? "")}\n`,
-              )
-            }
+            models = await lister(opts.auth)
           } catch (listErr) {
             errOutput.write(
               `  ${c.boldRed("error")} could not list models: ${listErr instanceof Error ? listErr.message : String(listErr)}\n`,
+            )
+          }
+          const current = agent.getModel?.() ?? modelErr
+          const picked = models
+            ? await (opts.pickModel ?? promptModelPicker)(models, current, errOutput)
+            : null
+          if (picked) {
+            try {
+              switchToPickedModel((m) => agent.setModel?.(m), picked, providerId)
+              errOutput.write(`  ${c.boldGreen("ok")} model set to ${c.cyan(picked)}\n`)
+            } catch (setErr) {
+              errOutput.write(
+                `  ${c.boldRed("error")} could not switch to ${c.cyan(picked)}: ${setErr instanceof Error ? setErr.message : String(setErr)}\n`,
+              )
+            }
+          } else if (models) {
+            errOutput.write(
+              `  ${c.dim("kept current model")} ${c.cyan(agent.getModel?.() ?? "")}\n`,
             )
           }
         }
