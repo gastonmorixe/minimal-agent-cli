@@ -24,6 +24,7 @@
     "typescript/no-floating-promises": "error",
     "typescript/no-unsafe-type-assertion": "off",
     "typescript/no-unnecessary-type-assertion": "off",
+    "typescript/no-unnecessary-boolean-literal-compare": "off",
     "no-await-in-loop": "off",
     "no-control-regex": "off",
     "tsdoc/syntax": "error",
