@@ -1,10 +1,22 @@
 # minimal-agent-cli
 
-`minimal-agent-cli` owns the terminal and process host for minimal-agent. It is a standalone Bun package and future repository, not a workspace nested inside `minimal-agent-core`.
+`minimal-agent-cli` owns the terminal and process host for minimal-agent. It is a standalone Bun package and repository, not a workspace nested inside `minimal-agent-core`. It owns the `minimal-agent` bin.
+
+## Run the CLI
+
+```sh
+bun install
+bun run src/index.ts --help          # every command and flag
+bun run src/index.ts                 # interactive REPL
+bun run src/index.ts -p "hi"         # one prompt, then exit
+bun run src/index.ts --host-mode acp # hand the process to the ACP plugin host mode
+```
+
+`src/index.ts` is the bin (`package.json#bin`). It calls `src/main.ts`, which does the startup work. `--host-mode <id>` needs a loaded, enabled plugin that declares that `hostModes[]` id. The `acp` mode comes from `ma-acp-plugin` in `minimal-agent-plugins`. Its host-mode argument `--approval` (off by default) turns on the approval gate. See that plugin's README. Terminal renderer docs are in `docs/tui/`. User-facing usage is in [`README.md`](README.md).
 
 ## Ownership
 
-- CLI-owned concerns: argument parsing, stdout/stderr projection, terminal UI, interactive input, local startup orchestration, plugin root discovery, and process exit behavior.
+- CLI-owned concerns: the `minimal-agent` bin, argument parsing, stdout/stderr projection, terminal UI, interactive input, local startup orchestration, host-mode dispatch, plugin root discovery, and process exit behavior.
 - Core-owned concerns: agent loop, canonical model/provider contracts, durable session records and repair, auth/network implementations, and SDK ports.
 - Shared contracts belong in published package exports: the `@minimal-agent/core/*` subpaths listed in `src/architecture/core-public-contract.ts`. The plugin contract is `@minimal-agent/core/plugin-api/*`.
 
