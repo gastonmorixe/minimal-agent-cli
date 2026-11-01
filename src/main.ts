@@ -115,7 +115,7 @@ import {
 } from "./startup/resume-load.ts"
 import { isHostModeRun, isInteractiveResumeRun } from "./startup/resume-mode.ts"
 import { runHostMode } from "./startup/run-host-mode.ts"
-import { runNonInteractivePrompt } from "./startup/run-non-interactive.ts"
+import { runNonInteractivePrompt, selectStdioMode } from "./startup/run-non-interactive.ts"
 import { runStartupSubcommand } from "./startup/run-subcommand.ts"
 import { bootSessionStores } from "./startup/session-store-boot.ts"
 import {
@@ -365,6 +365,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   })
   if (handledSubcommand) return currentExitCode()
 
+  // S38: stdio by mode. On the JSON event route only the event writer may
+  // reach stdout from here on. A stray write fails the run.
+  const stdioMode = selectStdioMode(args, commandPlan.command, opts)
+
   // Cold-start detection must happen BEFORE any subsystem creates
   // `~/.minimal-agent` (the file-log sink below does, on its first write).
   // Capture it here so the welcome card and the post-setup hint can both key
@@ -427,6 +431,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   const scrollbackSink = await attachStartupDiagnosticSinks({
     showHeader: SHOW_HEADER,
     env: env,
+    mode: stdioMode,
+    debug: opts.debug,
   })
 
   // Plugin-sync startup row. The clone itself ran silently before provider
@@ -475,8 +481,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   startProviderWarmups(providerState)
 
   // Resolve formatter: explicit --formatter, PATH, cached binary, or auto-download.
+  // Protocol mode renders no markdown, so it skips the formatter and its
+  // human warn line on stderr (S38).
   let formatterCmd: string[] | undefined
-  if (commandPlan.needsFormatter) {
+  if (commandPlan.needsFormatter && stdioMode !== "protocol") {
     const formatterResolution = await resolveFormatter(formatterExplicitArg)
     if (formatterResolution.cmd) {
       formatterCmd = formatterResolution.cmd
@@ -1230,6 +1238,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         showHeader: SHOW_HEADER,
         wantJsonOutput,
         outputFormat,
+        diagnostics: opts.wantDiagnostics,
         outputSchema,
         loader: hasPlugins ? loader : null,
         cwd: cwd,

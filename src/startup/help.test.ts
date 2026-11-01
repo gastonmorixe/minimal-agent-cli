@@ -64,4 +64,16 @@ describe("renderHelp", () => {
     expect(text).toContain("every arg after the id goes to the host mode")
     expect(text).toContain("cannot be combined with --prompt, -p, or a stdin prompt")
   })
+
+  test("documents --diagnostics and the --debug stderr mirror", () => {
+    const text = stripAnsi(renderHelp().join("\n"))
+    expect(text).toContain("--diagnostics")
+    expect(text).toContain("With --output-format json, also write diagnostics")
+    expect(text).toContain('each line is a session log entry with ch "event" or "diag"')
+    expect(text).toContain("--debug")
+    expect(text).toContain("outside the REPL, also mirror diagnostics to stderr")
+    expect(text).toContain(
+      "json, stream-json: stdout carries only JSON lines; a stray write fails the run",
+    )
+  })
 })

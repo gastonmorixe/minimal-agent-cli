@@ -146,8 +146,12 @@ function buildHelpSections(): HelpSection[] {
           [
             "text is human output; json is buffered JSONL; stream-json flushes JSONL events live",
             "--json is an alias for --output-format json",
+            "json, stream-json: stdout carries only JSON lines; a stray write fails the run",
           ],
         ),
+        row(c.cyan("--diagnostics"), "With --output-format json, also write diagnostics", [
+          'each line is a session log entry with ch "event" or "diag"',
+        ]),
         row(
           `${c.cyan("--output-schema")} ${c.dim("<file>")}`,
           "Constrain the final answer to a JSON Schema",
@@ -197,7 +201,10 @@ function buildHelpSections(): HelpSection[] {
             "cannot be combined with --prompt, -p, or a stdin prompt",
           ],
         ),
-        row(`${c.cyan("-d")}, ${c.cyan("--debug")}`, "Enable debug logging", ["or DEBUG=1"]),
+        row(`${c.cyan("-d")}, ${c.cyan("--debug")}`, "Enable debug logging", [
+          "or DEBUG=1",
+          "outside the REPL, also mirror diagnostics to stderr",
+        ]),
         row(`${c.cyan("-v")}, ${c.cyan("--verbose")}`, "Don't truncate debug output", [
           "or VERBOSE=1",
         ]),
