@@ -179,8 +179,8 @@ class RunPortState {
  * mounted) and the non-interactive `--prompt` path (which never does). With
  * no per-run override, a preflight issue must be denied with an
  * `ask_denied` notice and sent unchanged — `AgentCore`'s own headless
- * fallback — not asked through `Session`'s default `PendingAskRegistry`
- * (which would wait forever for a `session.answer()` nobody will call).
+ * fallback. This is also `Session`'s default since core decision 34. The
+ * value stays explicit, because no `session.answer()` caller exists here.
  */
 async function openInteractiveSession(
   deps: InteractiveSessionDeps,
