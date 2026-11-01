@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
+import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 
 async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
   if (!stream) return ""
@@ -38,6 +39,7 @@ describe("dump command architecture", () => {
         stderr: "pipe",
         env: {
           ...process.env,
+          ...tempHomeSpawnEnv(),
           HOME: home,
           // Clear any inherited MINIMAL_AGENT_HOME (the running harness sets it),
           // else it wins over HOME in resolveAgentHome and the spawned CLI reads
@@ -66,7 +68,12 @@ describe("dump command architecture", () => {
       const p = Bun.spawn(["bun", "run", "src/index.ts", "--dump", sid, "--dump-paths"], {
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env, HOME: home, MINIMAL_AGENT_HOME: join(home, ".minimal-agent") },
+        env: {
+          ...process.env,
+          ...tempHomeSpawnEnv(),
+          HOME: home,
+          MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),
+        },
       })
       const [code, stdout, stderr] = await Promise.all([
         p.exited,
@@ -99,6 +106,7 @@ describe("dump command architecture", () => {
           stderr: "pipe",
           env: {
             ...process.env,
+            ...tempHomeSpawnEnv(),
             HOME: home,
             // Clear inherited MINIMAL_AGENT_HOME (see note above); else it wins
             // over HOME and the spawned CLI reads the real ~/.minimal-agent.
@@ -124,6 +132,7 @@ describe("dump command architecture", () => {
         stderr: "pipe",
         env: {
           ...process.env,
+          ...tempHomeSpawnEnv(),
           HOME: home,
           // Clear any inherited MINIMAL_AGENT_HOME (the running harness sets it),
           // else it wins over HOME in resolveAgentHome and the spawned CLI reads
@@ -178,7 +187,12 @@ describe("dump command architecture", () => {
       const p = Bun.spawn(["bun", "run", "src/index.ts", "sessions", "alpha"], {
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env, HOME: home, MINIMAL_AGENT_HOME: join(home, ".minimal-agent") },
+        env: {
+          ...process.env,
+          ...tempHomeSpawnEnv(),
+          HOME: home,
+          MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),
+        },
       })
       const [code, stdout, stderr] = await Promise.all([
         p.exited,
@@ -215,6 +229,7 @@ describe("dump command architecture", () => {
         stderr: "pipe",
         env: {
           ...process.env,
+          ...tempHomeSpawnEnv(),
           HOME: home,
           MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),
         },
@@ -265,6 +280,7 @@ describe("dump command architecture", () => {
         stderr: "pipe",
         env: {
           ...process.env,
+          ...tempHomeSpawnEnv(),
           HOME: home,
           MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),
         },
@@ -297,7 +313,12 @@ describe("dump command architecture", () => {
         {
           stdout: "pipe",
           stderr: "pipe",
-          env: { ...process.env, HOME: home, MINIMAL_AGENT_HOME: join(home, ".minimal-agent") },
+          env: {
+            ...process.env,
+            ...tempHomeSpawnEnv(),
+            HOME: home,
+            MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),
+          },
         },
       )
       const [_code, stdout, stderr] = await Promise.all([

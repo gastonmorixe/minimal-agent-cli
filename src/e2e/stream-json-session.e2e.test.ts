@@ -14,6 +14,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { join } from "node:path"
 
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
+import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 
 // Needs the opencode-go provider plugin from the sibling plugins repo.
 const HAVE_PROVIDER = siblingPluginPresent("ma-llm-opencode-go-plugin")
@@ -52,6 +53,7 @@ async function runCli(args: string[], provider = "opencode-go") {
     timeout: 20000,
     env: {
       ...process.env,
+      ...tempHomeSpawnEnv(),
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",
       MINIMAL_AGENT_TRANSPORT: "test",

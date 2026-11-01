@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path"
 
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
+import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 
 // The json route uses the anthropic-messages surface of this provider.
 const HAVE_PROVIDER = siblingPluginPresent("ma-llm-opencode-go-plugin")
@@ -87,6 +88,7 @@ async function runCli(args: string[]) {
     timeout: 30000,
     env: {
       ...process.env,
+      ...tempHomeSpawnEnv(),
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",
       MINIMAL_AGENT_TRANSPORT: "test",
