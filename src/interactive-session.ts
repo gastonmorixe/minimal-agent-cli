@@ -45,6 +45,7 @@ import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
 import { inputCaptureStack } from "./input/input-capture-stack.ts"
 import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
+import { createPluginEventsPort, createStatusPort } from "./startup/host-ports.ts"
 import * as TOOL_TRANSCRIPT_FORMAT from "./ui/tool-transcript/format.ts"
 
 type MaybePromise<T> = T | Promise<T>
@@ -223,8 +224,10 @@ async function openInteractiveSession(
       ? { reflectionCooldownMs: deps.reflectionCooldownMs }
       : {}),
     ...(deps.retry !== undefined ? { retry: deps.retry } : {}),
-    ...(deps.statusPort !== undefined ? { statusPort: deps.statusPort } : {}),
-    ...(deps.pluginEvents !== undefined ? { pluginEvents: deps.pluginEvents } : {}),
+    // S23/S28: the CLI status rows and the plugin bus get the engine's
+    // status phases and stream telemetry. A caller port wins.
+    statusPort: deps.statusPort ?? createStatusPort(),
+    pluginEvents: deps.pluginEvents ?? createPluginEventsPort(deps.loader),
     // S17/S27: the `compactSource` port reads the plugin host's
     // `context:compact` queue, exactly like `buildAgentCore`.
     ports: { compactSource: { take: () => takePendingCompact() } },
