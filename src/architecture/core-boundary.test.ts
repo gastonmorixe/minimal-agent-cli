@@ -3,7 +3,9 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { productionTypeScriptFiles } from "./core-boundary.ts"
+import { importPluginModule } from "../plugins-ui/plugin-module.ts"
+
+import { PLUGIN_CODE_LOADER_FILES, productionTypeScriptFiles } from "./core-boundary.ts"
 import { CORE_PUBLIC_CONTRACT } from "./core-public-contract.ts"
 import {
   architectureNodeExecutable,
@@ -245,6 +247,22 @@ describe("CLI core architecture boundary", () => {
     expect(CORE_PUBLIC_CONTRACT).not.toHaveProperty("blockedUntilProgram2")
     expect(JSON.stringify(CORE_PUBLIC_CONTRACT)).not.toMatch(
       /createAgentRuntime|AgentRequest|SessionPort|PluginPort/,
+    )
+  })
+})
+
+describe("plugin code loader exemption (S35)", () => {
+  test("exactly one CLI file may import by a computed path", () => {
+    expect(PLUGIN_CODE_LOADER_FILES).toEqual(["plugins-ui/plugin-module.ts"])
+  })
+
+  test("that loader refuses a relative path and core code", async () => {
+    await expect(importPluginModule("./x.ts")).rejects.toThrow(/must be absolute/)
+    await expect(
+      importPluginModule("/w/node_modules/@minimal-agent/core/src/index.ts"),
+    ).rejects.toThrow(/names core code/)
+    await expect(importPluginModule("/w/minimal-agent-core/src/index.ts")).rejects.toThrow(
+      /names core code/,
     )
   })
 })

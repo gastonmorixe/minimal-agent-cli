@@ -98,6 +98,11 @@ export async function runReplLiveArea(
     /** Session directory override for queue persistence tests and embedded hosts. */
     sessionsDir?: string
     scrollbackSubmittedAt?: SubmittedAtStyle
+    /**
+     * Plugin live-area slots, loaded by the CLI plugin UI loader from each
+     * plugin's `ui` block (S35). Core no longer loads them.
+     */
+    liveAreaSlots?: readonly ResolvedLiveAreaSlot[]
   },
 ): Promise<void> {
   if (!opts.compositor || !opts.editor) {
@@ -315,7 +320,7 @@ export async function runReplLiveArea(
   // `runRepl(...)` + 2 `await Promise.resolve()` ticks would lose
   // their first keystroke. We pre-declare the locals here so the
   // `finally` block at end-of-fn can still reference them.
-  const slotRows = loader?.getLiveAreaSlots() ?? []
+  const slotRows = opts.liveAreaSlots ?? []
   let liveAreaScheduler: import("./ui/status/live-area-scheduler.ts").LiveAreaScheduler | null =
     null
   let tuiDiagnosticSurface:

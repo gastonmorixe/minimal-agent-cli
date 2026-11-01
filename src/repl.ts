@@ -30,7 +30,10 @@ import { GLOBAL_STATUS_BUS, StatusBus } from "@minimal-agent/core/host/status-bu
 import { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { PluginStream } from "@minimal-agent/core/host-kit/plugin-stream"
-import type { ManifestMode } from "@minimal-agent/core/plugin-api/types/plugin"
+import type {
+  ManifestMode,
+  ResolvedLiveAreaSlot,
+} from "@minimal-agent/core/plugin-api/types/plugin"
 import type { TurnResult } from "@minimal-agent/core/sdk/agent-core"
 import type { AgentEvent } from "@minimal-agent/core/sdk/events"
 import type { InputQueuePort } from "@minimal-agent/core/sdk/ports"
@@ -426,6 +429,8 @@ export async function runRepl(
     sessionId?: string
     /** Forwarded to live-area scrollback rendering. */
     scrollbackSubmittedAt?: false | "off" | "inline-locale"
+    /** Plugin live-area slots from the CLI plugin UI loader (S35). Forwarded. */
+    liveAreaSlots?: readonly ResolvedLiveAreaSlot[]
   },
 ): Promise<void> {
   if (opts?.useLiveArea) {

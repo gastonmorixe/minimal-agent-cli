@@ -22,7 +22,7 @@ describe("runListPluginsCommand", () => {
 
       let out = ""
       runListPluginsCommand({
-        roots: { embeddedDir: dir },
+        roots: { embedded: [join(dir, "plugins")] },
         config: { forceDisabled: new Set(), forceEnabled: new Set() },
         output: { write: (s) => (out += s) },
       })

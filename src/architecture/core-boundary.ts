@@ -191,6 +191,14 @@ export async function productionTypeScriptFiles(root: string): Promise<string[]>
   return files.sort()
 }
 
+/**
+ * CLI files (relative to the scanned root) that may import by a computed
+ * path. They load plugin code, which is not core, so the computed-loader
+ * rule does not apply to them. Every other rule still applies. Keep the
+ * list exact: one file per loader.
+ */
+export const PLUGIN_CODE_LOADER_FILES: readonly string[] = ["plugins-ui/plugin-module.ts"]
+
 /** Check production sources for forbidden core-boundary dependencies. */
 export async function checkCoreBoundary(
   project: Project,
@@ -201,7 +209,11 @@ export async function checkCoreBoundary(
   for (const file of files) {
     const sourceFile = project.program.getSourceFile(file)
     if (!sourceFile) throw new Error(`TypeScript project does not include production file: ${file}`)
-    violations.push(...inspectSourceFile(sourceFile))
+    const exempt = PLUGIN_CODE_LOADER_FILES.includes(relative(root, file).replaceAll("\\", "/"))
+    for (const v of inspectSourceFile(sourceFile)) {
+      if (exempt && v.rule === "computed-loader") continue
+      violations.push(v)
+    }
   }
   return violations
 }

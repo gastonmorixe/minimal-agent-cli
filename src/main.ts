@@ -77,7 +77,7 @@ import {
   openAgentCoreSession,
 } from "@minimal-agent/core/host-kit/build-agent-core"
 import { lastAdvertisedModeFromHistory, ModeManager } from "@minimal-agent/core/host-kit/modes"
-import { PluginLoader, resolveSiblingPluginRoots } from "@minimal-agent/core/host-kit/plugin-loader"
+import { PluginLoader, providerRootsOf } from "@minimal-agent/core/host-kit/plugin-loader"
 import { resolveAgentHome } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import type { Message } from "@minimal-agent/core/sdk/messages"
 import { parseSchemaFile } from "@minimal-agent/core/sdk/output-schema"
@@ -87,6 +87,8 @@ import { resolveInitialModeId } from "./cli/non-interactive-defaults.ts"
 import { registerCompactHostCommand } from "./commands/compact.ts"
 import { registerContinueHostCommand } from "./commands/continue.ts"
 import { InteractiveSession } from "./interactive-session.ts"
+import { terminalHandlerEnv } from "./plugins-ui/handler-env.ts"
+import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
 import { buildResumeHeader, replayToScrollback } from "./session-replay.ts"
 import { attachStartupDiagnosticSinks } from "./startup/diagnostic-sinks.ts"
@@ -101,6 +103,7 @@ import {
 } from "./startup/entry-exit.ts"
 import { readEmbeddedPackageVersion } from "./startup/help.ts"
 import { withHostPorts } from "./startup/host-ports.ts"
+import { computePluginRoots, DEFAULT_PLUGINS_REPO } from "./startup/plugin-roots.ts"
 import { resolveStartupProviderState, startProviderWarmups } from "./startup/provider-boot.ts"
 import {
   modelHidesReasoning,
@@ -325,7 +328,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     const pluginSyncEnabled =
       env.MINIMAL_AGENT_NO_PLUGIN_SYNC === "1" ? false : (userConfig.pluginSync ?? true)
     const pluginsRepo =
-      env.MINIMAL_AGENT_PLUGINS_REPO?.trim() || userConfig.pluginsRepo || undefined
+      env.MINIMAL_AGENT_PLUGINS_REPO?.trim() || userConfig.pluginsRepo || DEFAULT_PLUGINS_REPO
     pluginSyncResult = await bootstrapUserPlugins({
       targetDir: join(userDir, "plugins"),
       enabled: pluginSyncEnabled,
@@ -335,15 +338,17 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     })
   }
 
-  // Wave G: provider plugins (provider.json) migrate to the sibling
-  // ../minimal-agent-plugins repo alongside manifest plugins, and on an
+  // Every plugin root, computed here (S40): core knows no default plugin
+  // location. See `startup/plugin-roots.ts`.
+  const pluginRoots = computePluginRoots(providerEmbeddedDir, env, cwd, userDir)
+
+  // Provider plugins (provider.json) live in the plugins repo. On an
   // installed box they are git-cloned into `<userDir>/plugins` (just above).
-  // Discover from the embedded plugins dir, the dev-time sibling roots, AND
-  // the user clone root (same resolution the TUI loader uses) so a
-  // migrated/cloned provider is found. Earlier roots win on id collision.
-  // Without the user root a fresh install finds zero providers → `0 models
-  // available` and a fatal boot.
-  await bootProviderDiscovery({ embeddedDir: providerEmbeddedDir, userDir })
+  // Discover from the embedded roots (incl. the dev checkout) AND the user
+  // clone root, so a cloned provider is found. Earlier roots win on id
+  // collision. Without the user root a fresh install finds zero providers
+  // → `0 models available` and a fatal boot.
+  await bootProviderDiscovery({ roots: providerRootsOf(pluginRoots) })
 
   // Dispatch one-shot subcommands (dump/sessions/usage/list-*/login/logout/
   // auth-status). Returns true when handled (we return); login/logout/
@@ -530,7 +535,6 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // Load Plugins from ~/.agents/plugins and <cwd>/plugins.
   // Core tool names must always win over plugin names.
   const coreToolNames = new Set(TOOL_DEFINITIONS.map((t) => t.name))
-  const homeDir = env.HOME ? join(env.HOME, ".agents") : undefined
   // `userDir` (the per-user agent home) is resolved up front, before provider
   // discovery, and the first-run plugin clone runs earlier still (before
   // provider resolution) — because the LLM providers now ship IN the cloned
@@ -542,18 +546,6 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // regardless of the user's cwd, not just when cwd === <repo>.
   const thisFileDir = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url))
   const embeddedDir = dirname(thisFileDir)
-
-  // Dev-time sibling plugin repo. In production the `minimal-agent-plugins`
-  // repo is git-cloned into `~/.minimal-agent/plugins` (the loader's userDir
-  // root), so it loads with no special handling. When running from the
-  // monorepo SOURCE, though, that sibling checkout lives next to this repo
-  // at `<parent>/minimal-agent-plugins` and is NOT under any scanned root.
-  // Compute it and hand it to the loader as a sibling dir (its plugin dirs
-  // sit at the repo root, not under a `plugins/` subdir) so first-party
-  // plugins load at dev time too. `MINIMAL_AGENT_PLUGIN_SIBLINGS`
-  // (colon-separated absolute paths) overrides the default when set. Each
-  // candidate is included only when it EXISTS and is a directory.
-  const siblingDirs = resolveSiblingPluginRoots(embeddedDir)
 
   // Construct the single AgentContext shared across every plugin
   // dispatch path (tool handlers, prompt fragments, event subs, hook
@@ -680,13 +672,11 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   let getLiveModelId: () => string = () => selectedModel
   let getLiveProviderId: () => string | undefined = () => selectedProviderId
   const loader = await PluginLoader.load({
-    embeddedDir,
-    userDir,
-    homeDir,
-    projectDir: cwd,
-    // Dev-time sibling plugin repo (../minimal-agent-plugins). Empty in
-    // production and when the sibling checkout is absent.
-    ...(siblingDirs.length > 0 ? { siblingDirs } : {}),
+    // Every root comes from the CLI (S40), incl. the dev plugins checkout.
+    roots: pluginRoots,
+    // Terminal data for plugin handlers (palette, protocol). Core adds none
+    // (S31). It goes away when S41 moves plugin UI code to ui/ folders.
+    handlerEnv: terminalHandlerEnv,
     coreToolNames,
     // Single AgentContext shared with every plugin dispatch path.
     // Frozen value object; see createAgentContext + AgentContext docs.
@@ -711,6 +701,12 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // `client.ts`, which broadcasts `quota.headersReceived` after every
   // successful API response — see src/global-bus.ts for the rationale).
   setGlobalEventBus(loader.bus())
+  // The UI part of each accepted plugin (S35): live-area slots from the
+  // `ui` block, granted `ctx.tui`. Core loads only the headless part.
+  const pluginUi = await loadPluginUi({
+    packages: loader.loadedPackages(),
+    logger: (m) => diag.warn("plugin-ui", m),
+  })
   // Per-turn attachment producers + content drains, contributed by
   // plugins through the loader's `turnAttachments` manifest seam (the
   // memory plugin's short-term snapshot + save-echo collector, the
@@ -845,7 +841,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // duplicate the work and re-introduce the latency we're trying to
   // eliminate. The user-facing benefit: the live area shows up
   // instantly; the quota row populates a moment later.
-  const hasQuotaSlot = loader.getLiveAreaSlots().some((s) => s.definition.id === "quota")
+  const hasQuotaSlot = pluginUi.liveAreaSlots.some((s) => s.definition.id === "quota")
   const shouldSkipQuota =
     !commandPlan.needsQuota ||
     // Only meaningful for a provider that declares a quota-probe seam. A
@@ -1339,6 +1335,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         modeManager,
         hasPlugins,
         loader,
+        liveAreaSlots: pluginUi.liveAreaSlots,
         pendingDraft,
       })
     }
