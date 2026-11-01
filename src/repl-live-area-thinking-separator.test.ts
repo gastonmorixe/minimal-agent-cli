@@ -7,7 +7,7 @@
  * separator.
  *
  * This test simulates the internal state machine of `runReplLiveArea` — the
- * same `writeDirectSink` / `baseSink` / `onThinkingStop` plumbing — and
+ * same `writeDirectSink` / `baseSink` / `thinkingStop` plumbing — and
  * captures output to a string so we can assert on the rendered result.
  */
 
@@ -60,7 +60,7 @@ function simulateTurn(opts: {
     : null
 
   // This is the writeDirectSink from repl-live-area.ts — used for thinking
-  // chunks AND for the onThinkingStop separator.
+  // chunks AND for the thinkingStop separator.
   const writeDirectSink = (s: string) => {
     if (s.length === 0) return
     if (!wroteOutput) compositor.writeStream("\n")
@@ -91,13 +91,13 @@ function simulateTurn(opts: {
   }
 
   // Thinking chunk handler — writes through writeDirectSink.
-  const onThinkingChunk = (chunk: string) => {
+  const thinkingChunk = (chunk: string) => {
     writeDirectSink(chunk)
   }
 
-  // The FIXED onThinkingStop: resets state so baseSink will insert
+  // The FIXED thinkingStop: resets state so baseSink will insert
   // the leading blank-line separator.
-  const onThinkingStopFixed = () => {
+  const thinkingStopFixed = () => {
     writeDirectSink(lastChunkEndedWithNewline ? "\n" : "\n\n")
     // Reset state so the next baseSink call will insert a leading blank line.
     lastKind = "none"
@@ -107,11 +107,11 @@ function simulateTurn(opts: {
   // ---- Run the simulation ----
   // Emit thinking chunks.
   for (const chunk of opts.thinkingChunks) {
-    onThinkingChunk(chunk)
+    thinkingChunk(chunk)
   }
 
   // Signal thinking stop (use the fixed version).
-  onThinkingStopFixed()
+  thinkingStopFixed()
 
   // Now emit the response text through baseSink.
   baseSink(opts.responseText)
@@ -147,7 +147,7 @@ describe("thinking-block → response blank-line separation", () => {
       hasFormatter: false,
     })
 
-    // Even when the thinking block doesn't end with \n, the onThinkingStop
+    // Even when the thinking block doesn't end with \n, the thinkingStop
     // writes "\n\n" (close line + blank row), then baseSink writes the
     // response. The response must be separated by a blank line.
     expect(output).toMatch(/partial thinking text without newline.*\n\n.*Response follows/s)
@@ -193,7 +193,7 @@ describe("thinking-block → response blank-line separation", () => {
       compositor.writeStream(s)
     }
 
-    const onThinkingStopFixed = () => {
+    const thinkingStopFixed = () => {
       writeDirectSink(lastChunkEndedWithNewline ? "\n" : "\n\n")
       lastKind = "none"
       wroteOutput = false
@@ -201,11 +201,11 @@ describe("thinking-block → response blank-line separation", () => {
 
     // Pattern: thinking → response → thinking → response
     writeDirectSink("Thinking block 1.\n")
-    onThinkingStopFixed()
+    thinkingStopFixed()
     baseSink("Response 1.\n")
 
     writeDirectSink("Thinking block 2.\n")
-    onThinkingStopFixed()
+    thinkingStopFixed()
     baseSink("Response 2.\n")
 
     const output = compositor.text()

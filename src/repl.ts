@@ -32,11 +32,14 @@ import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { PluginStream } from "@minimal-agent/core/host-kit/plugin-stream"
 import type { ManifestMode } from "@minimal-agent/core/plugin-api/types/plugin"
 import type { TurnResult } from "@minimal-agent/core/sdk/agent-core"
+import type { AgentEvent } from "@minimal-agent/core/sdk/events"
+import type { InputQueuePort } from "@minimal-agent/core/sdk/ports"
 import type { ModelInfo } from "@minimal-agent/core/sdk/transport-types"
 import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
 import type { QueueKeyHandler } from "./editor/types.ts"
 import { RawInput } from "./input/input.ts"
 import { runReplLiveArea } from "./repl-live-area.ts"
+import { turnEventRenderer } from "./turn-event-render.ts"
 import { Formatter } from "./ui/formatter/formatter.ts"
 import { promptModelPicker } from "./ui/model-picker.ts"
 import type { Spinner } from "./ui/spinner/index.ts"
@@ -58,20 +61,20 @@ export interface ReplAgentLike {
     userText: string,
     opts?: {
       onTranscriptLine?: (line: string) => void
-      onThinkingStart?: () => MaybePromise<void>
-      onThinkingChunk?: (chunk: string) => MaybePromise<void>
-      onThinkingStop?: () => MaybePromise<void>
-      onTextStop?: () => MaybePromise<void>
       /**
-       * Optional. Fires for out-of-band conditions (refusal / content
-       * filter, output-budget events, reflection acks)
-       * with the semantic {@link TurnNotice}. The REPLs render each kind
-       * via `renderTurnNotice`; when a host omits the hook the agent core
-       * falls back to a style-free `onTranscriptLine` one-liner.
+       * Optional. Gets every turn event except `text_delta` (the text comes
+       * out of the generator), in log order (S36). The REPLs build it with
+       * `turnEventRenderer`: reasoning chunks, block edges, and notices
+       * (`renderTurnNotice`). With no `onEvent`, a notice becomes a
+       * style-free `onTranscriptLine` one-liner.
        */
-      onNotice?: (notice: TurnNotice) => MaybePromise<void>
-      drainQueuedUserText?: () => string | null
-      onQueueInject?: (text: string) => void
+      onEvent?: (event: AgentEvent) => MaybePromise<void>
+      /**
+       * Optional. User text the host queued during the turn. The loop
+       * takes it at a tool boundary and adds it to the next request (the
+       * core `inputQueue` port, S37).
+       */
+      inputQueue?: InputQueuePort
       /**
        * Optional cancellation signal. The live-area REPL forwards
        * {@link AbortBus.beginTurn}'s controller signal here so a user-press
@@ -529,8 +532,8 @@ export async function runRepl(
       // rationale on per-text-block lifecycle (mdstream's `partial`
       // paragraph buffer would otherwise concatenate two unrelated
       // text blocks within one `run()` and smash them together at
-      // end-of-turn). Lifted into a factory so `onTextStop` (below)
-      // can end+respawn at every text-block seam.
+      // end-of-turn). Lifted into a factory so the text-block stop
+      // (`textStop`, below) can end+respawn at every text-block seam.
       let formatter: Formatter | null = null
       const spawnMainFormatter = (): Formatter | null => {
         if (!opts?.formatterCmd) return null
@@ -638,15 +641,15 @@ export async function runRepl(
         lastKind = "transcript"
         statusRenderer?.resume()
       }
-      const onThinkingStart = (): void => {
+      const thinkingStart = (): void => {
         ensureThinkingFormatter()
       }
-      const onThinkingChunk = (chunk: string): void => {
+      const thinkingChunk = (chunk: string): void => {
         const active = ensureThinkingFormatter()
         if (active) active.write(chunk)
         else writeDirectSink(faintThinkingChunk(chunk))
       }
-      const onThinkingStop = async (): Promise<void> => {
+      const thinkingStop = async (): Promise<void> => {
         await endThinkingFormatter()
         // Guarantee exactly one blank line between the reasoning block and the
         // response text. Reasoning streams through `writeDirectSink` (lastKind
@@ -658,7 +661,7 @@ export async function runRepl(
       }
       // Per-text-block formatter boundary. See `runReplLiveArea` for the
       // full rationale; this is the legacy `runRepl` (non-live-area) twin.
-      const onTextStop = async (): Promise<void> => {
+      const textStop = async (): Promise<void> => {
         if (!formatter && !opts?.formatterCmd) return
         const old = formatter
         formatter = null
@@ -670,13 +673,15 @@ export async function runRepl(
       try {
         const gen = agent.run(text, {
           onTranscriptLine,
-          onThinkingStart,
-          onThinkingChunk,
-          onThinkingStop,
-          onTextStop,
-          onNotice: (notice: TurnNotice) => {
-            onTranscriptLine(renderTurnNotice(notice))
-          },
+          onEvent: turnEventRenderer({
+            thinkingStart,
+            thinkingChunk,
+            thinkingStop,
+            textStop,
+            notice: (notice: TurnNotice) => {
+              onTranscriptLine(renderTurnNotice(notice))
+            },
+          }),
         })
         while (true) {
           const { done, value } = await gen.next()

@@ -3,8 +3,8 @@
  * agent loop surfaces (provider refusal / content filter, output-budget
  * events, reflection-ack confirmations).
  *
- * The agent core detects each condition and hands the semantic value to
- * the host via the `onNotice` hook on `Agent.run` opts; THIS module
+ * The agent core detects each condition and emits the semantic value as a
+ * `notice` event; THIS module
  * decides what each looks like in the terminal. Keeping the ANSI here
  * (and out of `src/agent.ts`) preserves the core/presentation split:
  * headless hosts and `--json` mode never pay for or depend on terminal

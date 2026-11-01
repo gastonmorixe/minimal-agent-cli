@@ -18,7 +18,7 @@
  * @module host/interactive-session
  */
 
-import { createRuntime, type Session, type SessionEntry } from "@minimal-agent/core"
+import { createRuntime, type Session } from "@minimal-agent/core"
 import {
   type CompactRequestOpts,
   takePendingCompact,
@@ -38,14 +38,17 @@ import { ToolExecutorAdapter } from "@minimal-agent/core/host-kit/tool-executor-
 import { ToolRegistryAdapter } from "@minimal-agent/core/host-kit/tool-registry-adapter"
 import type { ManifestMode } from "@minimal-agent/core/plugin-api/types/plugin"
 import type { TurnResult } from "@minimal-agent/core/sdk/agent-core"
+import type { AgentEvent } from "@minimal-agent/core/sdk/events"
 import type { Message } from "@minimal-agent/core/sdk/messages"
+import type { InputQueuePort } from "@minimal-agent/core/sdk/ports"
 import type { PreflightIssue } from "@minimal-agent/core/sdk/provider"
 import { toolFilterFromNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
-import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
+import { formatTurnNoticePlain } from "@minimal-agent/core/sdk/turn-notice"
 import { inputCaptureStack } from "./input/input-capture-stack.ts"
 import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
 import { createPluginEventsPort, createStatusPort } from "./startup/host-ports.ts"
+import { TurnRenderPump } from "./turn-render-pump.ts"
 import * as TOOL_TRANSCRIPT_FORMAT from "./ui/tool-transcript/format.ts"
 
 type MaybePromise<T> = T | Promise<T>
@@ -83,13 +86,21 @@ export class TranscriptRouter {
     this.current(line)
   }
 
-  acquire(writer?: TranscriptWriter): () => void {
+  /**
+   * Route lines to `writer` (default: the fallback) until the returned
+   * release runs. `wrap` can put the chosen writer behind another step,
+   * for example the turn's render pump.
+   */
+  acquire(
+    writer?: TranscriptWriter,
+    wrap: (target: TranscriptWriter) => TranscriptWriter = (target) => target,
+  ): () => void {
     if (this.active !== null) {
       throw new Error("InteractiveSession already has an active run")
     }
     const lease = Symbol("interactive-session-transcript")
     this.active = lease
-    this.current = writer ?? this.fallback
+    this.current = wrap(writer ?? this.fallback)
     return () => {
       if (this.active !== lease) return
       this.active = null
@@ -118,6 +129,31 @@ const DEFAULT_REFLECTION_CHECKPOINT: ReflectionCheckpointBehavior = {
 }
 
 /**
+ * The per-run state behind the session's `inputQueue` and `reflectionGate`
+ * ports. The ports are built once, with the session. Each run sets what
+ * they read, and clears it when it ends.
+ */
+class RunPortState {
+  /** The queue of the run in progress, if the run has one. */
+  inputQueue: InputQueuePort | null = null
+  /** The reflection wait of the run in progress. */
+  reflection: ((round: number) => Promise<void>) | null = null
+
+  /** The `inputQueue` port: reads the queue of the run in progress. */
+  readonly inputQueuePort: InputQueuePort = {
+    take: () => this.inputQueue?.take() ?? null,
+    injected: (text) => this.inputQueue?.injected?.(text),
+  }
+
+  /** The `reflectionGate` port: waits on the reflection behavior of the run in progress. */
+  readonly reflectionGatePort = {
+    beforeCheckpoint: async (round: number): Promise<void> => {
+      await this.reflection?.(round)
+    },
+  }
+}
+
+/**
  * Build the `Session` behind one {@link InteractiveSession}: the same
  * host collaborators `buildAgentCore` wires (plugin-loaded tool registry,
  * mode manager, session persistence, lifecycle hooks, media resolver),
@@ -135,6 +171,7 @@ const DEFAULT_REFLECTION_CHECKPOINT: ReflectionCheckpointBehavior = {
 async function openInteractiveSession(
   deps: InteractiveSessionDeps,
   writeTranscript: TranscriptWriter,
+  runPorts: RunPortState,
 ): Promise<Session> {
   // Tool registry: core built-ins + plugin tools, with presentation + aliases.
   const toolRegistry = new ToolRegistryAdapter(deps.loader)
@@ -208,8 +245,6 @@ async function openInteractiveSession(
     toolRegistry,
     ...(toolFilter ? { toolFilter } : {}),
     toolExecutor,
-    // Interactive hosts pass writeTranscript; headless `--json` uses no-op.
-    transcriptSink: { write: writeTranscript },
     ...(sessionPersistence ? { sessionPersistence } : {}),
     promptContributors: [promptContributor],
     ...(modeProvider ? { modeProvider } : {}),
@@ -232,8 +267,13 @@ async function openInteractiveSession(
     statusPort,
     pluginEvents: deps.pluginEvents ?? createPluginEventsPort(deps.loader),
     // S17/S27: the `compactSource` port reads the plugin host's
-    // `context:compact` queue, exactly like `buildAgentCore`.
-    ports: { compactSource: { take: () => takePendingCompact() } },
+    // `context:compact` queue, exactly like `buildAgentCore`. The queue and
+    // reflection ports read the state of the run in progress (S37).
+    ports: {
+      compactSource: { take: () => takePendingCompact() },
+      inputQueue: runPorts.inputQueuePort,
+      reflectionGate: runPorts.reflectionGatePort,
+    },
     askUserFallback: "none",
   })
 }
@@ -249,6 +289,7 @@ export class InteractiveSession implements ReplAgentLike {
     private readonly modeManager: ModeManager | null,
     private readonly transcript: TranscriptRouter,
     private readonly reflectionCheckpoint: ReflectionCheckpointBehavior,
+    private readonly runPorts: RunPortState,
   ) {}
 
   /**
@@ -256,13 +297,15 @@ export class InteractiveSession implements ReplAgentLike {
    */
   static async create(deps: InteractiveSessionDeps): Promise<InteractiveSession> {
     const transcript = new TranscriptRouter(deps.writeTranscript)
-    const session = await openInteractiveSession(deps, transcript.write)
+    const runPorts = new RunPortState()
+    const session = await openInteractiveSession(deps, transcript.write, runPorts)
     return new InteractiveSession(
       session,
       deps.loader,
       deps.modeManager,
       transcript,
       deps.reflectionCheckpoint ?? DEFAULT_REFLECTION_CHECKPOINT,
+      runPorts,
     )
   }
 
@@ -321,53 +364,68 @@ export class InteractiveSession implements ReplAgentLike {
 
   /**
    * Run one user turn through the session, with interactive cooldown +
-   * per-turn transcript rebinding. Drives `session.run()` and remaps its
-   * `text_delta` log entries back onto the plain yielded-string channel
-   * `ReplAgentLike.run` promises (every chunk `AgentCore.sendAttempt`
-   * yields is also emitted as a `text_delta` event with the identical
-   * text, in the same order, when `emitDeltas` is on — `session.run`'s
-   * default).
+   * per-turn transcript rebinding. The turn renders from the session's own
+   * log entries (S36): each `text_delta` comes out as a yielded string, and
+   * every other event goes to `opts.onEvent`. A {@link TurnRenderPump}
+   * keeps the text, the events, and the tool transcript rows in log order.
+   * With no `onEvent`, a `notice` is written as a plain transcript line.
    */
   async *run(
     userText: string,
     opts?: {
       onTranscriptLine?: (line: string) => void
-      onThinkingStart?: () => MaybePromise<void>
-      onThinkingChunk?: (chunk: string) => MaybePromise<void>
-      onThinkingStop?: () => MaybePromise<void>
-      onTextStop?: () => MaybePromise<void>
-      onNotice?: (notice: TurnNotice) => MaybePromise<void>
-      drainQueuedUserText?: () => string | null
-      onQueueInject?: (text: string) => void
+      onEvent?: (event: AgentEvent) => MaybePromise<void>
+      inputQueue?: InputQueuePort
       signal?: AbortSignal
       askUser?: (issue: PreflightIssue) => Promise<string | null>
     },
   ): AsyncGenerator<string, TurnResult, undefined> {
-    const releaseTranscript = this.transcript.acquire(opts?.onTranscriptLine)
+    const pump = new TurnRenderPump()
+    const releaseTranscript = this.transcript.acquire(
+      opts?.onTranscriptLine,
+      (target) => (line) => pump.step(() => target(line)),
+    )
+    const onEvent = opts?.onEvent
+    const unsubscribe = this.session.subscribe(
+      (entry) => {
+        if (entry.ch !== "event") return
+        const event = entry.data
+        if (event.type === "text_delta") pump.text(event.text)
+        else if (onEvent) pump.step(() => onEvent(event))
+        else if (event.type === "notice") {
+          this.transcript.write(`\n  ${formatTurnNoticePlain(event.notice)}`)
+        }
+      },
+      { channels: ["event"] },
+    )
+    this.runPorts.inputQueue = opts?.inputQueue ?? null
+    this.runPorts.reflection = (round) =>
+      this.reflectionCheckpoint.wait({
+        round,
+        cooldownMs: this.session.agentCore().getReflectionCooldownMs(),
+        ...(opts?.signal ? { signal: opts.signal } : {}),
+      })
     let entries: ReturnType<Session["run"]> | undefined
+    let finished: Promise<void> | undefined
     let settled = false
     try {
       entries = this.session.run(userText, {
         ...(opts?.signal ? { signal: opts.signal } : {}),
-        ...(opts?.onThinkingStart ? { onThinkingStart: opts.onThinkingStart } : {}),
-        ...(opts?.onThinkingChunk ? { onThinkingChunk: opts.onThinkingChunk } : {}),
-        ...(opts?.onThinkingStop ? { onThinkingStop: opts.onThinkingStop } : {}),
-        ...(opts?.onTextStop ? { onTextStop: opts.onTextStop } : {}),
-        ...(opts?.onNotice ? { onNotice: opts.onNotice } : {}),
         ...(opts?.askUser ? { askUser: opts.askUser } : {}),
-        ...(opts?.drainQueuedUserText ? { drainQueuedUserText: opts.drainQueuedUserText } : {}),
-        ...(opts?.onQueueInject ? { onQueueInject: opts.onQueueInject } : {}),
-        beforeReflectionCheckpoint: async (round: number) => {
-          await this.reflectionCheckpoint.wait({
-            round,
-            cooldownMs: this.session.agentCore().getReflectionCooldownMs(),
-            ...(opts?.signal ? { signal: opts.signal } : {}),
-          })
-        },
       })
-      for await (const entry of entries) {
-        if (isTextDelta(entry)) yield entry.data.text
-      }
+      // The entry stream ends when the turn ends, and throws on a run
+      // failure. The pump gets the same entries through the subscription.
+      const stream = entries
+      finished = (async () => {
+        for await (const _entry of stream) {
+          // the subscription renders; this loop only waits for the end
+        }
+      })()
+      finished.then(
+        () => pump.close(),
+        (error: unknown) => pump.close(error),
+      )
+      yield* pump.drain()
       settled = true
       const result = await entries.result
       // A permanent error paused the run (outcome `waiting`). This host shows
@@ -378,28 +436,19 @@ export class InteractiveSession implements ReplAgentLike {
     } finally {
       if (!settled && entries) {
         // The consumer closed the generator before the turn settled (e.g. a
-        // stale run abandoned for a fresh one). Abort it and drain to its
+        // stale run abandoned for a fresh one). Abort it and wait for its
         // natural end so `session.run()` is never called again while this
-        // run is still finishing in the background — `for await` over the
-        // session's own entries only returns once its internal bookkeeping
-        // has already released the "running" lease.
+        // run is still finishing in the background.
+        pump.abandon()
         this.session.abort(new Error("InteractiveSession.run closed before the turn settled"))
-        try {
-          for await (const _entry of entries) {
-            // drain only; already abandoned by the caller
-          }
-        } catch {
+        await finished?.catch(() => {
           // Already reported (or about to be, to nobody) via entries.result.
-        }
+        })
       }
+      unsubscribe()
+      this.runPorts.inputQueue = null
+      this.runPorts.reflection = null
       releaseTranscript()
     }
   }
-}
-
-/** True for a `SessionEntry` carrying a `text_delta` event. */
-function isTextDelta(
-  entry: SessionEntry,
-): entry is SessionEntry & { ch: "event"; data: { type: "text_delta"; text: string } } {
-  return entry.ch === "event" && entry.data.type === "text_delta"
 }

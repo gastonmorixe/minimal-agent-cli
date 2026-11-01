@@ -16,12 +16,7 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 import { createRuntime, type Session } from "@minimal-agent/core"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
-import type {
-  ToolExecResult,
-  ToolExecutor,
-  ToolRegistry,
-  TranscriptSink,
-} from "@minimal-agent/core/sdk/ports"
+import type { ToolExecResult, ToolExecutor, ToolRegistry } from "@minimal-agent/core/sdk/ports"
 import { resolveStdioMode } from "../cli/output-format.ts"
 import type { ReplAgentLike } from "../repl.ts"
 import type { TestStreamedResponse as StreamedResponse } from "../test-utils/transport-types.ts"
@@ -53,10 +48,6 @@ class StubExecutor implements ToolExecutor {
   }
 }
 
-class DiscardTranscript implements TranscriptSink {
-  write(): void {}
-}
-
 /** The part of the send options this file reads. */
 interface SendOpts {
   readonly diagnostics?: { info: (source: string, message: string) => void }
@@ -81,7 +72,6 @@ function openSession(during: (opts: SendOpts) => void = () => {}): Session {
     model: "test-model",
     toolRegistry: EMPTY_REGISTRY,
     toolExecutor: new StubExecutor(),
-    transcriptSink: new DiscardTranscript(),
     sendFn,
   })
 }

@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events"
 
 import { StatusBus } from "@minimal-agent/core/host/status-bus"
 import type { TurnResult } from "@minimal-agent/core/sdk/agent-core"
+import type { AgentEvent } from "@minimal-agent/core/sdk/events"
 
 import { type ReplAgentLike, runRepl } from "./repl.ts"
 
@@ -49,18 +50,16 @@ function makeAgent(
       userText: string,
       opts?: {
         onTranscriptLine?: (line: string) => void
-        onThinkingStart?: () => void | Promise<void>
-        onThinkingChunk?: (chunk: string) => void | Promise<void>
-        onThinkingStop?: () => void | Promise<void>
+        onEvent?: (event: AgentEvent) => void | Promise<void>
       },
     ) {
       calls.push(userText)
       if (thinkingChunks.length > 0) {
-        await opts?.onThinkingStart?.()
+        await opts?.onEvent?.({ type: "block_started", itemType: "thinking", id: "1:thinking" })
         for (const chunk of thinkingChunks) {
-          await opts?.onThinkingChunk?.(chunk)
+          await opts?.onEvent?.({ type: "thinking_delta", id: "1:thinking", text: chunk })
         }
-        await opts?.onThinkingStop?.()
+        await opts?.onEvent?.({ type: "block_stopped", itemType: "thinking", id: "1:thinking" })
       }
       for (const chunk of chunks) {
         yield chunk
