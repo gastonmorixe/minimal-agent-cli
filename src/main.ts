@@ -100,6 +100,7 @@ import {
   writeStreamFailure,
 } from "./startup/entry-exit.ts"
 import { readEmbeddedPackageVersion } from "./startup/help.ts"
+import { withHostPorts } from "./startup/host-ports.ts"
 import { resolveStartupProviderState, startProviderWarmups } from "./startup/provider-boot.ts"
 import {
   modelHidesReasoning,
@@ -1242,29 +1243,32 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         // `--output-schema` never call this (see wantsEventStream), so those
         // paths stay byte-identical.
         openEventStreamSession: () =>
-          openAgentCoreSession({
-            // Same sid the store was opened with, so the stream carries the CLI id.
-            sessionId: sid,
-            auth,
-            model: selectedModel,
-            providerId: selectedProviderId,
-            ...(credentialName ? { credentialName } : {}),
-            effort,
-            serviceTier,
-            thinkingDisplay,
-            cacheTtl,
-            initialMessages,
-            loader: hasPlugins ? loader : null,
-            modeManager,
-            toolNamePolicy: opts.cliToolFilter,
-            store,
-            blobStore,
-            fileTrackingStore,
-            saveEcho,
-            turnAttachments: turnAttachmentSeam.producers,
-            codeHighlighter,
-            systemPromptOverrides: opts.systemPromptOverrides,
-          }),
+          openAgentCoreSession(
+            // S23/S28: status rows and plugin-bus telemetry, like the REPL.
+            withHostPorts({
+              // Same sid the store was opened with, so the stream carries the CLI id.
+              sessionId: sid,
+              auth,
+              model: selectedModel,
+              providerId: selectedProviderId,
+              ...(credentialName ? { credentialName } : {}),
+              effort,
+              serviceTier,
+              thinkingDisplay,
+              cacheTtl,
+              initialMessages,
+              loader: hasPlugins ? loader : null,
+              modeManager,
+              toolNamePolicy: opts.cliToolFilter,
+              store,
+              blobStore,
+              fileTrackingStore,
+              saveEcho,
+              turnAttachments: turnAttachmentSeam.producers,
+              codeHighlighter,
+              systemPromptOverrides: opts.systemPromptOverrides,
+            }),
+          ),
       })
     } finally {
       void hostLifecycle.sessionEnd?.({

@@ -40,6 +40,7 @@ import type { AgentCore, TurnResult } from "@minimal-agent/core/sdk/agent-core"
 import type { PromptSource } from "../cli/extract-prompt.ts"
 import { applyTurnWillStart } from "../repl-editor-hooks.ts"
 
+import { withHostPorts } from "./host-ports.ts"
 import { turnBlockedError } from "./run-non-interactive.ts"
 
 /** Default time the entry has to end after the first shutdown signal. */
@@ -321,7 +322,8 @@ function buildHostRuntime(
       // because only the REPL path rebinds it. Without this, a model switch
       // over the protocol leaves ModelInfo on the old model.
       const session = await openAgentCoreSession({
-        ...sessionDeps,
+        // S23/S28: status rows and plugin-bus telemetry, like the human path.
+        ...withHostPorts(sessionDeps),
         wireModelInfoSource: true,
         sessionId: input.sessionId,
       })
