@@ -30,10 +30,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { loadSession } from "@minimal-agent/core/host/session-restore"
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
-import type { StreamedResponse } from "@minimal-agent/core/sdk/transport-types"
 import { buildTestCore } from "@minimal-agent/core/testing/test-core"
-
 import { replayToScrollback, toolDisplaysFromRecords } from "./session-replay.ts"
+import type {
+  TestStreamedResponse as StreamedResponse,
+  TestTransport as TransportFn,
+} from "./test-utils/transport-types.ts"
 
 const ANSI_RE = new RegExp(`${String.fromCodePoint(0x1b)}\\[[0-9;?]*[ -/]*[@-~]`, "g")
 
@@ -58,9 +60,7 @@ class CaptureSink {
  * computes the actual unified diff and the agent persists it as
  * `display` on the tool_result record.
  */
-function singleEditRoundSendFn(
-  filePath: string,
-): import("@minimal-agent/core/sdk/transport-types").TransportFn {
+function singleEditRoundSendFn(filePath: string): TransportFn {
   let round = 0
   return async function* (): AsyncGenerator<unknown, StreamedResponse> {
     if (round === 0) {
@@ -90,7 +90,7 @@ function singleEditRoundSendFn(
       stopReason: "end_turn",
     } as StreamedResponse
     // biome-ignore lint/suspicious/noExplicitAny: test seam
-  } as any as import("@minimal-agent/core/sdk/transport-types").TransportFn
+  } as any as TransportFn
 }
 
 describe("--resume fidelity: tool display payload survives the JSONL round-trip", () => {

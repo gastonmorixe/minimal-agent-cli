@@ -38,11 +38,13 @@ import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { StatusBus } from "@minimal-agent/core/host/status-bus"
 import type { TurnResult } from "@minimal-agent/core/sdk/agent-core"
 import type { Message } from "@minimal-agent/core/sdk/messages"
-import type { SendOptions, StreamedResponse } from "@minimal-agent/core/sdk/transport-types"
 import { buildTestCore } from "@minimal-agent/core/testing/test-core"
 import { abortBus as globalAbortBus } from "./bus/abort-bus.ts"
-
 import { type ReplAgentLike, runRepl } from "./repl.ts"
+import type {
+  TestSendOptions as SendOptions,
+  TestStreamedResponse as StreamedResponse,
+} from "./test-utils/transport-types.ts"
 
 // ----------------------------- fakes ---------------------------------------
 
