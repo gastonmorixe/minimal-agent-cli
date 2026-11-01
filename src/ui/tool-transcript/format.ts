@@ -1057,7 +1057,7 @@ export function formatToolPreview(
  * run: a `│ ⊘ <message>` row (dim message behind the bold-red deny glyph)
  * and a `╰ (refused by <mode>)` closer. The core tool loop owns the semantic
  * decision (which tool, which mode, what message); the box-drawing frame and
- * palette live here so `agent/tool-round.ts` never imports the ANSI helpers.
+ * palette live here so core `src/loops/tool-round.ts` never imports the ANSI helpers.
  */
 export function formatRefusalRows(message: string, refusedBy: string): string[] {
   return [
@@ -1080,7 +1080,7 @@ export function formatModeCloseRow(labelDisplay: string): string {
  * Render one streamed body row (`│ <line>`) for the live Bash stream path.
  * The core streamer buffers the previous line and emits it through this
  * helper before buffering the next, so the box-drawing gutter + dim styling
- * stay in the host instead of being hand-built in `agent/tool-round.ts`.
+ * stay in the host instead of being hand-built in core `src/loops/tool-round.ts`.
  */
 export function formatStreamBodyRow(line: string): string {
   return `  ${c.dimCyan("│")} ${c.dim(line)}`
