@@ -28,7 +28,6 @@
     "typescript/no-unnecessary-type-assertion": "off",
     "typescript/no-unnecessary-boolean-literal-compare": "off",
     "typescript/restrict-template-expressions": "off",
-    "typescript/require-array-sort-compare": "off",
     "no-await-in-loop": "off",
     "no-control-regex": "off",
     "no-shadow": "off",
@@ -52,9 +51,7 @@
     "jsdoc-js/require-description": "error",
     "jsdoc-js/check-param-names": "error",
     "jsdoc-js/require-param": "off",
-    "jsdoc-js/require-param-description": "off",
     "jsdoc-js/require-returns": "off",
-    "jsdoc-js/require-returns-description": "off",
     "max-lines": ["error", { "max": 810, "skipBlankLines": true, "skipComments": true }]
   },
   "overrides": [
