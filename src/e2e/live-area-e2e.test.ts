@@ -392,3 +392,111 @@ describe("live-area REPL (end to end)", () => {
     await replPromise
   })
 })
+
+describe("live-area REPL (end to end) : writes from inside a turn keep their place", () => {
+  /** Build the REPL stack with a scrollback capture. */
+  function setup() {
+    const stdin = new FakeTTYInput()
+    const output = new FakeOutput()
+    const compositor = new Compositor({ output: output as any })
+    const scrollbackWrites: string[] = []
+    const origWriteStream = compositor.writeStream.bind(compositor)
+    compositor.writeStream = (chunk: string) => {
+      scrollbackWrites.push(chunk)
+      return origWriteStream(chunk)
+    }
+    const editor = new EditorController({
+      exitFn: () => {},
+      prompt: "❯ ",
+      continuationPrompt: "  ",
+      compositor,
+      stdin: stdin as any,
+      output: output as any,
+    })
+    return { stdin, output, compositor, editor, scrollbackWrites }
+  }
+
+  it("sends the queue echo through the agent's ordered render steps", async () => {
+    const { stdin, output, compositor, editor, scrollbackWrites } = setup()
+    const QUEUED = "QUEUE_ECHO_ORDER_SENTINEL"
+    const held: Array<() => void> = []
+    const seen: { atTake?: boolean; afterSteps?: boolean } = {}
+    const fakeAgent: ReplAgentLike = {
+      pluginLoader: () => null,
+      // A real session holds the step while earlier rows still render.
+      renderInOrder: (step: () => void) => {
+        held.push(step)
+      },
+      async *run(_text: string, opts?: any) {
+        yield "body\n"
+        await new Promise((r) => setTimeout(r, 40))
+        expect(opts?.inputQueue?.take()).toBe(QUEUED)
+        seen.atTake = scrollbackWrites.join("").includes(QUEUED)
+        for (const step of held.splice(0)) step()
+        seen.afterSteps = scrollbackWrites.join("").includes(QUEUED)
+        return { blocks: [], text: "ok\n", stopReason: "end_turn" } as any
+      },
+    }
+    const replPromise = runRepl(fakeAgent, {
+      output: output as any,
+      statusBus: new StatusBus(),
+      statusRenderer: null,
+      useLiveArea: true,
+      compositor,
+      editor,
+    })
+    await Promise.resolve()
+    stdin.send("first")
+    stdin.send("\r")
+    await new Promise((r) => setTimeout(r, 5))
+    stdin.send(QUEUED)
+    stdin.send("\r")
+    await new Promise((r) => setTimeout(r, 100))
+    expect(seen).toEqual({ atTake: false, afterSteps: true })
+    stdin.send("\x03")
+    stdin.send("\x03")
+    await replPromise
+  })
+
+  it("sends the mode-change chip through the agent's ordered render steps", async () => {
+    const { ModeManager } = await import("@minimal-agent/core/host-kit/modes")
+    const modeManager = new ModeManager([{ id: "ask", label: "ASK" }])
+    const { stdin, output, compositor, editor, scrollbackWrites } = setup()
+    const held: Array<() => void> = []
+    const hasChip = () => scrollbackWrites.some((chunk) => chunk.includes("→"))
+    const seen: { atDeliver?: boolean; afterSteps?: boolean } = {}
+    const fakeAgent: ReplAgentLike = {
+      pluginLoader: () => null,
+      modes: () => modeManager,
+      renderInOrder: (step: () => void) => {
+        held.push(step)
+      },
+      async *run() {
+        yield "body\n"
+        // A mid-turn delivery, the way the loop consumes it after a tool round.
+        modeManager.cycleNext()
+        modeManager.consumePendingAttachment()
+        seen.atDeliver = hasChip()
+        for (const step of held.splice(0)) step()
+        seen.afterSteps = hasChip()
+        return { blocks: [], text: "ok\n", stopReason: "end_turn" } as any
+      },
+    }
+    const replPromise = runRepl(fakeAgent, {
+      output: output as any,
+      statusBus: new StatusBus(),
+      statusRenderer: null,
+      useLiveArea: true,
+      compositor,
+      editor,
+    })
+    await Promise.resolve()
+    stdin.send("first")
+    stdin.send("\r")
+    await new Promise((r) => setTimeout(r, 50))
+    expect(seen).toEqual({ atDeliver: false, afterSteps: true })
+    stdin.send("\x03")
+    stdin.send("\x03")
+    await replPromise
+  })
+})

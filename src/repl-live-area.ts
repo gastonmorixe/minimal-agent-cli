@@ -371,6 +371,14 @@ export async function runReplLiveArea(
     // We do NOT persist here; the file we just loaded from already
     // contains exactly these items, so a re-save is wasted I/O.
   }
+  /**
+   * Run a scrollback write in turn order. A write from inside a core port
+   * (queue echo, mode-change chip) waits for the rows before it (S36).
+   */
+  const renderInOrder = (step: () => void): void => {
+    if (agent.renderInOrder) agent.renderInOrder(step)
+    else step()
+  }
   /** Flush a queue item's pre-rendered scrollback lines, if any. */
   const flushQueueItemToScrollback = (item: QueueItem): void => {
     if (item.commitLines.length === 0) return
@@ -415,7 +423,7 @@ export async function runReplLiveArea(
       toFgOpen: modeLabelFgOpen(modeManager, event.toId),
       at: event.at,
     })
-    compositor.writeStream(`\n${chip}\n`)
+    renderInOrder(() => compositor.writeStream?.(`\n${chip}\n`))
   }
   let cancelled = false
   /** When non-null, the goodbye banner uses this reason in the closer copy. */
@@ -1214,7 +1222,11 @@ export async function runReplLiveArea(
         // fires from inside agent.run when consumePendingAttachment
         // returns a block, which is the actual "model now knows"
         // moment. See the onDeliver wiring further up.
-        for (const item of drained) flushQueueItemToScrollback(item)
+        // The echo goes through the turn order, so it shows after the tool
+        // rows and text of the round before it.
+        renderInOrder(() => {
+          for (const item of drained) flushQueueItemToScrollback(item)
+        })
         renderDecoration()
         return drained.map((i) => i.text).join("\n\n")
       }

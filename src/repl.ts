@@ -60,6 +60,12 @@ export interface ReplAgentLike {
   modes?(): ModeManager | null
   /** Optional: convenience for the active mode (if any). */
   getActiveMode?(): ManifestMode | null
+  /**
+   * Optional. Run a host render write in turn order (S36). A session that
+   * renders through a pump holds the write until the rows before it show.
+   * With no such method, the REPL writes at once.
+   */
+  renderInOrder?(step: () => void): void
   run(
     userText: string,
     opts?: {

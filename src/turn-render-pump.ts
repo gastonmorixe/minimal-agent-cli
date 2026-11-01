@@ -12,6 +12,8 @@
  * - A step waits when an earlier text chunk is still with the consumer, or
  *   an earlier step still runs (it returned a promise). The drain loop then
  *   runs it in order, between the text chunks.
+ * - When the turn signal aborts, the pump drops the items that wait, and
+ *   stops waiting for a step that runs. A stuck step cannot block the turn.
  *
  * @module turn-render-pump
  */
@@ -43,6 +45,22 @@ export class TurnRenderPump {
   private abandoned = false
   private failed = false
   private failure: unknown
+  private readonly idleWaiters: Array<() => void> = []
+  /** Resolves when the signal aborts. Never resolves with no signal. */
+  private readonly aborted: Promise<void>
+
+  /** `signal` is the turn signal. On abort, the pump calls {@link abandon}. */
+  constructor(signal?: AbortSignal) {
+    this.aborted = new Promise<void>((resolve) => {
+      if (!signal) return
+      const onAbort = () => {
+        this.abandon()
+        resolve()
+      }
+      if (signal.aborted) onAbort()
+      else signal.addEventListener("abort", onAbort, { once: true })
+    })
+  }
 
   /** Add a text chunk for the consumer. */
   text(text: string): void {
@@ -79,14 +97,27 @@ export class TurnRenderPump {
   }
 
   /**
+   * Resolves when no item waits and no step runs, or after {@link abandon}.
+   * A host write that is not a step (for example the reflection cooldown)
+   * waits for this, so it shows after the rows before it.
+   */
+  idle(): Promise<void> {
+    if (this.isIdle()) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      this.idleWaiters.push(resolve)
+    })
+  }
+
+  /**
    * Yield each text chunk in order, and run the queued steps between them.
    * Ends after {@link close} and the last item. Throws the first step
    * failure or the close error.
    */
   async *drain(): AsyncGenerator<string, void, undefined> {
     for (;;) {
+      if (this.abandoned) break
       if (this.running) {
-        await this.running
+        await this.untilAbort(this.running)
         continue
       }
       const item = this.items.shift()
@@ -103,16 +134,32 @@ export class TurnRenderPump {
           yield item.text
         } else {
           try {
-            await item.run()
+            await this.untilAbort(item.run())
           } catch (error) {
             this.fail(error)
           }
         }
       } finally {
         this.busy = false
+        this.notifyIdle()
       }
     }
     if (this.failed) throw this.failure
+  }
+
+  /** Wait for `value`, but stop waiting when the signal aborts. */
+  private async untilAbort(value: MaybePromise<void>): Promise<void> {
+    if (!isThenable(value)) return
+    await Promise.race([value, this.aborted])
+  }
+
+  private isIdle(): boolean {
+    return this.abandoned || (!this.busy && this.running === null && this.items.length === 0)
+  }
+
+  private notifyIdle(): void {
+    if (!this.isIdle()) return
+    for (const resolve of this.idleWaiters.splice(0)) resolve()
   }
 
   private runNow(run: RenderStep): void {
@@ -134,6 +181,7 @@ export class TurnRenderPump {
       if (this.running === running) this.running = null
       this.busy = false
       this.notify()
+      this.notifyIdle()
     })
   }
 
@@ -147,5 +195,6 @@ export class TurnRenderPump {
     const wake = this.wake
     this.wake = null
     wake?.()
+    this.notifyIdle()
   }
 }
