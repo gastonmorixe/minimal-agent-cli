@@ -46,11 +46,7 @@ function homeFiles(home: string) {
   return { home, log: join(home, "requests.log"), mark: join(home, "mark.txt") }
 }
 
-async function runChild(
-  args: string[],
-  killAtRound: number,
-  files = homeFiles(HOME_DIR),
-) {
+async function runChild(args: string[], killAtRound: number, files = homeFiles(HOME_DIR)) {
   const p = Bun.spawn(["bun", "run", CHILD, "--skip-quota", "--formatter", "cat", ...args], {
     cwd: CLI_ROOT,
     stdin: "ignore",
