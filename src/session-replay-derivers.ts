@@ -41,7 +41,6 @@
 
 import { buildEditDiff, buildFileDiff } from "@minimal-agent/core/host/diff"
 import {
-  type DerivedDisplay,
   getReplayRenderer,
   type ReplaySidecarTask,
 } from "@minimal-agent/core/host/session-replay-sidecar"
@@ -51,16 +50,27 @@ import {
 } from "@minimal-agent/core/host/tool-input-aliases"
 import { renderUnifiedDiff } from "./ui/render/unified-diff.ts"
 
-// The shared replay shape and the renderer registry live in core, so the
-// plugin loader and this host read one registry.
+// The shared replay input shape and the renderer registry live in core, so
+// the plugin loader and this host read one registry. The result shape is
+// CLI-owned (spec S29): core does not read it.
 export {
   clearReplayRenderers,
-  type DerivedDisplay,
   type ReplaySidecarTask,
   type ReplayToolRenderer,
   type ReplayToolRenderInput,
   registerReplayRenderer,
 } from "@minimal-agent/core/host/session-replay-sidecar"
+
+/**
+ * Override fields a re-deriver or a plugin replay renderer may fill. Each one
+ * is optional: a deriver that only knows the body returns `{ display: "..." }`
+ * and leaves the header and the footer untouched.
+ */
+export interface DerivedDisplay {
+  display?: string
+  displayHeader?: string
+  displayFooter?: string
+}
 
 /**
  * Annotation prefixes the agent appends to `content` for the model.

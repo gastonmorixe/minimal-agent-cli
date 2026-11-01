@@ -1,8 +1,17 @@
 import { describe, expect, it } from "bun:test"
 
-import type { SessionRecord } from "@minimal-agent/core/host-kit/session-store"
+import { parseLines, type SessionRecord } from "@minimal-agent/core/host-kit/session-store"
 
 import { toolDisplaysFromRecords, userTimestampsFromRecords } from "./session-replay.ts"
+
+/**
+ * Records as a session file written before spec S29 holds them: an old
+ * `tool_result` can carry `display` / `displayHeader` / `displayFooter`.
+ * Core no longer types these fields, so parse them like a real load does.
+ */
+function legacyRecords(recs: object[]): SessionRecord[] {
+  return parseLines(recs.map((r) => JSON.stringify(r)).join("\n")).records
+}
 
 function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[0-9;]*m/g, "")
@@ -11,7 +20,7 @@ function stripAnsi(s: string): string {
 describe("toolDisplaysFromRecords", () => {
   it("returns a map keyed by tool_use_id with every present display field", () => {
     const t = "2026-05-22T17:00:00.000Z"
-    const records: SessionRecord[] = [
+    const records = legacyRecords([
       {
         kind: "tool_result",
         ts: t,
@@ -38,7 +47,7 @@ describe("toolDisplaysFromRecords", () => {
         display: "render",
         displayFooter: "footer · 1ms",
       },
-    ]
+    ])
     const map = toolDisplaysFromRecords(records)
     expect(map.size).toBe(3)
     expect(map.get("tu_edit")?.display).toContain("--- a")
@@ -198,7 +207,7 @@ describe("toolDisplaysFromRecords", () => {
     // values must take precedence : the live agent is the source of
     // truth, the deriver is best-effort fallback.
     const t = "2026-05-22T17:00:00.000Z"
-    const records: SessionRecord[] = [
+    const records = legacyRecords([
       {
         kind: "assistant",
         ts: t,
@@ -222,7 +231,7 @@ describe("toolDisplaysFromRecords", () => {
         displayHeader: "AUTHORITATIVE HEADER",
         displayFooter: "AUTHORITATIVE FOOTER",
       },
-    ]
+    ])
     const map = toolDisplaysFromRecords(records)
     const entry = map.get("tu_t")
     expect(entry?.display).toBe("AUTHORITATIVE BODY")
@@ -237,7 +246,7 @@ describe("toolDisplaysFromRecords", () => {
     // from two sources) and the design contract is "persisted row =
     // live agent owned this render".
     const t = "2026-05-22T17:00:00.000Z"
-    const records: SessionRecord[] = [
+    const records = legacyRecords([
       {
         kind: "assistant",
         ts: t,
@@ -259,7 +268,7 @@ describe("toolDisplaysFromRecords", () => {
         isError: false,
         displayHeader: "PERSISTED ONLY THIS",
       },
-    ]
+    ])
     const map = toolDisplaysFromRecords(records)
     const entry = map.get("tu_p")
     expect(entry?.displayHeader).toBe("PERSISTED ONLY THIS")
@@ -282,7 +291,7 @@ describe("toolDisplaysFromRecords", () => {
     // tool_use_ids are unique), but we should still survive the case
     // without throwing or returning a stale value.
     const t = "2026-05-22T17:00:00.000Z"
-    const records: SessionRecord[] = [
+    const records = legacyRecords([
       {
         kind: "tool_result",
         ts: t,
@@ -299,7 +308,7 @@ describe("toolDisplaysFromRecords", () => {
         isError: false,
         display: "second display",
       },
-    ]
+    ])
     const map = toolDisplaysFromRecords(records)
     expect(map.get("tu_dup")?.display).toBe("second display")
   })

@@ -16,7 +16,7 @@ import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { replayToScrollback } from "../session-replay.ts"
 import { SIBLING_REPO_ROOT, siblingRepoPresent } from "../test-utils/sibling-repo.ts"
-import * as TOOL_TRANSCRIPT_FORMAT from "../ui/tool-transcript/format.ts"
+import { createReplToolView } from "../ui/tool-transcript/tool-view.ts"
 import { TOOL_PRESENTATION, toolPresentationMap } from "./tool-presentation.ts"
 
 const dirs: string[] = []
@@ -81,14 +81,15 @@ describe("CLI tool presentation map (S41)", () => {
     const loader = await PluginLoader.load({ roots: { embedded: [pluginsDir] }, logger: () => {} })
     const transcript: string[] = []
     const executor = new ToolExecutorAdapter({
-      presentation: TOOL_PRESENTATION,
-      writeTranscript: (line) => transcript.push(line),
+      toolView: createReplToolView({
+        writeTranscript: (line) => transcript.push(line),
+        presentation: TOOL_PRESENTATION,
+      }),
       loader,
       modeManager: null,
       blobStore: null,
       blobSkipTools: new Set(),
       feedbackTracker: new ToolFeedbackTracker(),
-      transcriptFormatter: TOOL_TRANSCRIPT_FORMAT,
       model: "test-model",
     })
     const run = executor.execute({

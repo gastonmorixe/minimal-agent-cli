@@ -12,14 +12,18 @@
  *   label on the CLI status bus.
  * - {@link createPluginEventsPort} forwards each event to the plugin
  *   loader's event bus.
- * - {@link withHostPorts} fills both ports into session deps that do not
- *   set them. Every session the CLI opens goes through it.
+ * - {@link withHostPorts} fills both ports, and the terminal `toolEnv`
+ *   port (spec S24), into session deps that do not set them. Every session
+ *   the CLI opens goes through it.
  *
  * @module host/startup/host-ports
  */
 
 import { GLOBAL_STATUS_BUS, type StatusBus } from "@minimal-agent/core/host/status-bus"
 import type { BuildAgentCoreDeps } from "@minimal-agent/core/host-kit/build-agent-core"
+import type { ToolEnvPort } from "@minimal-agent/core/sdk/ports"
+
+import { TERMINAL_TOOL_ENV } from "../terminal/terminal-tool-env.ts"
 
 /** The engine's live status port, as the session deps declare it. */
 export type HostStatusPort = NonNullable<BuildAgentCoreDeps["statusPort"]>
@@ -134,8 +138,9 @@ export function createPluginEventsPort(
 }
 
 /**
- * Fill the CLI status port and plugin-event port into `deps` when they do
- * not set them. A port that `deps` already sets stays.
+ * Fill the CLI status port, plugin-event port, and terminal `toolEnv` port
+ * into `deps` when they do not set them. A port that `deps` already sets
+ * stays. Core reads no terminal size, so the CLI gives Bash its own (S24).
  *
  * @param deps - Session deps for `openSession` or `openAgentCoreSession`.
  * @param statusBus - The status bus for the rows. Defaults to the CLI one.
@@ -145,14 +150,16 @@ export function withHostPorts<
     loader: PluginBusSource | null
     statusPort?: HostStatusPort
     pluginEvents?: HostPluginEventsPort
+    toolEnv?: ToolEnvPort
   },
 >(
   deps: T,
   statusBus: StatusBusLike = GLOBAL_STATUS_BUS,
-): T & { statusPort: HostStatusPort; pluginEvents: HostPluginEventsPort } {
+): T & { statusPort: HostStatusPort; pluginEvents: HostPluginEventsPort; toolEnv: ToolEnvPort } {
   return {
     ...deps,
     statusPort: deps.statusPort ?? createStatusPort(statusBus),
     pluginEvents: deps.pluginEvents ?? createPluginEventsPort(deps.loader),
+    toolEnv: deps.toolEnv ?? TERMINAL_TOOL_ENV,
   }
 }

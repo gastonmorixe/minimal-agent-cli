@@ -619,12 +619,13 @@ const MODE_CHANGE_RE =
  * Build the `toolDisplays` map for {@link replayToScrollback} from raw
  * {@link SessionRecord}s. Two-source merge:
  *
- *  1. **Persisted overrides** (new sessions): each `tool_result` row
- *     carries `display` / `displayHeader` / `displayFooter` written
- *     by the live agent at `Store.appendToolResult` time. We index
- *     those verbatim by `tool_use_id`.
+ *  1. **Persisted overrides** (sessions written before spec S29): an
+ *     old `tool_result` row can carry `display` / `displayHeader` /
+ *     `displayFooter` that the live agent wrote. We index those
+ *     verbatim by `tool_use_id` ({@link legacyToolDisplay}). New rows
+ *     never carry them.
  *
- *  2. **Re-derived fallback** (pre-fix / unsupported sessions): for
+ *  2. **Re-derived fallback** (all new sessions): for
  *     every `tool_result` row WITHOUT persisted overrides, we look up
  *     the matching `tool_use` block's input via `assistantToolUseIndex`
  *     and run {@link deriveDisplayFallback}. Today this covers `Task`
@@ -691,16 +692,12 @@ export function toolDisplaysFromRecords(
   // live agent owned that render, we don't try to second-guess).
   for (const rec of records) {
     if (rec.kind !== "tool_result") continue
-    const hasOverride =
-      rec.display !== undefined ||
-      rec.displayHeader !== undefined ||
-      rec.displayFooter !== undefined
-    if (hasOverride) {
-      const entry: { display?: string; displayHeader?: string; displayFooter?: string } = {}
-      if (rec.display !== undefined) entry.display = rec.display
-      if (rec.displayHeader !== undefined) entry.displayHeader = rec.displayHeader
-      if (rec.displayFooter !== undefined) entry.displayFooter = rec.displayFooter
-      out.set(rec.tool_use_id, entry)
+    // Records written before S29 can carry the live view's text. Core no
+    // longer types or writes these fields. The replay reads them from old
+    // records only.
+    const legacy = legacyToolDisplay(rec)
+    if (legacy) {
+      out.set(rec.tool_use_id, legacy)
       continue
     }
     const tu = toolUseIndex.get(rec.tool_use_id)
@@ -841,4 +838,25 @@ export function stringifyUserText(
     parts.push(b.text)
   }
   return { text: parts.join(" ").trim(), modeAfter }
+}
+
+/**
+ * The `display` / `displayHeader` / `displayFooter` strings of a
+ * `tool_result` record written before spec S29, or `null` when the record
+ * has none. Core no longer writes them, so only old records carry them.
+ */
+export function legacyToolDisplay(rec: object): {
+  display?: string
+  displayHeader?: string
+  displayFooter?: string
+} | null {
+  const entry: { display?: string; displayHeader?: string; displayFooter?: string } = {}
+  if ("display" in rec && typeof rec.display === "string") entry.display = rec.display
+  if ("displayHeader" in rec && typeof rec.displayHeader === "string") {
+    entry.displayHeader = rec.displayHeader
+  }
+  if ("displayFooter" in rec && typeof rec.displayFooter === "string") {
+    entry.displayFooter = rec.displayFooter
+  }
+  return Object.keys(entry).length > 0 ? entry : null
 }

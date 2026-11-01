@@ -1,8 +1,8 @@
 /**
  * Moved from core (S34 Phase 4): core no longer formats terminal rows. The
- * CLI injects its own tool transcript formatter through the public
- * `ToolExecutorAdapter` port. These tests prove the CLI formatter still
- * colors Read and Edit bodies, and that the model-facing content stays plain.
+ * CLI builds them from the core tool view events (S24) with its own tool
+ * view. These tests prove the CLI view still colors Read and Edit bodies,
+ * and that the model-facing content stays plain.
  */
 
 import { afterEach, describe, expect, it } from "bun:test"
@@ -11,13 +11,13 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { ToolFeedbackTracker } from "@minimal-agent/core/host-kit/feedback-tracker"
-import {
-  type CodeHighlighter,
-  type CodeHighlightRequest,
-  ToolExecutorAdapter,
-} from "@minimal-agent/core/host-kit/tool-executor-adapter"
+import { ToolExecutorAdapter } from "@minimal-agent/core/host-kit/tool-executor-adapter"
 
-import * as TOOL_TRANSCRIPT_FORMAT from "./format.ts"
+import type {
+  CodeHighlighter,
+  CodeHighlightRequest,
+} from "../formatter/mdstream-code-highlighter.ts"
+import { createReplToolView } from "./tool-view.ts"
 
 const dirs: string[] = []
 afterEach(() => {
@@ -40,15 +40,16 @@ function adapter(
   codeHighlighter: CodeHighlighter | null = highlighter,
 ): ToolExecutorAdapter {
   return new ToolExecutorAdapter({
-    presentation: new Map(),
-    writeTranscript: (line) => transcript.push(line),
+    toolView: createReplToolView({
+      writeTranscript: (line) => transcript.push(line),
+      presentation: new Map(),
+      codeHighlighter,
+    }),
     loader: null,
     modeManager: null,
     blobStore: null,
     blobSkipTools: new Set(),
     feedbackTracker: new ToolFeedbackTracker(),
-    codeHighlighter,
-    transcriptFormatter: TOOL_TRANSCRIPT_FORMAT,
     model: "test-model",
   })
 }

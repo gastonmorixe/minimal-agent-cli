@@ -24,6 +24,7 @@ import {
   takePendingCompact,
 } from "@minimal-agent/core/host/compact-contract"
 import { GLOBAL_STATUS_BUS } from "@minimal-agent/core/host/status-bus"
+import type { ToolTimeTracker } from "@minimal-agent/core/host/tool-time"
 import { loadBlobStoreConfig } from "@minimal-agent/core/host-kit/blob-store"
 import { type BuildAgentCoreDeps, toEffort } from "@minimal-agent/core/host-kit/build-agent-core"
 import { ToolFeedbackTracker } from "@minimal-agent/core/host-kit/feedback-tracker"
@@ -49,8 +50,10 @@ import { TOOL_PRESENTATION } from "./plugins-ui/tool-presentation.ts"
 import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
 import { createPluginEventsPort, createStatusPort } from "./startup/host-ports.ts"
+import { TERMINAL_TOOL_ENV, terminalColumns } from "./terminal/terminal-tool-env.ts"
 import { type StepLive, TurnRenderPump } from "./turn-render-pump.ts"
-import * as TOOL_TRANSCRIPT_FORMAT from "./ui/tool-transcript/format.ts"
+import type { CodeHighlighter } from "./ui/formatter/mdstream-code-highlighter.ts"
+import { createReplToolView } from "./ui/tool-transcript/tool-view.ts"
 
 type MaybePromise<T> = T | Promise<T>
 
@@ -113,6 +116,15 @@ export class TranscriptRouter {
 export type InteractiveSessionDeps = BuildAgentCoreDeps & {
   /** Mode manager for prompt/status/cycling (same instance as buildAgentCore). */
   modeManager: ModeManager | null
+  /**
+   * Transcript sink for the tool rows and the turn rows when no run gives
+   * its own writer.
+   */
+  writeTranscript?: (line: string) => void
+  /** Optional `· HH:MM:SS` tool-header time hints. */
+  toolTimeTracker?: ToolTimeTracker | null
+  /** Warm, fail-closed syntax highlighter for the tool transcript bodies. */
+  codeHighlighter?: CodeHighlighter | null
   /** Injectable interactive reflection behavior. Defaults to the real TUI cooldown. */
   reflectionCheckpoint?: ReflectionCheckpointBehavior
   /**
@@ -198,24 +210,28 @@ async function openInteractiveSession(
   // S23: one status port for the sends and the tool rows. A caller port wins.
   const statusPort = deps.statusPort ?? createStatusPort()
 
-  const toolExecutor = new ToolExecutorAdapter({
+  // S24: core sends plain tool view events. The CLI builds the rows.
+  const toolView = createReplToolView({
+    writeTranscript,
     // The CLI's static map (S41): icon, color, and early header paint.
     presentation: TOOL_PRESENTATION,
+    toolTimeTracker: deps.toolTimeTracker ?? null,
+    codeHighlighter: deps.codeHighlighter ?? null,
+    columns: terminalColumns,
+  })
+  const toolExecutor = new ToolExecutorAdapter({
     loader: deps.loader,
     modeManager: deps.modeManager,
     blobStore: deps.blobStore,
     blobSkipTools: loadBlobStoreConfig().skipTools,
     feedbackTracker: new ToolFeedbackTracker(),
-    toolTimeTracker: deps.toolTimeTracker ?? null,
-    codeHighlighter: deps.codeHighlighter ?? null,
-    // The terminal host styles the tool transcript rows (frames, colors).
-    transcriptFormatter: TOOL_TRANSCRIPT_FORMAT,
+    toolView,
     model: deps.model,
     store: deps.store,
     fileTrackingStore: deps.fileTrackingStore,
-    writeTranscript,
     lifecycle,
-    ...(deps.toolEnv ? { toolEnv: deps.toolEnv } : {}),
+    // S24: the CLI gives Bash its own terminal size. Core reads none.
+    toolEnv: deps.toolEnv ?? TERMINAL_TOOL_ENV,
     statusPort,
   })
 
