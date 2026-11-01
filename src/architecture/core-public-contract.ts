@@ -11,6 +11,7 @@ export const CORE_PUBLIC_CONTRACT = {
   resolvableFromCurrentCorePackage: true,
   packages: ["@minimal-agent/core"],
   coreSubpaths: [
+    ".",
     "./sdk/events",
     "./sdk/lifecycle",
     "./sdk/ports",
@@ -30,7 +31,11 @@ export const CORE_PUBLIC_CONTRACT = {
     "MediaResolver",
   ],
   engine: ["AgentCore"],
-  blockedUntilProgram2: ["host-safe construction contract", "stable completion DTO"],
+  // The host-safe construction contract. Every CLI route opens its session
+  // through these names (see src/routes.test.ts).
+  construction: ["createRuntime", "Session", "SessionOptions"],
+  // The stable completion DTO. `Session.run().result` resolves to it.
+  completion: ["TurnResult"],
 } as const
 
 export const LEGACY_CORE_TRANSPORT_CONTRACTS = [

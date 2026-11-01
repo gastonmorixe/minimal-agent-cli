@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
 
+import * as coreRoot from "@minimal-agent/core"
 import coreManifest from "@minimal-agent/core/package.json"
 import { parseJsonc } from "@minimal-agent/core/plugin-api"
-import { AgentCore } from "@minimal-agent/core/sdk/agent-core"
+import { AgentCore, type TurnResult } from "@minimal-agent/core/sdk/agent-core"
 import { serializeEvent } from "@minimal-agent/core/sdk/events"
 import { NOOP_LIFECYCLE } from "@minimal-agent/core/sdk/lifecycle"
 
@@ -45,5 +46,15 @@ describe("core dependency", () => {
     expect(serializeEvent).toBeFunction()
     expect(NOOP_LIFECYCLE).toBeObject()
     expect(parseJsonc('{ "a": 1, // comment\n }')).toEqual({ a: 1 })
+  })
+
+  test("exports the construction contract and the completion DTO", () => {
+    expect(coreRoot.createRuntime).toBeFunction()
+    expect(coreRoot.Session).toBeFunction()
+    // Type-level checks: these fail typecheck if core drops the names.
+    const options: keyof coreRoot.SessionOptions = "model"
+    const outcome: TurnResult["outcome"] | undefined = undefined
+    expect(options).toBe("model")
+    expect(outcome).toBeUndefined()
   })
 })
