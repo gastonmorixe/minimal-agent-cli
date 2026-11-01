@@ -10,7 +10,7 @@
  */
 
 import { afterAll, describe, expect, it } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
 import { importPluginModule } from "./plugin-module.ts"
@@ -47,6 +47,13 @@ mkdirSync(join(WS, "core", "src"), { recursive: true })
 writeFileSync(join(WS, "core", "package.json"), '{"name":"@minimal-agent/core"}\n')
 const FAKE_CORE = writeModule(join(WS, "core", "src", "index.ts"), "core")
 
+// Links into the real root of the installed core package.
+const REAL_CORE = realpathSync(join(CLI_ROOT, "node_modules", "@minimal-agent", "core"))
+symlinkSync(join(REAL_CORE, "src", "sdk", "runtime.ts"), join(PLUGIN, "core-file.ts"))
+symlinkSync(join(REAL_CORE, "src"), join(PLUGIN, "core-dir"))
+const CORE_ROOT_LINK = join(DIR, "core-root-link")
+symlinkSync(REAL_CORE, CORE_ROOT_LINK)
+
 describe("importPluginModule (S35)", () => {
   it("imports a module inside the plugin root", async () => {
     expect(await importPluginModule(GOOD, PLUGIN)).toMatchObject({ default: "good" })
@@ -71,5 +78,21 @@ describe("importPluginModule (S35)", () => {
     await expect(importPluginModule(join(PLUGIN, "linked.ts"), PLUGIN)).rejects.toThrow(
       /outside the plugin/,
     )
+  })
+
+  it("refuses a file link inside the plugin root to a core file", async () => {
+    await expect(importPluginModule(join(PLUGIN, "core-file.ts"), PLUGIN)).rejects.toThrow(
+      /names core code/,
+    )
+  })
+
+  it("refuses a module under a dir link inside the plugin root to core", async () => {
+    const path = join(PLUGIN, "core-dir", "sdk", "runtime.ts")
+    await expect(importPluginModule(path, PLUGIN)).rejects.toThrow(/names core code/)
+  })
+
+  it("refuses a module when the plugin root is a link to core", async () => {
+    const path = join(CORE_ROOT_LINK, "src", "sdk", "runtime.ts")
+    await expect(importPluginModule(path, CORE_ROOT_LINK)).rejects.toThrow(/names core code/)
   })
 })
