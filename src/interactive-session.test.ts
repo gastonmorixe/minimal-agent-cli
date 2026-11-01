@@ -110,7 +110,6 @@ describe("InteractiveSession", () => {
     const modes = {
       active: () => activeMode,
       activeId: () => activeMode.id,
-      promptPrefix: (prefix: string) => prefix,
       consumePendingAttachment: () => null,
     } as unknown as ModeManager
     const requestMessages: Message[][] = []
