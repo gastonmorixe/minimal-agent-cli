@@ -18,7 +18,7 @@
  * @module host/interactive-session
  */
 
-import { createRuntime, type Session } from "@minimal-agent/core"
+import { createRuntime, type ResumeSessionOptions, type Session } from "@minimal-agent/core"
 import {
   type CompactRequestOpts,
   takePendingCompact,
@@ -114,6 +114,12 @@ export type InteractiveSessionDeps = BuildAgentCoreDeps & {
   modeManager: ModeManager | null
   /** Injectable interactive reflection behavior. Defaults to the real TUI cooldown. */
   reflectionCheckpoint?: ReflectionCheckpointBehavior
+  /**
+   * `--resume` target: the session store's id and directory. When set, the
+   * session opens through core's `resumeSession` (S50), and
+   * `initialMessages` / `initialCheckpoint` are not used.
+   */
+  resumeFrom?: { sid: string; dir: string }
 }
 
 const DEFAULT_REFLECTION_CHECKPOINT: ReflectionCheckpointBehavior = {
@@ -226,8 +232,7 @@ async function openInteractiveSession(
   // Media resolver: ingest inline @file / image refs using the run's model.
   const mediaResolver = new MediaResolverAdapter(deps.model)
 
-  const runtime = createRuntime()
-  return runtime.openSession({
+  const options = {
     auth: deps.auth,
     model: deps.model,
     ...(deps.providerId !== undefined ? { providerId: deps.providerId } : {}),
@@ -238,8 +243,6 @@ async function openInteractiveSession(
     ...(deps.serviceTier !== undefined ? { serviceTier: deps.serviceTier } : {}),
     ...(deps.thinkingDisplay !== undefined ? { thinkingDisplay: deps.thinkingDisplay } : {}),
     ...(deps.cacheTtl !== undefined ? { cacheTtl: deps.cacheTtl } : {}),
-    ...(deps.initialMessages !== undefined ? { initialMessages: deps.initialMessages } : {}),
-    ...(deps.initialCheckpoint !== undefined ? { initialCheckpoint: deps.initialCheckpoint } : {}),
     ...(deps.sendFn !== undefined ? { sendFn: deps.sendFn } : {}),
     ...(deps.networkClient !== undefined ? { networkClient: deps.networkClient } : {}),
     toolRegistry,
@@ -275,6 +278,24 @@ async function openInteractiveSession(
       reflectionGate: runPorts.reflectionGatePort,
     },
     askUserFallback: "none",
+  } satisfies ResumeSessionOptions
+  const runtime = createRuntime()
+  // S50: a `--resume` with a session store reopens the session through
+  // core's `resumeSession`. Core reads the history and the last round
+  // checkpoint back from the store, so `run(_, { resume: true })` can
+  // continue an unfinished turn at its next round. The event log stays in
+  // memory, as for a new session.
+  if (deps.resumeFrom) {
+    return runtime.resumeSession(deps.resumeFrom.sid, {
+      ...options,
+      persist: { dir: deps.resumeFrom.dir, cwd: process.cwd() },
+      eventLogPath: null,
+    })
+  }
+  return runtime.openSession({
+    ...options,
+    ...(deps.initialMessages !== undefined ? { initialMessages: deps.initialMessages } : {}),
+    ...(deps.initialCheckpoint !== undefined ? { initialCheckpoint: deps.initialCheckpoint } : {}),
   })
 }
 
@@ -378,6 +399,8 @@ export class InteractiveSession implements ReplAgentLike {
       inputQueue?: InputQueuePort
       signal?: AbortSignal
       askUser?: (issue: PreflightIssue) => Promise<string | null>
+      /** Continue the unfinished turn at its next round (S50). `userText` is not used. */
+      resume?: boolean
     },
   ): AsyncGenerator<string, TurnResult, undefined> {
     const pump = new TurnRenderPump()
@@ -412,6 +435,7 @@ export class InteractiveSession implements ReplAgentLike {
       entries = this.session.run(userText, {
         ...(opts?.signal ? { signal: opts.signal } : {}),
         ...(opts?.askUser ? { askUser: opts.askUser } : {}),
+        ...(opts?.resume ? { resume: true } : {}),
       })
       // The entry stream ends when the turn ends, and throws on a run
       // failure. The pump gets the same entries through the subscription.

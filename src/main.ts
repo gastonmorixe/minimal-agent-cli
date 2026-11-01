@@ -111,6 +111,7 @@ import {
   signInStepLabel,
 } from "./startup/provider-presentation.ts"
 import { peekResumeCredentialPin } from "./startup/resolve-credential-name.ts"
+import { continueResumedTurn } from "./startup/resume-continue.ts"
 import {
   loadResumeState,
   type ResumedToolDisplay,
@@ -120,7 +121,7 @@ import { isHostModeRun, isInteractiveResumeRun } from "./startup/resume-mode.ts"
 import { runHostMode } from "./startup/run-host-mode.ts"
 import { runNonInteractivePrompt, selectStdioMode } from "./startup/run-non-interactive.ts"
 import { runStartupSubcommand } from "./startup/run-subcommand.ts"
-import { bootSessionStores } from "./startup/session-store-boot.ts"
+import { bootSessionStores, resumeTargetOf } from "./startup/session-store-boot.ts"
 import {
   printStartupConfigRows,
   printTerminalViewportRow,
@@ -131,8 +132,7 @@ import type { StreamInfo } from "./startup/stream-json-writer.ts"
 import { isColdStart, maybeShowFirstRunWelcome } from "./ui/chrome/first-run.ts"
 import { buildReadyBanner } from "./ui/chrome/ready-banner.ts"
 import { resolveFormatter } from "./ui/formatter/auto.ts"
-import type { Spinner } from "./ui/spinner/index.ts"
-import { getSpinnerPreset, type NamedSpinnerPreset } from "./ui/spinner/named-presets.ts"
+import { resolveSpinnerPreset } from "./ui/spinner/named-presets.ts"
 import {
   closeStartupTree,
   closeStartupTreeWithTools,
@@ -140,7 +140,6 @@ import {
   printStartupRow,
   startStartupRowSpinner,
 } from "./ui/startup/tree.ts"
-import type { StatusSpinnerTheme } from "./ui/status/line-renderer.ts"
 import { c } from "./ui/style/ansi.ts"
 import { formatFatalError } from "./ui/turn-error.ts"
 
@@ -897,6 +896,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   let toolStartTimes: Map<string, number> | null = null
   let userTimestamps: (Date | null)[] | null = null
   let toolDisplays: Map<string, ResumedToolDisplay> | null = null
+  // S50: set when the resumed session's last turn is unfinished. The run
+  // then continues that turn by itself before anything else.
+  let roundCheckpoint: ResumeState["roundCheckpoint"] = null
   const resumeSameSid = resumeSameArg !== undefined
   if (effectiveResumeArg) {
     const failResume = (err: unknown): number => {
@@ -940,6 +942,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       toolStartTimes,
       userTimestamps,
       toolDisplays,
+      roundCheckpoint,
     } = resumed)
     resumeCompactBoundaries = resumed.compactBoundaries
     printStartupRow("resume", resumed.banner)
@@ -1083,6 +1086,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   const codeHighlighter = createMdstreamCodeHighlighter(formatterCmd)
   void codeHighlighter?.warmup()
 
+  const resumeTarget = resumeTargetOf(store, resumeSid)
   // Tier-2 InteractiveSession over AgentCore — production conversation path
   // for both REPL and non-interactive human/`--prompt` (json/stream-json
   // still opens a dedicated Session via openEventStreamSession below).
@@ -1106,6 +1110,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     blobStore,
     fileTrackingStore,
     initialMessages,
+    // S50: resume through core's `resumeSession` when the store is open.
+    // Without a store, seed the history and the checkpoint directly.
+    ...(resumeTarget ? { resumeFrom: resumeTarget } : {}),
+    ...(roundCheckpoint ? { initialCheckpoint: roundCheckpoint } : {}),
     toolTimeTracker,
     codeHighlighter,
     systemPromptOverrides: opts.systemPromptOverrides,
@@ -1240,6 +1248,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         cwd: cwd,
         // Values for the stream-json session_started first line.
         streamInfo,
+        continueTurn: roundCheckpoint !== null,
         // Structured event-stream route for `--output-format json` / `stream-json`:
         // open a fully-wired Session (Tier-1 adapters, over createRuntime) whose
         // own complete event log run-non-interactive filters at its own
@@ -1262,6 +1271,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
               thinkingDisplay,
               cacheTtl,
               initialMessages,
+              ...(roundCheckpoint ? { initialCheckpoint: roundCheckpoint } : {}),
               loader: hasPlugins ? loader : null,
               modeManager,
               toolNamePolicy: opts.cliToolFilter,
@@ -1302,20 +1312,14 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // Resolve --spinner / MINIMAL_AGENT_SPINNER → instantiated spinner.
   // Unknown names log a warning and fall back to the default preset so a
   // typo never breaks the REPL.
-  let spinner: Spinner<StatusSpinnerTheme> | undefined
-  if (spinnerName) {
-    const preset: NamedSpinnerPreset | null = getSpinnerPreset(spinnerName)
-    if (preset) {
-      spinner = preset.factory()
-    } else {
-      console.error(
-        `  ${c.boldRed("warn")} unknown spinner preset "${spinnerName}". ` +
-          `Run with ${c.cyan("--list-spinners")} to see available ids.`,
-      )
-    }
-  }
+  const spinner = resolveSpinnerPreset(spinnerName, (line) => console.error(line))
 
   try {
+    // S50: no human is assumed. An unfinished resumed turn continues by
+    // itself before the prompt mounts.
+    if (roundCheckpoint !== null) {
+      await continueResumedTurn({ agent, formatterCmd, loader: hasPlugins ? loader : null, cwd })
+    }
     if (noLiveArea) {
       await runRepl(agent, { formatterCmd, auth, spinner })
     } else {

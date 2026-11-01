@@ -11,9 +11,13 @@
 
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-
+import type { RoundCheckpoint } from "@minimal-agent/core"
 import { parseReplaySidecarTasks } from "@minimal-agent/core/host/session-replay-sidecar"
-import { compactDisplayBoundaries, loadSession } from "@minimal-agent/core/host/session-restore"
+import {
+  compactDisplayBoundaries,
+  lastTurnRoundCheckpoint,
+  loadSession,
+} from "@minimal-agent/core/host/session-restore"
 import { resolveSessionsDir } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import type { Message, ToolUseBlock } from "@minimal-agent/core/sdk/messages"
 import { toolDisplaysFromRecords, userTimestampsFromRecords } from "../session-replay.ts"
@@ -60,6 +64,12 @@ export interface ResumeState {
    * renders (Edit's diff, the Tasks tree) survive `--resume`.
    */
   readonly toolDisplays: Map<string, ResumedToolDisplay>
+  /**
+   * Last round checkpoint of an unfinished turn (S50), or null when the
+   * last turn settled. When set, the resumed run continues that turn at
+   * round `round + 1` by itself. No human is assumed.
+   */
+  readonly roundCheckpoint: RoundCheckpoint | null
   /** Text for the `resume` startup row. */
   readonly banner: string
 }
@@ -112,7 +122,12 @@ export function loadResumeState(resumeSid: string, env: NodeJS.ProcessEnv): Resu
   // Show the draft restore in the startup tree too, so a user who reads
   // only the banner knows why the editor is not empty.
   const draftNote = pendingDraft !== null ? ` ${c.dim("(unsent draft restored)")}` : ""
-  const banner = `resume ${c.cyan(resumeSid)} ${c.dim(`(${initialMessages.length} message(s))`)}${repairNote}${droppedNote}${draftNote}`
+  const roundCheckpoint = lastTurnRoundCheckpoint(loaded.records)
+  const continueNote =
+    roundCheckpoint !== null
+      ? ` ${c.dim(`(unfinished turn continues at round ${roundCheckpoint.round + 1})`)}`
+      : ""
+  const banner = `resume ${c.cyan(resumeSid)} ${c.dim(`(${initialMessages.length} message(s))`)}${repairNote}${droppedNote}${draftNote}${continueNote}`
 
   return {
     initialMessages,
@@ -122,6 +137,7 @@ export function loadResumeState(resumeSid: string, env: NodeJS.ProcessEnv): Resu
     toolStartTimes,
     userTimestamps: userTimestampsFromRecords(loaded.records),
     toolDisplays: toolDisplaysFromRecords(loaded.records, { sidecarTasks }),
+    roundCheckpoint,
     banner,
   }
 }
