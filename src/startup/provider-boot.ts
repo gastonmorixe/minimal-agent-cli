@@ -26,6 +26,7 @@ import {
 import { primeProviderSessionInfo } from "@minimal-agent/core/host/provider-session"
 import type { CliOptions } from "../cli/parse-argv.ts"
 import { printStartupRow } from "../ui/startup/tree.ts"
+import { c } from "../ui/style/ansi.ts"
 import { resolveBootModel, resolveSingleStoredProviderBootModel } from "./resolve-boot-model.ts"
 import { resolveCredentialName } from "./resolve-credential-name.ts"
 
@@ -150,7 +151,7 @@ export async function resolveStartupProviderState(
     apiKey: input.opts.apiKey,
     authHeader: input.opts.authHeader,
   })
-  printStartupRow("auth", startupAuthLabel(auth, selectedProviderId))
+  printStartupRow("auth", startupAuthLabel(auth, selectedProviderId, c.dim))
 
   return {
     selectedModel,

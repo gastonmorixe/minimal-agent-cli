@@ -45,6 +45,7 @@ import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
 import { inputCaptureStack } from "./input/input-capture-stack.ts"
 import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
+import * as TOOL_TRANSCRIPT_FORMAT from "./ui/tool-transcript/format.ts"
 
 type MaybePromise<T> = T | Promise<T>
 
@@ -152,6 +153,8 @@ async function openInteractiveSession(
     feedbackTracker: new ToolFeedbackTracker(),
     toolTimeTracker: deps.toolTimeTracker ?? null,
     codeHighlighter: deps.codeHighlighter ?? null,
+    // The terminal host styles the tool transcript rows (frames, colors).
+    transcriptFormatter: TOOL_TRANSCRIPT_FORMAT,
     model: deps.model,
     store: deps.store,
     fileTrackingStore: deps.fileTrackingStore,
