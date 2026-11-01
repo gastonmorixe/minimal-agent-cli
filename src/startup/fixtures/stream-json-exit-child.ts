@@ -14,8 +14,8 @@
 import { createRuntime } from "@minimal-agent/core"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import type { ToolExecResult, ToolExecutor } from "@minimal-agent/core/sdk/ports"
-import type { StreamedResponse } from "@minimal-agent/core/sdk/transport-types"
 import type { ReplAgentLike } from "../../repl.ts"
+import type { TestStreamedResponse as StreamedResponse } from "../../test-utils/transport-types.ts"
 import { runNonInteractivePrompt } from "../run-non-interactive.ts"
 
 const size = Number(process.argv[2] ?? "1000000")

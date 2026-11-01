@@ -21,7 +21,10 @@ import type { HostModeContext, HostModeHandler } from "@minimal-agent/core/host-
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
 import type { ModelInfoSnapshot } from "@minimal-agent/core/plugin-api/types/plugin"
-import type { SendOptions, StreamedResponse } from "@minimal-agent/core/sdk/transport-types"
+import type {
+  TestSendOptions as SendOptions,
+  TestStreamedResponse as StreamedResponse,
+} from "../test-utils/transport-types.ts"
 
 import { type RunHostModeInput, runHostMode } from "./run-host-mode.ts"
 

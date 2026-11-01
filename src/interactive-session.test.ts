@@ -23,12 +23,15 @@ import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
 import type { Message } from "@minimal-agent/core/sdk/messages"
-import type { SendOptions, StreamedResponse } from "@minimal-agent/core/sdk/transport-types"
 import {
   InteractiveSession,
   type ReflectionCheckpointContext,
   TranscriptRouter,
 } from "./interactive-session.ts"
+import type {
+  TestSendOptions as SendOptions,
+  TestStreamedResponse as StreamedResponse,
+} from "./test-utils/transport-types.ts"
 
 function fakeModel(id: string): ModelEntry {
   return {

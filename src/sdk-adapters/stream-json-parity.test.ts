@@ -24,7 +24,7 @@ import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { buildAgentCore } from "@minimal-agent/core/host-kit/build-agent-core"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import type { AgentEvent, EventSink } from "@minimal-agent/core/sdk/events"
-import type { StreamedResponse } from "@minimal-agent/core/sdk/transport-types"
+import type { TestStreamedResponse as StreamedResponse } from "../test-utils/transport-types.ts"
 
 const AUTH: AuthResult = { type: "api-key", token: "test-token" }
 const MODEL = "test-model"

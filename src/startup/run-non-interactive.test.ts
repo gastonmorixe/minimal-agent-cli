@@ -33,8 +33,8 @@ import type {
   ToolRegistry,
   TranscriptSink,
 } from "@minimal-agent/core/sdk/ports"
-import type { StreamedResponse } from "@minimal-agent/core/sdk/transport-types"
 import type { ReplAgentLike } from "../repl.ts"
+import type { TestStreamedResponse as StreamedResponse } from "../test-utils/transport-types.ts"
 
 import {
   type RunNonInteractivePromptInput,
