@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { ChildProcess } from "node:child_process"
 import { readdir } from "node:fs/promises"
 import { isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -218,6 +219,45 @@ export async function checkCoreBoundary(
   return violations
 }
 
+/** The longest time to wait for the TypeScript server to exit on its own. */
+const SERVER_EXIT_TIMEOUT_MS = 5000
+
+/** Read `key` of `value`, or `undefined` when `value` is not an object. */
+function field(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined
+}
+
+/**
+ * Close the TypeScript API with no stderr output.
+ *
+ * `api.close()` closes the server's stdin and sends SIGTERM at the same
+ * time. Sometimes (more often under machine load) the server gets the
+ * signal while it shuts down after the end of stdin. It then writes
+ * "context canceled" to the stderr that this process shares with it. The
+ * boundary test requires an empty stderr, so that line fails it.
+ *
+ * This function first closes stdin and waits for the server to exit with
+ * code 0. Then `api.close()` sends a signal to no process. The server
+ * process is internal to TypeScript 7.0.2 (exact pin). If its shape
+ * changes, this function only calls `api.close()`.
+ */
+async function closeApi(api: API): Promise<void> {
+  const child = field(field(field(api, "client"), "channel"), "child")
+  if (child instanceof ChildProcess && child.exitCode === null && child.signalCode === null) {
+    const exited = new Promise<void>((resolve) => {
+      child.once("exit", () => resolve())
+    })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, SERVER_EXIT_TIMEOUT_MS)
+    })
+    child.stdin?.end()
+    await Promise.race([exited, timeout])
+    clearTimeout(timer)
+  }
+  api.close()
+}
+
 async function main(argv: readonly string[]): Promise<number> {
   const rootArg = argv[argv.indexOf("--root") + 1] ?? "src"
   const configArg = argv[argv.indexOf("--config") + 1] ?? "tsconfig.json"
@@ -243,7 +283,7 @@ async function main(argv: readonly string[]): Promise<number> {
       snapshot.dispose()
     }
   } finally {
-    api.close()
+    await closeApi(api)
   }
 }
 
