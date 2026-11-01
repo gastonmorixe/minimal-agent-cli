@@ -1,8 +1,24 @@
 import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
 
-import * as coreRoot from "@minimal-agent/core"
-import coreManifest from "@minimal-agent/core/package.json"
+import { createRuntime, Session, type SessionOptions } from "@minimal-agent/core"
+import {
+  createDiagnosticBus,
+  type DiagnosticBus,
+  Facility,
+  getDiagnosticBus,
+  type LogEvent,
+  Severity,
+} from "@minimal-agent/core/host/diagnostics"
+import {
+  GLOBAL_STATUS_BUS,
+  type StatusActivity,
+  StatusBus,
+  type StatusDirection,
+  type StatusHandle,
+  type StatusSnapshot,
+} from "@minimal-agent/core/host/status-bus"
+import { name as coreName } from "@minimal-agent/core/package.json"
 import { parseJsonc } from "@minimal-agent/core/plugin-api"
 import { AgentCore, type TurnResult } from "@minimal-agent/core/sdk/agent-core"
 import { serializeEvent } from "@minimal-agent/core/sdk/events"
@@ -31,7 +47,7 @@ describe("core dependency", () => {
   })
 
   test("installs the package named in the contract", () => {
-    expect(coreManifest.name).toBe(CORE_PUBLIC_CONTRACT.packages[0])
+    expect(coreName).toBe(CORE_PUBLIC_CONTRACT.packages[0])
   })
 
   test("resolves every contract subpath", () => {
@@ -49,12 +65,38 @@ describe("core dependency", () => {
   })
 
   test("exports the construction contract and the completion DTO", () => {
-    expect(coreRoot.createRuntime).toBeFunction()
-    expect(coreRoot.Session).toBeFunction()
+    expect(createRuntime).toBeFunction()
+    expect(Session).toBeFunction()
     // Type-level checks: these fail typecheck if core drops the names.
-    const options: keyof coreRoot.SessionOptions = "model"
+    const options: keyof SessionOptions = "model"
     const outcome: TurnResult["outcome"] | undefined = undefined
     expect(options).toBe("model")
     expect(outcome).toBeUndefined()
+  })
+
+  test("exports the diagnostics and status groups (S11)", () => {
+    expect(createDiagnosticBus).toBeFunction()
+    expect(getDiagnosticBus).toBeFunction()
+    expect(StatusBus).toBeFunction()
+    expect(GLOBAL_STATUS_BUS).toBeInstanceOf(StatusBus)
+    // Type-level checks: these fail typecheck if core drops the names.
+    // `Facility` and `Severity` are const enums, so only a type query works.
+    type Types = [
+      DiagnosticBus,
+      typeof Facility,
+      LogEvent,
+      typeof Severity,
+      StatusActivity,
+      StatusDirection,
+      StatusHandle,
+      StatusSnapshot,
+    ]
+    const count: Types["length"] = 8
+    expect(count).toBe(8)
+    const names: readonly string[] = [
+      ...CORE_PUBLIC_CONTRACT.diagnostics,
+      ...CORE_PUBLIC_CONTRACT.status,
+    ]
+    expect(names).toHaveLength(12)
   })
 })

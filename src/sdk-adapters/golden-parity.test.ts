@@ -29,7 +29,7 @@ import { describe, expect, it } from "bun:test"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { buildAgentCore } from "@minimal-agent/core/host-kit/build-agent-core"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
-import type { TestStreamedResponse as StreamedResponse } from "../test-utils/transport-types.ts"
+import type { TestSendResult as StreamedResponse } from "../test-utils/transport-types.ts"
 
 const AUTH: AuthResult = { type: "api-key", token: "test-token" }
 const MODEL = "test-model"

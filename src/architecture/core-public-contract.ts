@@ -7,7 +7,7 @@
  * `./plugin-api` and its `./plugin-api/*` subpaths.
  */
 export const CORE_PUBLIC_CONTRACT = {
-  status: "exported",
+  exportState: "exported",
   resolvableFromCurrentCorePackage: true,
   packages: ["@minimal-agent/core"],
   coreSubpaths: [
@@ -16,6 +16,8 @@ export const CORE_PUBLIC_CONTRACT = {
     "./sdk/lifecycle",
     "./sdk/ports",
     "./sdk/agent-core",
+    "./host/diagnostics",
+    "./host/status-bus",
     "./plugin-api",
   ],
   events: ["AgentEvent", "EventSink"],
@@ -36,6 +38,26 @@ export const CORE_PUBLIC_CONTRACT = {
   construction: ["createRuntime", "Session", "SessionOptions"],
   // The stable completion DTO. `Session.run().result` resolves to it.
   completion: ["TurnResult"],
+  // The diagnostic bus. The CLI shows its events in the status area and
+  // scrollback (see src/ui/status/). Subpath: ./host/diagnostics.
+  diagnostics: [
+    "DiagnosticBus",
+    "Facility",
+    "LogEvent",
+    "Severity",
+    "createDiagnosticBus",
+    "getDiagnosticBus",
+  ],
+  // The status bus. The CLI live area reads its snapshots. Subpath:
+  // ./host/status-bus.
+  status: [
+    "GLOBAL_STATUS_BUS",
+    "StatusActivity",
+    "StatusBus",
+    "StatusDirection",
+    "StatusHandle",
+    "StatusSnapshot",
+  ],
 } as const
 
 export const LEGACY_CORE_TRANSPORT_CONTRACTS = [

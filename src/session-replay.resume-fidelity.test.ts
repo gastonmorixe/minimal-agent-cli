@@ -33,7 +33,7 @@ import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
 import { buildTestCore } from "@minimal-agent/core/testing/test-core"
 import { replayToScrollback, toolDisplaysFromRecords } from "./session-replay.ts"
 import type {
-  TestStreamedResponse as StreamedResponse,
+  TestSendResult as StreamedResponse,
   TestTransport as TransportFn,
 } from "./test-utils/transport-types.ts"
 

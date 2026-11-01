@@ -19,8 +19,8 @@ import { StdioInterceptor } from "./ui/stdio-interceptor.ts"
 
 /**
  * The `run` method's generator return value, derived structurally from
- * `ReplAgentLike` itself instead of naming the legacy transport type
- * (`StreamedResponse`) directly: `src/architecture/core-boundary.test.ts`
+ * `ReplAgentLike` itself instead of naming the legacy transport result
+ * type directly: `src/architecture/core-boundary.test.ts`
  * forbids importing that name from a core package anywhere in this repo's
  * production sources (see `LEGACY_CORE_TRANSPORT_CONTRACTS`). This fake
  * agent only needs SOME type to satisfy the stub return below, and

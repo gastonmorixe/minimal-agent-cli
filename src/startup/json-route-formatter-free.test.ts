@@ -17,8 +17,8 @@ import { openAgentCoreSession } from "@minimal-agent/core/host-kit/build-agent-c
 import { InteractiveSession } from "../interactive-session.ts"
 import type { ReplAgentLike } from "../repl.ts"
 import type {
-  TestSendOptions as SendOptions,
-  TestStreamedResponse as StreamedResponse,
+  TestSendParams as SendOptions,
+  TestSendResult as StreamedResponse,
 } from "../test-utils/transport-types.ts"
 import { Formatter } from "../ui/formatter/formatter.ts"
 import * as TOOL_FORMAT from "../ui/tool-transcript/format.ts"

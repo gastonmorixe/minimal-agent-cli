@@ -42,8 +42,8 @@ import { buildTestCore } from "@minimal-agent/core/testing/test-core"
 import { abortBus as globalAbortBus } from "./bus/abort-bus.ts"
 import { type ReplAgentLike, runRepl } from "./repl.ts"
 import type {
-  TestSendOptions as SendOptions,
-  TestStreamedResponse as StreamedResponse,
+  TestSendParams as SendOptions,
+  TestSendResult as StreamedResponse,
 } from "./test-utils/transport-types.ts"
 
 // ----------------------------- fakes ---------------------------------------

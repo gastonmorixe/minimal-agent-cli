@@ -15,7 +15,7 @@ import { createRuntime } from "@minimal-agent/core"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import type { ToolExecResult, ToolExecutor } from "@minimal-agent/core/sdk/ports"
 import type { ReplAgentLike } from "../../repl.ts"
-import type { TestStreamedResponse as StreamedResponse } from "../../test-utils/transport-types.ts"
+import type { TestSendResult } from "../../test-utils/transport-types.ts"
 import { runNonInteractivePrompt } from "../run-non-interactive.ts"
 
 const size = Number(process.argv[2] ?? "1000000")
@@ -31,7 +31,7 @@ class OkExecutor implements ToolExecutor {
 let round = 0
 // Round 1 streams the large text and asks for a tool, so the loop sends a
 // second request. Round 2 throws a permanent error, which pauses the run.
-const sendFn = async function* (): AsyncGenerator<string, StreamedResponse, undefined> {
+const sendFn = async function* (): AsyncGenerator<string, TestSendResult, undefined> {
   round++
   if (round === 1) {
     yield text
@@ -43,7 +43,7 @@ const sendFn = async function* (): AsyncGenerator<string, StreamedResponse, unde
       text,
       stopReason: "tool_use",
       usage: { input_tokens: 1, output_tokens: 1 },
-    } as StreamedResponse
+    } as TestSendResult
   }
   throw Object.assign(new Error("permanent upstream failure"), { errorClass: "permanent" })
 }
