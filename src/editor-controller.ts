@@ -503,8 +503,8 @@ export class EditorController extends EventEmitter {
           // Emit AFTER footer cleanup so the REPL teardown path sees a
           // clean editor state.
           this.emit("quit", e.reason)
-          // For back-compat with consumers (draft-store cleanup, REPL
-          // exit loop) that listen on the legacy "cancel" event.
+          // For back-compat with consumers (the REPL exit loop) that
+          // listen on the legacy "cancel" event.
           this.emit("cancel", e.reason)
           // Hard guarantee: confirmed Ctrl+C×2 ALWAYS quits.
           // Same rationale as forceQuitEscapeHatch above: cooperative
