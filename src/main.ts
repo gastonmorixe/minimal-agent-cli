@@ -696,6 +696,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     enabledPluginIds: pluginOverrides.forceEnabled,
     // Effective platform for `platforms` whitelist gating (CLI/env/detected).
     effectivePlatform: resolvedPlatform.platform,
+    // Core reads no process stream (S44). The terminal host gives plugin
+    // handlers its own streams (`ctx.stdin`, `ctx.stdout`, `ctx.stderr`).
+    handlerStdio: { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr },
   })
   // Expose the loader's event bus to deep emit-points (notably
   // `client.ts`, which broadcasts `quota.headersReceived` after every
