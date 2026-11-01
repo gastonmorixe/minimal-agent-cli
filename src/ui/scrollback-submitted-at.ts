@@ -21,7 +21,7 @@
  */
 
 import type { SubmittedAtStyle } from "@minimal-agent/core/host/config"
-import { ansiStyle as c } from "@minimal-agent/core/plugin-api/utils/ansi"
+import { ansiStyle as c } from "../terminal-kit/ansi.ts"
 
 /** The config style type lives in core config (spec S26). */
 export type { SubmittedAtStyle }

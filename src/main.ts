@@ -88,6 +88,7 @@ import { registerCompactHostCommand } from "./commands/compact.ts"
 import { registerContinueHostCommand } from "./commands/continue.ts"
 import { InteractiveSession } from "./interactive-session.ts"
 import { terminalHandlerEnv } from "./plugins-ui/handler-env.ts"
+import { toolPresentationMap } from "./plugins-ui/tool-presentation.ts"
 import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
 import { buildResumeHeader, replayToScrollback } from "./session-replay.ts"
@@ -1192,17 +1193,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       }),
     )
     if (resumeReplayMessages.length > 0) {
-      // Tool presentation map (icon + color) for replay: always empty now.
-      // `TOOL_DEFINITIONS` and `PluginLoader.getExtraTools()` no longer
-      // carry `icon` / `color` / `headerKey` (S29/S31 dropped the cosmetic
-      // fields from `ToolDefinition` and the plugin loader's tool-building
-      // path), so there is nothing left to mirror into this map. The
-      // replayed `╭` header falls back to the bare bold tool name until
-      // the CLI's own static presentation map (S41) replaces this.
-      const toolPresentation = new Map<
-        string,
-        { icon?: string; color?: string; headerKey?: string }
-      >()
+      // Tool presentation map (icon + color) for replay: the CLI's static
+      // map (S41). Core tool definitions carry no cosmetic fields (S29).
+      const toolPresentation = toolPresentationMap()
       await replayToScrollback(resumeReplayMessages, stdoutSink, {
         modeManager,
         formatterCmd,

@@ -45,6 +45,7 @@ import type { PreflightIssue } from "@minimal-agent/core/sdk/provider"
 import { toolFilterFromNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
 import { formatTurnNoticePlain } from "@minimal-agent/core/sdk/turn-notice"
 import { inputCaptureStack } from "./input/input-capture-stack.ts"
+import { TOOL_PRESENTATION } from "./plugins-ui/tool-presentation.ts"
 import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
 import { createPluginEventsPort, createStatusPort } from "./startup/host-ports.ts"
@@ -186,7 +187,7 @@ async function openInteractiveSession(
   writeTranscript: TranscriptWriter,
   runPorts: RunPortState,
 ): Promise<Session> {
-  // Tool registry: core built-ins + plugin tools, with presentation + aliases.
+  // Tool registry: core built-ins + plugin tools, with aliases.
   const toolRegistry = new ToolRegistryAdapter(deps.loader)
 
   // Tool executor: runs executeToolRound verbatim. It is the SOLE persister of
@@ -198,7 +199,8 @@ async function openInteractiveSession(
   const statusPort = deps.statusPort ?? createStatusPort()
 
   const toolExecutor = new ToolExecutorAdapter({
-    presentation: toolRegistry.presentation(),
+    // The CLI's static map (S41): icon, color, and early header paint.
+    presentation: TOOL_PRESENTATION,
     loader: deps.loader,
     modeManager: deps.modeManager,
     blobStore: deps.blobStore,

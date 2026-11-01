@@ -5,8 +5,8 @@
  * caller owns key event delivery and writing the rendered rows to the screen.
  */
 
-import { ANSI_CODES, bgRgb } from "@minimal-agent/core/plugin-api/utils/ansi"
 import { displayWidth, truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { ANSI_CODES, bgRgb } from "../terminal-kit/ansi.ts"
 
 const { DIM, RESET } = ANSI_CODES
 const SELECTED_BG = bgRgb(55, 45, 85)

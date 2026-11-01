@@ -60,8 +60,8 @@
  */
 
 import { type DiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
-import { ANSI_CODES } from "@minimal-agent/core/plugin-api/utils/ansi"
-import { PALETTE } from "@minimal-agent/core/plugin-api/utils/palette"
+import { ANSI_CODES } from "../../terminal-kit/ansi.ts"
+import { PALETTE } from "../../terminal-kit/palette.ts"
 
 // ---------------------------------------------------------------------------
 // SGR helpers (no `c` import; these compose raw palette opens with attributes).

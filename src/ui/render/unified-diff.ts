@@ -1,13 +1,8 @@
 /**
- * Re-export shim — the implementation moved to the leaf contract package
- * `@minimal-agent/core/plugin-api` in Wave D-0.
- *
- * The unified-diff colorizer now lives at
- * `plugin-api/src/utils/unified-diff.ts`. This file stays at the old path
- * so every core importer can use the UI rendering boundary while host code
- * and plugins consume the same implementation.
+ * Re-export of the unified-diff colorizer at its old UI path. The code
+ * lives in the CLI terminal-kit (`src/terminal-kit/unified-diff.ts`, S41).
  *
  * @module ui/render/unified-diff
  */
 
-export { renderUnifiedDiff } from "@minimal-agent/core/plugin-api/utils/unified-diff"
+export { renderUnifiedDiff } from "../../terminal-kit/unified-diff.ts"

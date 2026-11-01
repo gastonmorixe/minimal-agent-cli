@@ -30,7 +30,7 @@ import {
   type LogEvent,
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
-import { PALETTE } from "@minimal-agent/core/plugin-api/utils/palette"
+import { PALETTE } from "../../terminal-kit/palette.ts"
 
 import {
   formatScrollbackTs,

@@ -14,7 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 
-import { renderUnifiedDiff } from "@minimal-agent/core/plugin-api/utils/unified-diff"
+import { renderUnifiedDiff } from "../../terminal-kit/unified-diff.ts"
 
 const PATCH = [
   "--- a/src/example.ts",

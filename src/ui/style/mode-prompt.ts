@@ -11,7 +11,7 @@
  */
 
 import type { ModeManager, ModeStyle } from "@minimal-agent/core/host-kit/modes"
-import { ansiStyle as c } from "@minimal-agent/core/plugin-api/utils/ansi"
+import { ansiStyle as c } from "../../terminal-kit/ansi.ts"
 
 import {
   clampLabel,

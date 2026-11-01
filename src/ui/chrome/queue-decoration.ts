@@ -52,8 +52,8 @@
  */
 
 import { truncHint } from "@minimal-agent/core/host/truncate-hint"
-import { ANSI_CODES, bgRgb, ansiStyle as c } from "@minimal-agent/core/plugin-api/utils/ansi"
 import { displayWidth, truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { ANSI_CODES, bgRgb, ansiStyle as c } from "../../terminal-kit/ansi.ts"
 
 /**
  * Cap on item rows before eliding into a "... and N more" tail. Bumped
