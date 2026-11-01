@@ -144,6 +144,8 @@ async function openInteractiveSession(
   // store; the session-persistence adapter no-ops appendToolResult.
   const hooks = deps.loader && typeof deps.loader.hooks === "function" ? deps.loader.hooks() : null
   const lifecycle = createLifecyclePort(hooks)
+  // S23: one status port for the sends and the tool rows. A caller port wins.
+  const statusPort = deps.statusPort ?? createStatusPort()
 
   const toolExecutor = new ToolExecutorAdapter({
     presentation: toolRegistry.presentation(),
@@ -162,6 +164,7 @@ async function openInteractiveSession(
     writeTranscript,
     lifecycle,
     ...(deps.toolEnv ? { toolEnv: deps.toolEnv } : {}),
+    statusPort,
   })
 
   // Prompt contributor: awaits the plugin prompt block once (parity seam),
@@ -226,7 +229,7 @@ async function openInteractiveSession(
     ...(deps.retry !== undefined ? { retry: deps.retry } : {}),
     // S23/S28: the CLI status rows and the plugin bus get the engine's
     // status phases and stream telemetry. A caller port wins.
-    statusPort: deps.statusPort ?? createStatusPort(),
+    statusPort,
     pluginEvents: deps.pluginEvents ?? createPluginEventsPort(deps.loader),
     // S17/S27: the `compactSource` port reads the plugin host's
     // `context:compact` queue, exactly like `buildAgentCore`.

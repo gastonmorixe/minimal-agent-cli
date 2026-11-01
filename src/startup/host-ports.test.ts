@@ -8,6 +8,9 @@
  */
 
 import { afterEach, describe, expect, it } from "bun:test"
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { clearModelRegistry, clearProviderRegistry } from "@minimal-agent/core/host/model-registry"
@@ -56,13 +59,34 @@ function textEvents(text: string): CanonicalEvents {
   ]
 }
 
-function okResponse(text: string): NetworkResponse {
+/** A stream with one `Read` tool call on `path`, then a clean `tool_use` stop. */
+function readToolEvents(path: string): CanonicalEvents {
+  return [
+    {
+      type: "message_start",
+      messageId: "msg_host_ports_tool",
+      modelId: "test-model-1",
+      initialUsage: { inputTokens: 1, outputTokens: 0 },
+    },
+    { type: "tool_use_start", index: 0, id: "tu_host_ports", name: "Read" },
+    { type: "tool_use_input_delta", index: 0, partialJson: JSON.stringify({ file_path: path }) },
+    { type: "tool_use_stop", index: 0 },
+    { type: "message_delta", stopReason: "tool_use", usage: { inputTokens: 1, outputTokens: 4 } },
+    { type: "message_stop" },
+  ]
+}
+
+function sseResponse(events: CanonicalEvents): NetworkResponse {
   return new NetworkResponse({
     status: 200,
     headers: { "content-type": "text/event-stream" },
     transport: { id: "fake", protocol: "h2" },
-    body: sseBodyFromEvents(textEvents(text)),
+    body: sseBodyFromEvents(events),
   })
+}
+
+function okResponse(text: string): NetworkResponse {
+  return sseResponse(textEvents(text))
 }
 
 function unavailableResponse(): NetworkResponse {
@@ -143,6 +167,16 @@ function recordStatusLabels(): { labels: string[]; stop: () => void } {
   return { labels, stop }
 }
 
+/** Record the top status row (label and notification id) on each bus change. */
+function recordStatusRows(): { rows: string[]; stop: () => void } {
+  const rows: string[] = []
+  const stop = GLOBAL_STATUS_BUS.subscribe(() => {
+    const top = GLOBAL_STATUS_BUS.currentStatus()
+    if (top) rows.push(`${top.label}|${top.notificationId}|${top.category}`)
+  })
+  return { rows, stop }
+}
+
 afterEach(() => {
   clearModelRegistry()
   clearProviderRegistry()
@@ -169,6 +203,14 @@ describe("statusRowFor", () => {
       ],
     ]
     for (const [fields, label] of cases) expect(statusRowFor(fields).label).toBe(label)
+  })
+
+  it("keeps the tool.running notification id that picks the tool spinner icon", () => {
+    expect(statusRowFor({ phase: "running_tool", toolName: "Read" })).toEqual({
+      label: "Running Read",
+      notificationId: "tool.running",
+      category: "tool",
+    })
   })
 })
 
@@ -237,9 +279,38 @@ describe("REPL turn with the default host ports", () => {
     expect(deltas.length).toBeGreaterThanOrEqual(1)
     expect(deltas[0]?.payload).toMatchObject({ deltaTokens: expect.any(Number) })
     expect(ends).toEqual([{ event: "llm.outputEnd", payload: { reason: "stream_end" } }])
+    // The quota footer refresh reaches the same plugin bus.
+    expect(seen.some((e) => e.event === "quota.headersReceived")).toBe(true)
     // The CLI status rows show the request.
     expect(status.labels).toContain("Sending request")
     expect(status.labels).toContain("Receiving stream")
+  }, 15_000)
+
+  it("shows a Running <tool> status row while a tool runs", async () => {
+    registerTestProvider()
+    const dir = mkdtempSync(join(tmpdir(), "ma-host-ports-tool-"))
+    const path = join(dir, "note.txt")
+    writeFileSync(path, "tool body\n")
+    let calls = 0
+    const status = recordStatusRows()
+    try {
+      const session = await InteractiveSession.create(
+        sessionDeps(
+          fakeLoader([]),
+          fakeNetworkClient(() => {
+            calls += 1
+            return calls === 1 ? sseResponse(readToolEvents(path)) : okResponse("read done")
+          }),
+        ),
+      )
+      const text = await drain(session.run("read it"))
+      expect(text).toContain("read done")
+    } finally {
+      status.stop()
+    }
+
+    expect(calls).toBe(2)
+    expect(status.rows).toContain("Running Read|tool.running|tool")
   }, 15_000)
 
   it("shows a retrying status row on a transient failure", async () => {

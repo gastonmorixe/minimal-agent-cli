@@ -64,7 +64,8 @@ export function statusRowFor(fields: HostStatusFields): StatusRow {
     case "running_tool":
       return {
         label: `Running ${fields.toolName ?? "tool"}`,
-        notificationId: "tool.run",
+        // The spinner picks its tool icon by this id.
+        notificationId: "tool.running",
         category: "tool",
       }
     case "retrying":
