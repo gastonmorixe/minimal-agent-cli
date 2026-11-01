@@ -27,7 +27,12 @@ import { createReplToolView } from "./tool-view.ts"
 const GOLDEN_PATH = join(import.meta.dirname, "tool-transcript.golden.json")
 const UPDATE = process.env.UPDATE_TOOL_TRANSCRIPT_GOLDEN === "1"
 
-const root = mkdtempSync(join(tmpdir(), "cli-tool-transcript-golden-"))
+// Use a short fixed parent. The rows cut a long path at the terminal width
+// before the scrub runs. A long tmpdir() (macOS /var/folders/...) then leaves
+// the root text in the rows, and the golden does not match.
+const root = mkdtempSync(
+  join(process.platform === "win32" ? tmpdir() : "/tmp", "cli-tool-transcript-golden-"),
+)
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 /** A header time that never moves, so the golden is stable. */

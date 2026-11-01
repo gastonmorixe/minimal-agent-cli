@@ -6,7 +6,8 @@
  * (`src/architecture/core-boundary.ts`) exempts this file only from the
  * computed-loader rule, and this function refuses a core path.
  *
- * The checks use real paths (links resolved), never the path text:
+ * The checks use real paths (links resolved), never the path text. The
+ * import uses the path text, the same as the core loader:
  *
  *   - The target must be inside the plugin's own root.
  *   - The target must not be under the real root of the installed
@@ -94,5 +95,9 @@ export async function importPluginModule(abs: string, pluginRoot: string): Promi
   if (!isUnder(real, realpathSync(pluginRoot))) {
     throw new Error(`plugin module path is outside the plugin root ${pluginRoot}: ${abs}`)
   }
-  return import(real)
+  // Import the path text, not the real path. Core loads the headless
+  // handlers by the path text. Bun keys its module cache by that text, so a
+  // real path under a link (macOS /var -> /private/var) loads a second copy
+  // of each shared module, such as the style slots.
+  return import(abs)
 }
