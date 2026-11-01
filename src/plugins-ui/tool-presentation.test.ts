@@ -5,7 +5,7 @@
  */
 
 import { afterEach, describe, expect, it } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -15,6 +15,7 @@ import { ToolExecutorAdapter } from "@minimal-agent/core/host-kit/tool-executor-
 import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { replayToScrollback } from "../session-replay.ts"
+import { SIBLING_REPO_ROOT, siblingRepoPresent } from "../test-utils/sibling-repo.ts"
 import * as TOOL_TRANSCRIPT_FORMAT from "../ui/tool-transcript/format.ts"
 import { TOOL_PRESENTATION, toolPresentationMap } from "./tool-presentation.ts"
 
@@ -123,3 +124,94 @@ describe("CLI tool presentation map (S41)", () => {
     expect(stripAnsi(out.join(""))).toMatch(/╭ ⤓ Fetch\s+https:\/\/example\.com\/a/)
   })
 })
+
+/**
+ * Tools of the shipped plugins that keep the bare bold tool name on purpose.
+ * They never had an icon in their manifests. Add a new tool here only when it
+ * must have no icon. Otherwise add a row to TOOL_PRESENTATION.
+ */
+const BARE_TOOLS: ReadonlySet<string> = new Set([
+  "ModelInfo",
+  "SecurityStatus",
+  "SessionHistory",
+  "SessionInfo",
+])
+
+/** The fields of a plugin manifest that set its canonical tool names. */
+type ManifestTools = {
+  id?: unknown
+  name?: unknown
+  camelName?: unknown
+  headless?: { tools?: unknown }
+}
+
+/** Plugin id and canonical tool names of each sibling `ma-*` manifest. */
+function shippedTools(): { pluginId: string; tools: string[] }[] {
+  const out: { pluginId: string; tools: string[] }[] = []
+  for (const dir of readdirSync(SIBLING_REPO_ROOT)
+    .filter((d) => d.startsWith("ma-"))
+    .sort()) {
+    let raw: string
+    try {
+      raw = readFileSync(join(SIBLING_REPO_ROOT, dir, "manifest.json"), "utf8")
+    } catch {
+      continue // A provider plugin (provider.json) or a kit: no tools.
+    }
+    const m: ManifestTools = JSON.parse(raw)
+    const name = typeof m.name === "string" ? m.name : ""
+    // Same rule as the core loader (computeEffectiveName): an explicit name
+    // passes unchanged. Otherwise the CamelCase plugin name is the prefix.
+    const prefix =
+      typeof m.camelName === "string"
+        ? m.camelName
+        : name
+            .split(/[\s-]+/)
+            .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
+            .join("")
+    const tools: string[] = []
+    const entries: unknown[] = Array.isArray(m.headless?.tools) ? m.headless.tools : []
+    for (const entry of entries) {
+      const tool: unknown = Reflect.get(Object(Reflect.get(Object(entry), "trigger")), "tool")
+      const toolName: unknown = Reflect.get(Object(tool), "name")
+      if (typeof toolName !== "string") continue
+      const explicit = Reflect.get(Object(tool), "explicitName") === true
+      tools.push(explicit ? toolName : `${prefix}${toolName}`)
+    }
+    out.push({ pluginId: typeof m.id === "string" ? m.id : dir, tools })
+  }
+  return out
+}
+
+describe.skipIf(!siblingRepoPresent())(
+  "CLI tool presentation map covers the shipped plugins",
+  () => {
+    it("has a row (or a BARE_TOOLS entry) for every tool in every plugin manifest", () => {
+      const shipped = shippedTools().flatMap((p) => p.tools)
+      expect(shipped.length).toBeGreaterThan(30)
+      const missing = shipped.filter((n) => !TOOL_PRESENTATION.has(n) && !BARE_TOOLS.has(n))
+      expect(missing).toEqual([])
+    })
+
+    it("has no row or BARE_TOOLS entry for a tool that no plugin ships", () => {
+      const shipped = new Set(shippedTools().flatMap((p) => p.tools))
+      const stale = [...TOOL_PRESENTATION.keys(), ...BARE_TOOLS].filter((n) => !shipped.has(n))
+      expect(stale).toEqual([])
+    })
+
+    it("derives the same canonical names as the core loader", async () => {
+      // The loader skips plugins that are off by default or on another
+      // platform. Check the name rule on the plugins that it loads.
+      const loader = await PluginLoader.load({
+        roots: { embedded: [SIBLING_REPO_ROOT] },
+        logger: () => {},
+      })
+      const loaded = new Set(loader.loadedPluginIds())
+      const checked = shippedTools().filter((p) => loaded.has(p.pluginId))
+      expect(checked.length).toBeGreaterThan(10)
+      for (const p of checked) {
+        for (const tool of p.tools)
+          expect({ tool, known: loader.hasTool(tool) }).toEqual({ tool, known: true })
+      }
+    })
+  },
+)
