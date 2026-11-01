@@ -80,9 +80,15 @@ describe("history edit live-area command bridge", () => {
         version: "0.1.0",
         description: "test",
         capabilities: ["sessions:write"],
-        commands: [
-          { name: "history-edit", summary: "test", handler: { type: "module", path: "./cmd.ts" } },
-        ],
+        headless: {
+          commands: [
+            {
+              name: "history-edit",
+              summary: "test",
+              handler: { type: "module", path: "./cmd.ts" },
+            },
+          ],
+        },
       }),
     )
     await Bun.write(

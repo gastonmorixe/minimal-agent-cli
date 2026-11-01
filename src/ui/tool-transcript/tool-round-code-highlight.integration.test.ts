@@ -35,7 +35,10 @@ const highlighter: CodeHighlighter = {
   close: async () => {},
 }
 
-function adapter(transcript: string[]): ToolExecutorAdapter {
+function adapter(
+  transcript: string[],
+  codeHighlighter: CodeHighlighter | null = highlighter,
+): ToolExecutorAdapter {
   return new ToolExecutorAdapter({
     presentation: new Map(),
     writeTranscript: (line) => transcript.push(line),
@@ -44,7 +47,7 @@ function adapter(transcript: string[]): ToolExecutorAdapter {
     blobStore: null,
     blobSkipTools: new Set(),
     feedbackTracker: new ToolFeedbackTracker(),
-    codeHighlighter: highlighter,
+    codeHighlighter,
     transcriptFormatter: TOOL_TRANSCRIPT_FORMAT,
     model: "test-model",
   })
@@ -112,5 +115,25 @@ describe("ToolExecutorAdapter code highlighting with the CLI formatter", () => {
     expect(rendered).toContain("\x1b[48;2;29;56;0m\x1b[38;5;118m+")
     expect(rendered).toContain("\x1b[38;2;10;20;30moldCall()")
     expect(rendered).toContain("\x1b[38;2;10;20;30mnewCall()")
+  })
+
+  it("colors an Edit diff with the terminal-kit renderer when no highlighter runs (S41)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ma-edit-plain-"))
+    dirs.push(dir)
+    const path = join(dir, "example.ts")
+    writeFileSync(path, "oldCall()\n")
+    const transcript: string[] = []
+
+    const result = await adapter(transcript, null).execute({
+      type: "tool_use",
+      id: "edit-2",
+      name: "Edit",
+      input: { file_path: path, old_string: "oldCall()", new_string: "newCall()" },
+    })
+
+    expect(String(result.content)).not.toContain("\x1b")
+    const rendered = transcript.join("\n")
+    expect(rendered).toContain("\x1b[38;5;199m-oldCall()")
+    expect(rendered).toContain("\x1b[38;5;118m+newCall()")
   })
 })

@@ -87,7 +87,6 @@ import { resolveInitialModeId } from "./cli/non-interactive-defaults.ts"
 import { registerCompactHostCommand } from "./commands/compact.ts"
 import { registerContinueHostCommand } from "./commands/continue.ts"
 import { InteractiveSession } from "./interactive-session.ts"
-import { terminalHandlerEnv } from "./plugins-ui/handler-env.ts"
 import { toolPresentationMap } from "./plugins-ui/tool-presentation.ts"
 import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
@@ -335,6 +334,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       repoUrl: pluginsRepo,
       // Silent: no spinner or startup row yet — the tree hasn't opened.
       showSpinner: false,
+      // Core labels are plain (S41). The CLI styles the startup row label.
+      styles: c,
     })
   }
 
@@ -676,9 +677,6 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   const loader = await PluginLoader.load({
     // Every root comes from the CLI (S40), incl. the dev plugins checkout.
     roots: pluginRoots,
-    // Terminal data for plugin handlers (palette, protocol). Core adds none
-    // (S31). It goes away when S41 moves plugin UI code to ui/ folders.
-    ...(replRoute ? { handlerEnv: terminalHandlerEnv } : {}),
     coreToolNames,
     // Single AgentContext shared with every plugin dispatch path.
     // Frozen value object; see createAgentContext + AgentContext docs.
@@ -882,6 +880,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         leadSpaces: 2,
         showOverage: env.MINIMAL_AGENT_QUOTA_OVERAGE === "1",
         overage: info.quota?.overage,
+        // Core emits plain text (S41). The CLI terminal-kit styles it.
+        styles: c,
       })
     } catch {
       // No provider session seam (or cold cache): skip the segment.

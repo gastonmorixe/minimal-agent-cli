@@ -27,12 +27,14 @@ import type { Finding, FindingSeverity } from "@minimal-agent/core/sdk/tool-life
 import { shouldSoftSplit, splitBashSegments } from "../../cli/bash-split.ts"
 import { c } from "../style/ansi.ts"
 
+// Colors a plain Edit/Write diff when no code highlighter runs (S41: core
+// emits the plain patch).
+export { renderUnifiedDiff } from "../../terminal-kit/unified-diff.ts"
 export { resolveFileLanguage } from "../formatter/file-language.ts"
 export type {
   CodeHighlighter,
   CodeHighlightRequest,
 } from "../formatter/mdstream-code-highlighter.ts"
-
 export { highlightReadBody, highlightUnifiedDiff } from "./code-highlight-render.ts"
 
 /**
