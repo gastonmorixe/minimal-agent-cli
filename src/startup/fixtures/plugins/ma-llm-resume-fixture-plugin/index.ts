@@ -97,7 +97,13 @@ function register(ctx?: ProviderSetupContext): void {
     surfaceId: RESUME_FIXTURE_PROVIDER,
     displayName: "Resume Fixture",
     capabilities: { ...caps, tools: { ...caps.tools, userDefined: true } },
-    pricing: { inputUSD: 0, outputUSD: 0, cacheWriteUSD: 0, cacheReadUSD: 0, webSearchPerCallUSD: 0 },
+    pricing: {
+      inputUSD: 0,
+      outputUSD: 0,
+      cacheWriteUSD: 0,
+      cacheReadUSD: 0,
+      webSearchPerCallUSD: 0,
+    },
   })
   ctx.providers.register(adapter)
 }

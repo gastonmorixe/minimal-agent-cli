@@ -43,6 +43,7 @@ import type { QueueKeyHandler } from "./editor/types.ts"
 import { RawInput } from "./input/input.ts"
 import { runReplLiveArea } from "./repl-live-area.ts"
 import { turnEventRenderer } from "./turn-event-render.ts"
+import type { StepLive } from "./turn-render-pump.ts"
 import { Formatter } from "./ui/formatter/formatter.ts"
 import { promptModelPicker } from "./ui/model-picker.ts"
 import type { Spinner } from "./ui/spinner/index.ts"
@@ -50,7 +51,6 @@ import { StatusRenderer, type StatusSpinnerTheme } from "./ui/status/line-render
 import { c, faintThinkingChunk } from "./ui/style/ansi.ts"
 import { modePromptPrefix } from "./ui/style/mode-prompt.ts"
 import { formatTurnError } from "./ui/turn-error.ts"
-import type { StepLive } from "./turn-render-pump.ts"
 import { renderTurnNotice } from "./ui/turn-notice.ts"
 
 type MaybePromise<T> = T | Promise<T>
