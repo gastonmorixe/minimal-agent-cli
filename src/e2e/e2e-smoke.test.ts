@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
+import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 
 // These tests boot the real CLI with the opencode-go provider plugin from the
 // sibling plugins repo. On a bare core checkout (core CI) it is absent, so
@@ -16,8 +17,9 @@ async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<st
 }
 
 describe("CLI smoke", () => {
+  // The test limit matches the spawn ceiling. A real `bun` spawn can wait
+  // for a CPU much longer than the default 5 s limit on a busy machine.
   it("prints help within budget without auth or network", async () => {
-    const t0 = performance.now()
     const p = Bun.spawn(["bun", "run", "src/index.ts", "--help"], {
       stdout: "pipe",
       stderr: "pipe",
@@ -25,9 +27,14 @@ describe("CLI smoke", () => {
       // parallel test load (the timing budget is asserted separately below).
       timeout: 20000,
     })
-    await p.exited
-    expect(performance.now() - t0).toBeLessThan(2000)
-  })
+    expect(await p.exited).toBe(0)
+    // The budget is CPU time of the child, not wall-clock time. Wall-clock
+    // time grows with machine load. CPU time stays near 0.2 s, and a help
+    // path that boots plugins or the network would use much more.
+    const cpuMicros = p.resourceUsage()?.cpuTime.total ?? 0n
+    expect(cpuMicros).toBeGreaterThan(0n)
+    expect(cpuMicros).toBeLessThan(2_000_000n)
+  }, 20000)
 
   it.skipIf(!HAVE_PROVIDER)(
     "starts, sends a one-shot prompt, and exits without external network",
@@ -113,6 +120,7 @@ describe("CLI smoke", () => {
           timeout: 20000,
           env: {
             ...process.env,
+            ...tempHomeSpawnEnv(),
             NODE_ENV: "test",
             MINIMAL_AGENT_TEST_AUTH: "1",
             MINIMAL_AGENT_TRANSPORT: "test",

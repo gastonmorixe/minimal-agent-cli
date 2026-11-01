@@ -21,6 +21,8 @@ import { afterAll, describe, expect, it } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 
+import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
+
 const CLI_ROOT = join(import.meta.dir, "..", "..")
 const TMP_ROOT = join(CLI_ROOT, "tmp")
 mkdirSync(TMP_ROOT, { recursive: true })
@@ -47,6 +49,7 @@ async function runChild(args: string[]) {
     timeout: 30000,
     env: {
       ...process.env,
+      ...tempHomeSpawnEnv(),
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",
       MINIMAL_AGENT_PROVIDER: "resume-fixture",

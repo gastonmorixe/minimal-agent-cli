@@ -20,6 +20,7 @@ import type { AuthResult } from "@minimal-agent/core/host/auth"
 import type { BuildAgentCoreDeps } from "@minimal-agent/core/host-kit/build-agent-core"
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
 import { InteractiveSession } from "../interactive-session.ts"
+import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 import type {
   TestSendParams as SendOptions,
   TestSendResult as StreamedResponse,
@@ -55,6 +56,7 @@ async function runChild(args: string[], killAtRound: number, files = homeFiles(H
     timeout: 30000,
     env: {
       ...process.env,
+      ...tempHomeSpawnEnv(),
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",
       MINIMAL_AGENT_PROVIDER: "resume-fixture",
