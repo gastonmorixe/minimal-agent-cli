@@ -18,7 +18,7 @@
     "node": ">=22.18.0"
   },
   "dependencies": {
-    "@minimal-agent/core": "git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#f26330ae58a1c03cd48ab84bc7397b264713663f"
+    "@minimal-agent/core": "git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#f9441d183e3a65164feb0ed7192dacb540edc801"
   },
   "scripts": {
     "start": "bun run src/index.ts",
