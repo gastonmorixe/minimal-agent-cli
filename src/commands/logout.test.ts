@@ -3,12 +3,12 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import {
-  ANTHROPIC_PLAN_OAUTH,
-  clearCredentials,
-  writeCredentials,
-} from "@minimal-agent/core/host/auth"
 import { AuthStore } from "@minimal-agent/core/host/auth-store"
+import { clearProviderCredentials } from "@minimal-agent/core/host/auth-strategies"
+import {
+  clearProviderPlugins,
+  registerProviderPlugin,
+} from "@minimal-agent/core/host/provider-plugin"
 
 import { runLogoutCommand } from "./logout.ts"
 
@@ -59,15 +59,39 @@ describe("runLogoutCommand", () => {
     const dir = mkdtempSync(join(tmpdir(), "ma-logout-"))
     try {
       const store = new AuthStore({ path: join(dir, "auth.jsonc") })
-      writeCredentials({ claudeAiOauth: { accessToken: "AT", refreshToken: "RT" } }, store)
-      expect(store.has(ANTHROPIC_PLAN_OAUTH.id, ANTHROPIC_PLAN_OAUTH.name)).toBe(true)
+      // A neutral provider plugin owns the slot (decision 39: core has no
+      // provider OAuth client). Logout clears it through the plugin contract.
+      clearProviderPlugins()
+      registerProviderPlugin({
+        id: "example",
+        displayName: "Example",
+        shortCode: "ex",
+        register: () => {},
+        oauthLogin: {
+          serviceId: "example-oauth",
+          displayName: "Example (OAuth)",
+          config: () => ({
+            clientId: "c",
+            tokenUrl: "http://127.0.0.1/token",
+            authorizeUrl: "http://127.0.0.1/authorize",
+            redirectUri: "http://127.0.0.1/callback",
+            scopes: [],
+          }),
+          buildCredential: () => {
+            throw new Error("not used")
+          },
+        },
+      })
+      store.set("example-oauth", "Example (OAuth)", { accessToken: "AT", refreshToken: "RT" })
+      expect(store.has("example-oauth", "Example (OAuth)")).toBe(true)
 
-      expect(clearCredentials(store)).toBe(true) // first removal succeeds
-      expect(clearCredentials(store)).toBe(false) // second is a no-op
-      expect(store.has(ANTHROPIC_PLAN_OAUTH.id, ANTHROPIC_PLAN_OAUTH.name)).toBe(false)
+      expect(clearProviderCredentials("example", store)).toBe(true) // first removal succeeds
+      expect(clearProviderCredentials("example", store)).toBe(false) // second is a no-op
+      expect(store.has("example-oauth", "Example (OAuth)")).toBe(false)
       // the file still parses (banner preserved by the store on the write)
       expect(() => readFileSync(join(dir, "auth.jsonc"), "utf-8")).not.toThrow()
     } finally {
+      clearProviderPlugins()
       rmSync(dir, { recursive: true, force: true })
     }
   })
