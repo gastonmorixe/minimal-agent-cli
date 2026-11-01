@@ -75,3 +75,30 @@ export function resolveOutputFormat(opts: {
   if (opts.jsonFlag) return "json"
   return "text"
 }
+
+/**
+ * How the process uses stdio for this run (S38).
+ *
+ * - `protocol`: stdout carries only protocol lines. This is a `json` or
+ *   `stream-json` one-shot run, or a `--host-mode` run. No human chrome
+ *   (scrollback diagnostics) goes to stderr unless `--debug` is set.
+ * - `print`: a `text` one-shot run. Human progress goes to stderr.
+ * - `interactive`: the REPL. The TUI owns the terminal.
+ */
+export type StdioMode = "protocol" | "print" | "interactive"
+
+/**
+ * Resolve the {@link StdioMode} from the parsed route facts. Pure.
+ *
+ * `hasPrompt` is true when argv names a one-shot prompt (`--prompt`, `-`,
+ * or a bare positional). Without a prompt the run is interactive.
+ */
+export function resolveStdioMode(opts: {
+  outputFormat: OutputFormat
+  hostMode: boolean
+  hasPrompt: boolean
+}): StdioMode {
+  if (opts.hostMode) return "protocol"
+  if (!opts.hasPrompt) return "interactive"
+  return opts.outputFormat === "text" ? "print" : "protocol"
+}

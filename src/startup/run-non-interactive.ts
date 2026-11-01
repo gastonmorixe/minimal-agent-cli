@@ -50,13 +50,25 @@
  * `stream-json` fall back to the legacy path until the factory is wired, so no
  * path regresses before integration.
  *
+ * **Stdio guard (S38).** The JSON route installs a stdout guard
+ * ({@link installJsonStdioGuard}). Only the guard's own writer (the tagged
+ * writer of the JSON event lines) reaches stdout. Every other stdout write
+ * and every stdout `console` call is dropped and counted. A run with a dropped write
+ * fails with exit code 1, so a stray human line can never pass unseen.
+ *
+ * **`--diagnostics` (S39).** On the `json` route the flag writes each kept
+ * entry with {@link serializeEntry}: `{v:1, seq, ts, sessionId, ch, data}`.
+ * `ch:"event"` lines hold the same kept events. `ch:"diag"` lines hold every
+ * session diagnostic. Without the flag, stdout matches the golden byte for
+ * byte. The `stream-json` route ignores the flag (it has its own envelope).
+ *
  * Split out of `src/index.ts` to keep the entry point under the `max-lines`
  * lint budget.
  *
  * @module host/startup/run-non-interactive
  */
 
-import type { Session } from "@minimal-agent/core"
+import { type Session, serializeEntry } from "@minimal-agent/core"
 import { fatalErrorFields } from "@minimal-agent/core/host/error-hint"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
@@ -66,11 +78,14 @@ import {
   STREAM_JSON_EVENT_KINDS,
   serializeEvent,
 } from "@minimal-agent/core/sdk/events"
-import type { OutputFormat } from "../cli/output-format.ts"
+import { extractPromptFromArgs } from "../cli/extract-prompt.ts"
+import { type OutputFormat, resolveStdioMode, type StdioMode } from "../cli/output-format.ts"
 import { enforceOutputSchema, PrintOutput, resolvePrintModeOptions } from "../print-output.ts"
 import type { ReplAgentLike } from "../repl.ts"
 import { applyTurnWillStart } from "../repl-editor-hooks.ts"
 import { Formatter } from "../ui/formatter/formatter.ts"
+
+import { isHostModeRun } from "./resume-mode.ts"
 
 import {
   type StreamInfo,
@@ -92,6 +107,84 @@ const TURN_BLOCKED_MESSAGE = "turn.willStart: prompt blocked by lifecycle policy
  */
 export function turnBlockedError(): Error & { code: "turn.blocked" } {
   return Object.assign(new Error(TURN_BLOCKED_MESSAGE), { code: "turn.blocked" as const })
+}
+
+/** The stdout guard of the JSON route. See {@link installJsonStdioGuard}. */
+export interface JsonStdioGuard {
+  /** The tagged writer: the one path to the real stdout. */
+  readonly write: (chunk: string) => void
+  /** How many stray writes (stdout or a stdout `console` call) the guard dropped. */
+  readonly strays: () => number
+  /** Put back `process.stdout.write` and the stdout `console` calls. */
+  readonly restore: () => void
+}
+
+let activeGuard: JsonStdioGuard | null = null
+
+/**
+ * Install the JSON-route stdout guard (S38), or return the one already
+ * installed. The guard replaces `process.stdout.write`, `console.log`,
+ * `console.info`, and `console.debug`.
+ * Only {@link JsonStdioGuard.write} reaches the real stdout. Any other write
+ * is dropped and counted. The guard also becomes the stream-json writer, so
+ * the host's failure lines pass it.
+ */
+export function installJsonStdioGuard(): JsonStdioGuard {
+  if (activeGuard !== null) return activeGuard
+  const stdout = process.stdout
+  const realWrite = stdout.write.bind(stdout)
+  // console.log, console.info, and console.debug all write to stdout.
+  const originalConsole = { log: console.log, info: console.info, debug: console.debug }
+  let strays = 0
+  stdout.write = ((...args: unknown[]) => {
+    strays++
+    const cb = args.find((a): a is (err?: Error) => void => typeof a === "function")
+    cb?.()
+    return true
+  }) as typeof stdout.write
+  const dropConsole = (): void => {
+    strays++
+  }
+  console.log = dropConsole
+  console.info = dropConsole
+  console.debug = dropConsole
+  const guard: JsonStdioGuard = {
+    write: (chunk) => void realWrite(chunk),
+    strays: () => strays,
+    restore: () => {
+      stdout.write = realWrite
+      console.log = originalConsole.log
+      console.info = originalConsole.info
+      console.debug = originalConsole.debug
+      if (activeGuard === guard) activeGuard = null
+    },
+  }
+  activeGuard = guard
+  setStreamJsonWrite(guard.write)
+  return guard
+}
+
+/**
+ * Pick the {@link StdioMode} at boot, after subcommand dispatch (S38). On the
+ * JSON event route (`json` / `stream-json`, a prompt, no `--output-schema`)
+ * it also installs the stdout guard, so a stray write from any later boot
+ * step fails the run. `--host-mode` installs its own guard.
+ */
+export function selectStdioMode(
+  args: readonly string[],
+  command: string,
+  opts: { readonly outputFormat: OutputFormat; readonly outputSchemaPath: string | undefined },
+): StdioMode {
+  const hostMode = isHostModeRun(command)
+  const mode = resolveStdioMode({
+    outputFormat: opts.outputFormat,
+    hostMode,
+    hasPrompt: extractPromptFromArgs(args).kind !== "none",
+  })
+  if (mode === "protocol" && !hostMode && opts.outputSchemaPath === undefined) {
+    installJsonStdioGuard()
+  }
+  return mode
 }
 
 /** `LEGACY_EVENT_KINDS`, as a `Set` for an O(1) membership check per entry. */
@@ -155,6 +248,13 @@ export interface RunNonInteractivePromptInput {
   readonly stdout?: (chunk: string) => void
   /** Exit hook for tests. Defaults to `process.exit`. */
   readonly exit?: (code: number) => never
+  /**
+   * `--diagnostics` (S39): on the `json` route, write session log entries
+   * (`ch:"event"` and `ch:"diag"`) instead of bare events.
+   */
+  readonly diagnostics?: boolean
+  /** Where the guard's failure note goes. Defaults to `process.stderr`. */
+  readonly stderr?: (chunk: string) => void
 }
 
 /**
@@ -194,7 +294,23 @@ function wantsEventStream(input: RunNonInteractivePromptInput): boolean {
  * (`events-jsonl.integration.test.ts`).
  */
 async function runCoreEventStream(input: RunNonInteractivePromptInput): Promise<void> {
-  const write = input.stdout ?? ((chunk: string) => void process.stdout.write(chunk))
+  // The host may install the guard at boot. Otherwise this run installs it
+  // and removes it at the end.
+  const ownGuard = activeGuard === null
+  const guard = installJsonStdioGuard()
+  try {
+    await runGuardedEventStream(input, guard)
+  } finally {
+    if (ownGuard) guard.restore()
+  }
+}
+
+/** {@link runCoreEventStream} with the stdout guard in place. */
+async function runGuardedEventStream(
+  input: RunNonInteractivePromptInput,
+  guard: JsonStdioGuard,
+): Promise<void> {
+  const write = input.stdout ?? guard.write
   // Never call process.exit after writing the stream. On a slow pipe reader,
   // process.exit can drop the queued tail (measured: 1 MB and up, Bun 1.4.x).
   // So the default only sets the exit code, and the caller returns. The
@@ -216,6 +332,8 @@ async function runCoreEventStream(input: RunNonInteractivePromptInput): Promise<
   const emitDeltas = isStreamJson
   // stream-json also keeps the closing run_finished line. json stays frozen.
   const keep = isStreamJson ? STREAM_JSON_EVENT_KIND_SET : LEGACY_EVENT_KIND_SET
+  // --diagnostics: json lines become whole session log entries (S39).
+  const entryLines = input.diagnostics === true && !isStreamJson
   // stream-json lines carry an envelope. The shared writer owns seq, which
   // counts the lines on this stdout from 0. It is not entry.seq, which counts
   // every logged entry. The json route does not use the writer.
@@ -240,7 +358,9 @@ async function runCoreEventStream(input: RunNonInteractivePromptInput): Promise<
       // the wire format of the route (LEGACY_EVENT_KINDS for json,
       // STREAM_JSON_EVENT_KINDS for stream-json). It does not change what
       // Session logs internally.
-      if (entry.ch === "event" && keep.has(entry.data.type)) {
+      if (entryLines && (entry.ch === "diag" || keep.has(entry.data.type))) {
+        write(serializeEntry(entry))
+      } else if (entry.ch === "event" && keep.has(entry.data.type)) {
         if (isStreamJson) {
           writeStreamJsonEvent(entry.data, { sessionId: entry.sessionId, ts: entry.ts })
         } else {
@@ -258,6 +378,14 @@ async function runCoreEventStream(input: RunNonInteractivePromptInput): Promise<
     // trace), but exit non-zero so scripts see the failure. An abort is not
     // a failure of the run itself.
     if (fatalErrorFields(err)) fail(1)
+  }
+  // A dropped stray write means some code tried to put a non-protocol line
+  // on stdout. Fail the run so the bug cannot pass unseen.
+  const strays = guard.strays()
+  if (strays > 0) {
+    const stderr = input.stderr ?? ((chunk: string) => void process.stderr.write(chunk))
+    stderr(`error: the JSON route dropped ${strays} stray stdout write(s)\n`)
+    fail(1)
   }
 }
 

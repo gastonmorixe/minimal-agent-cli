@@ -85,6 +85,13 @@ export interface CliOptions {
    * {@link resolveOutputFormat}.
    */
   readonly outputFormat: OutputFormat
+  /**
+   * `--diagnostics`: on the `json` route, write every line as a session log
+   * entry (`{v:1, ch:"event"|"diag", ...}`), diagnostics included (S39).
+   */
+  readonly wantDiagnostics: boolean
+  /** `--debug` (or `DEBUG=1`): mirror diagnostics to stderr outside the TUI (S38). */
+  readonly debug: boolean
   readonly outputSchemaPath: string | undefined
   readonly spinnerName: string | undefined
   readonly showHeader: boolean
@@ -246,6 +253,8 @@ export function parseCliOptions(
     outputFormatFlag: valueAfter(args, "--output-format"),
     jsonFlag: wantJsonOutput,
   })
+  const wantDiagnostics = args.includes("--diagnostics")
+  const debug = args.includes("--debug") || env.DEBUG === "1"
   const outputSchemaPath = valueAfter(args, "--output-schema")
 
   const showHeader = resolveShowHeader({
@@ -353,6 +362,8 @@ export function parseCliOptions(
     wantListSpinners,
     wantJsonOutput,
     outputFormat,
+    wantDiagnostics,
+    debug,
     outputSchemaPath,
     spinnerName,
     showHeader,
