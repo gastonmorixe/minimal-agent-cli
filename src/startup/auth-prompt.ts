@@ -1,10 +1,12 @@
 /**
  * First-time / stale-credentials login prompt for the CLI entry point.
  *
- * Wraps `getAuth()` so a fresh install (no credentials) or a rejected
- * refresh token offers an inline `--login` flow on interactive TTYs
- * instead of dumping the user back at the shell. Non-interactive runs
- * keep the fail-fast behavior.
+ * Wraps a credential resolver so a fresh install (no credentials) or a
+ * rejected refresh token offers an inline `--login` flow on interactive
+ * TTYs instead of dumping the user back at the shell. Non-interactive runs
+ * keep the fail-fast behavior. The caller gives the resolver (for example
+ * `resolveStartupAuth` from `@minimal-agent/core/host/provider-auth`).
+ * Core holds no provider OAuth client (decision 39).
  *
  * Split out of `src/index.ts` to keep that file under the `max-lines`
  * lint budget.
@@ -12,7 +14,7 @@
  * @module startup/auth-prompt
  */
 
-import { getAuth } from "@minimal-agent/core/host/auth"
+import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { discoverCredentialedProviders } from "@minimal-agent/core/host/auth-strategies"
 import { runLoginCommand } from "../commands/login.ts"
 import {
@@ -25,8 +27,8 @@ import {
 import { type CommandOutput, writeCommandRows } from "../ui/command-output.ts"
 
 export interface FirstTimeAuthPromptDeps {
-  /** Override credential resolution for tests. */
-  getAuth?: typeof getAuth
+  /** Resolve the credential of the selected provider. */
+  resolveAuth: () => Promise<AuthResult>
   /** Override login handoff for tests. */
   runLogin?: () => Promise<number>
   /** Input stream for the yes/no prompt. */
@@ -38,30 +40,27 @@ export interface FirstTimeAuthPromptDeps {
 }
 
 /**
- * Wrap `getAuth()` with a first-time / stale-credentials login prompt.
+ * Wrap `deps.resolveAuth()` with a first-time / stale-credentials login prompt.
  *
  * On a fresh install minimal-agent's own store (`~/.minimal-agent/auth.jsonc`)
- * is empty; `getAuth()` throws `"No minimal-agent credentials found …"`.
+ * is empty, so the resolver throws `"no credentials for provider …"`.
  * Rather than dump the user back at the shell with an error, we detect that
  * case in interactive mode (TTY on stdout AND stdin) and offer to run
  * `--login` inline. If they accept, we run the OAuth flow and retry
- * `getAuth()`.
+ * the resolver.
  *
  * Non-interactive runs (non-TTY, `--prompt`, piped stdin) keep the current
  * "fail fast with a hint" behavior — script-friendly and predictable.
  *
  * Stale credentials (refresh token rejected) take a similar path: we surface
- * the error and ask if they want to re-login. `getAuth()` itself doesn't
- * eagerly refresh unless the token is within `EXPIRY_BUFFER_MS` of expiry,
- * so this branch only fires when we're about to make a real API call AND
- * the cached token won't survive it. The 401-after-refresh case in
- * `client.ts` is handled separately (it bubbles a clean error that already
- * mentions `--login`).
+ * the error and ask if they want to re-login. The 401-after-refresh case in
+ * the transport is handled separately (it bubbles a clean error that
+ * already names the login command).
  */
 export async function getAuthWithFirstTimePrompt(
-  deps: FirstTimeAuthPromptDeps = {},
-): Promise<Awaited<ReturnType<typeof getAuth>>> {
-  const auth = deps.getAuth ?? getAuth
+  deps: FirstTimeAuthPromptDeps,
+): Promise<AuthResult> {
+  const auth = deps.resolveAuth
   const input = deps.input ?? process.stdin
   const output = deps.output ?? process.stderr
   const runLogin =
@@ -76,7 +75,7 @@ export async function getAuthWithFirstTimePrompt(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     const looksLikeMissing =
-      /No minimal-agent credentials|No credentials found|No OAuth access token|No refresh token/i.test(
+      /No minimal-agent credentials|No credentials found|no credentials for provider|No OAuth access token|No refresh token/i.test(
         msg,
       )
     const looksLikeStale = /invalid_grant|stale/i.test(msg)
