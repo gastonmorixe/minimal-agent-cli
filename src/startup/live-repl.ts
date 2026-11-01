@@ -24,6 +24,7 @@ import { getSessionId } from "@minimal-agent/core/host/session-id"
 import { AutoAskController } from "@minimal-agent/core/host-kit/auto-ask"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
+import type { ResolvedLiveAreaSlot } from "@minimal-agent/core/plugin-api/types/plugin"
 import type { ReplAgentLike, runRepl } from "../repl.ts"
 import type { Spinner } from "../ui/spinner/index.ts"
 import type { StatusSpinnerTheme } from "../ui/status/line-renderer.ts"
@@ -51,6 +52,8 @@ export interface LiveAreaReplOptions {
   hasPlugins: boolean
   /** The plugin loader (hooks facade for the editor). */
   loader: PluginLoader
+  /** Live-area slots from the CLI plugin UI loader (S35). */
+  liveAreaSlots: readonly ResolvedLiveAreaSlot[]
   /** Unsent draft restored from a resumed session, or `null`. */
   pendingDraft: string | null
 }
@@ -73,6 +76,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     modeManager,
     hasPlugins,
     loader,
+    liveAreaSlots,
     pendingDraft,
   } = opts
   const { Compositor } = await import("../ui/compositor.ts")
@@ -264,6 +268,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
       // closer copy in that case.
       sessionId: getSessionId(),
       scrollbackSubmittedAt: userConfig.scrollback?.submittedAt,
+      liveAreaSlots,
     })
   } finally {
     interceptor.uninstall()

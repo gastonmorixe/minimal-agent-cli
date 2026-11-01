@@ -16,3 +16,8 @@ pathIgnorePatterns = [
   ".swarm/**",
   "tmp/**",
 ]
+
+# Never auto-install packages at run time (S51). A missing package is an
+# error, so the pinned lockfile is the only source of dependencies.
+[install]
+auto = "disable"

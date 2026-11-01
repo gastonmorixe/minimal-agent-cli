@@ -95,7 +95,7 @@ async function loaderWithCommand(bus: EventBus): Promise<PluginLoader> {
     bus,
     embeddedDir: root,
     homeDir: root,
-    projectDir: root,
+    roots: { project: [join(root, ".agents", "plugins")] },
     logger: () => {},
   })
 }

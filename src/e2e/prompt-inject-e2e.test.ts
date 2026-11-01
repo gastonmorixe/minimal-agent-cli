@@ -96,7 +96,7 @@ async function emptyLoader(bus: EventBus, sid: string): Promise<PluginLoader> {
     sessionId: sid,
     embeddedDir: root,
     homeDir: root,
-    projectDir: root,
+    roots: { project: [join(root, ".agents", "plugins")] },
     logger: () => {},
   })
 }
