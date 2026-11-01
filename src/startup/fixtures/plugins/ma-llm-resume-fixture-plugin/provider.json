@@ -1,0 +1,8 @@
+{
+  "id": "resume-fixture",
+  "name": "LLM Provider: Resume Fixture",
+  "version": "0.1.0",
+  "description": "Test-only provider for the --resume spawn tests. It scripts each round and can kill the process.",
+  "entry": "./index.ts",
+  "export": "resumeFixtureProviderPlugin"
+}
