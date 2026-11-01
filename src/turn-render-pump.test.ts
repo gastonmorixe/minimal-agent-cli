@@ -95,4 +95,55 @@ describe("TurnRenderPump", () => {
     })
     expect(trace).toEqual(["late row"])
   })
+
+  it("resolves idle only after the queued items and the async step end", async () => {
+    const pump = new TurnRenderPump()
+    const trace: string[] = []
+    let finish: (() => void) | undefined
+    pump.step(async () => {
+      trace.push("stop:begin")
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      trace.push("stop:end")
+    })
+    pump.step(() => {
+      trace.push("tool-row")
+    })
+    const idle = pump.idle().then(() => {
+      trace.push("idle")
+    })
+    const consumed = consume(pump, trace)
+    await Promise.resolve()
+    expect(trace).toEqual(["stop:begin"])
+    finish?.()
+    await idle
+    expect(trace).toEqual(["stop:begin", "stop:end", "tool-row", "idle"])
+    pump.close()
+    await consumed
+  })
+
+  it("stops waiting for a step that never ends when the signal aborts", async () => {
+    const controller = new AbortController()
+    const pump = new TurnRenderPump(controller.signal)
+    const trace: string[] = []
+    pump.step(() => new Promise<void>(() => {}))
+    pump.step(() => {
+      trace.push("pending row")
+    })
+    pump.text("late")
+    const idle = pump.idle()
+    const consumed = consume(pump, trace)
+    setTimeout(() => controller.abort(), 5)
+    const timeout = new Promise<string>((resolve) => setTimeout(() => resolve("timeout"), 1000))
+    expect(await Promise.race([consumed.then(() => "ended"), timeout])).toBe("ended")
+    expect(await Promise.race([idle.then(() => "idle"), timeout])).toBe("idle")
+    // The abort drops the steps and text that waited behind the stuck step.
+    expect(trace).toEqual([])
+    // A step after the abort runs at once.
+    pump.step(() => {
+      trace.push("abort notice")
+    })
+    expect(trace).toEqual(["abort notice"])
+  })
 })

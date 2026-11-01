@@ -144,6 +144,8 @@ class RunPortState {
   inputQueue: InputQueuePort | null = null
   /** The reflection wait of the run in progress. */
   reflection: ((round: number) => Promise<void>) | null = null
+  /** The render pump of the run in progress. */
+  pump: TurnRenderPump | null = null
 
   /** The `inputQueue` port: reads the queue of the run in progress. */
   readonly inputQueuePort: InputQueuePort = {
@@ -151,9 +153,14 @@ class RunPortState {
     injected: (text) => this.inputQueue?.injected?.(text),
   }
 
-  /** The `reflectionGate` port: waits on the reflection behavior of the run in progress. */
+  /**
+   * The `reflectionGate` port: waits on the reflection behavior of the run
+   * in progress. It first waits for the pump to go idle, so the cooldown
+   * shows after the rows of the round before it.
+   */
   readonly reflectionGatePort = {
     beforeCheckpoint: async (round: number): Promise<void> => {
+      await this.pump?.idle()
       await this.reflection?.(round)
     },
   }
@@ -384,6 +391,17 @@ export class InteractiveSession implements ReplAgentLike {
   }
 
   /**
+   * Run a host render write in turn order. During a run, the write waits
+   * for the rows and text the log emitted before it (S36). With no run in
+   * progress, it runs at once. The REPL uses it for writes from inside a
+   * core port: the queue echo and the mode-change chip.
+   */
+  renderInOrder(step: () => void): void {
+    if (this.runPorts.pump) this.runPorts.pump.step(step)
+    else step()
+  }
+
+  /**
    * Run one user turn through the session, with interactive cooldown +
    * per-turn transcript rebinding. The turn renders from the session's own
    * log entries (S36): each `text_delta` comes out as a yielded string, and
@@ -403,7 +421,8 @@ export class InteractiveSession implements ReplAgentLike {
       resume?: boolean
     },
   ): AsyncGenerator<string, TurnResult, undefined> {
-    const pump = new TurnRenderPump()
+    const pump = new TurnRenderPump(opts?.signal)
+    this.runPorts.pump = pump
     const releaseTranscript = this.transcript.acquire(
       opts?.onTranscriptLine,
       (target) => (line) => pump.step(() => target(line)),
@@ -472,6 +491,7 @@ export class InteractiveSession implements ReplAgentLike {
       unsubscribe()
       this.runPorts.inputQueue = null
       this.runPorts.reflection = null
+      this.runPorts.pump = null
       releaseTranscript()
     }
   }
