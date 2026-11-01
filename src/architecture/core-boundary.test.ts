@@ -257,12 +257,18 @@ describe("plugin code loader exemption (S35)", () => {
   })
 
   test("that loader refuses a relative path and core code", async () => {
-    await expect(importPluginModule("./x.ts")).rejects.toThrow(/must be absolute/)
-    await expect(
-      importPluginModule("/w/node_modules/@minimal-agent/core/src/index.ts"),
-    ).rejects.toThrow(/names core code/)
-    await expect(importPluginModule("/w/minimal-agent-core/src/index.ts")).rejects.toThrow(
-      /names core code/,
+    // More cases (links, other checkout names): plugins-ui/plugin-module.test.ts.
+    const cliRoot = join(import.meta.dir, "..", "..")
+    const coreEntry = join(
+      cliRoot,
+      "node_modules",
+      "@minimal-agent",
+      "core",
+      "src",
+      "sdk",
+      "runtime.ts",
     )
+    await expect(importPluginModule("./x.ts", cliRoot)).rejects.toThrow(/must be absolute/)
+    await expect(importPluginModule(coreEntry, cliRoot)).rejects.toThrow(/names core code/)
   })
 })
