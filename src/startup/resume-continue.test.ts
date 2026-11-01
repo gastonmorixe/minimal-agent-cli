@@ -2,8 +2,9 @@
  * `--resume` continues an unfinished turn at its next round (S50).
  *
  * The test spawns the real CLI `main()` through
- * `fixtures/resume-kill-child.ts`, with a scripted provider and a real
- * session store in a temp home. Run 1 does two tool rounds, and the child
+ * `fixtures/resume-kill-child.ts`, with the scripted fixture provider
+ * (`fixtures/plugins/ma-llm-resume-fixture-plugin`, shipped with this test,
+ * so it never skips) and a real session store in a temp home. Run 1 does two tool rounds, and the child
  * kills itself with SIGKILL when round 3 starts. Run 2 is
  * `--resume <id>`. It must continue the turn by itself at round 3, with
  * no human input, and must not repeat the Bash calls of rounds 1 and 2.
@@ -19,14 +20,10 @@ import type { AuthResult } from "@minimal-agent/core/host/auth"
 import type { BuildAgentCoreDeps } from "@minimal-agent/core/host-kit/build-agent-core"
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
 import { InteractiveSession } from "../interactive-session.ts"
-import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
 import type {
   TestSendOptions as SendOptions,
   TestStreamedResponse as StreamedResponse,
 } from "../test-utils/transport-types.ts"
-
-// The scripted rounds use the anthropic-messages surface of this provider.
-const HAVE_PROVIDER = siblingPluginPresent("ma-llm-opencode-go-plugin")
 
 const CLI_ROOT = join(import.meta.dir, "..", "..")
 const TMP_ROOT = join(CLI_ROOT, "tmp")
@@ -36,13 +33,24 @@ const LOG = join(HOME_DIR, "requests.log")
 const MARK = join(HOME_DIR, "mark.txt")
 const SESSIONS = join(HOME_DIR, ".minimal-agent", "sessions")
 const CHILD = join(import.meta.dir, "fixtures", "resume-kill-child.ts")
+// Only the fixture provider. The test needs no sibling plugins repo.
+const FIXTURE_PLUGINS = join(import.meta.dir, "fixtures", "plugins")
 const SID = "5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d"
 
 afterAll(() => {
   rmSync(HOME_DIR, { recursive: true, force: true })
 })
 
-async function runChild(args: string[], killAtRound: number) {
+/** A temp home with its own request log and mark file. */
+function homeFiles(home: string) {
+  return { home, log: join(home, "requests.log"), mark: join(home, "mark.txt") }
+}
+
+async function runChild(
+  args: string[],
+  killAtRound: number,
+  files = homeFiles(HOME_DIR),
+) {
   const p = Bun.spawn(["bun", "run", CHILD, "--skip-quota", "--formatter", "cat", ...args], {
     cwd: CLI_ROOT,
     stdin: "ignore",
@@ -53,14 +61,15 @@ async function runChild(args: string[], killAtRound: number) {
       ...process.env,
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",
-      MINIMAL_AGENT_TRANSPORT: "test",
-      MINIMAL_AGENT_PROVIDER: "opencode-go",
-      MINIMAL_AGENT_MODEL: "qwen3.7-plus",
+      MINIMAL_AGENT_PROVIDER: "resume-fixture",
+      MINIMAL_AGENT_MODEL: "resume-fixture-model",
+      MINIMAL_AGENT_PLUGIN_SIBLINGS: FIXTURE_PLUGINS,
+      MINIMAL_AGENT_NO_PLUGIN_SYNC: "1",
       MINIMAL_AGENT_NO_LIVE_AREA: "1",
-      HOME: HOME_DIR,
-      MINIMAL_AGENT_HOME: join(HOME_DIR, ".minimal-agent"),
-      RESUME_TEST_LOG: LOG,
-      RESUME_TEST_MARK: MARK,
+      HOME: files.home,
+      MINIMAL_AGENT_HOME: join(files.home, ".minimal-agent"),
+      RESUME_TEST_LOG: files.log,
+      RESUME_TEST_MARK: files.mark,
       RESUME_TEST_KILL_AT_ROUND: String(killAtRound),
     },
   })
@@ -79,7 +88,7 @@ function lines(path: string): string[] {
     .filter((l) => l.length > 0)
 }
 
-describe.skipIf(!HAVE_PROVIDER)("--resume continues an unfinished turn (S50)", () => {
+describe("--resume continues an unfinished turn (S50)", () => {
   it("a run killed after round 2 continues at round 3 and does not repeat rounds 1-2", async () => {
     const first = await runChild(["--session-id", SID, "-p", "go"], 3)
     expect(first.signalCode).toBe("SIGKILL")
@@ -118,6 +127,32 @@ describe.skipIf(!HAVE_PROVIDER)("--resume continues an unfinished turn (S50)", (
     ])
     expect(JSON.stringify(conversation[3]?.content)).toContain("ROUND-3-ANSWER")
     expect(records.filter((r) => r.kind === "round_checkpoint").at(-1)?.round).toBe(0)
+  }, 60000)
+
+  it("the json route continues the turn at round 3 before the new prompt", async () => {
+    const files = homeFiles(mkdtempSync(join(HOME_DIR, "json-")))
+    const sid = "7c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
+    const first = await runChild(["--session-id", sid, "-p", "go"], 3, files)
+    expect(first.signalCode).toBe("SIGKILL")
+    expect(lines(files.mark)).toEqual(["r1", "r2"])
+
+    rmSync(files.log, { force: true })
+    const resumed = await runChild(
+      ["--resume", sid, "-p", "next", "--output-format", "json"],
+      0,
+      files,
+    )
+    expect(resumed.stderr).not.toContain("fatal")
+    expect(resumed.exitCode).toBe(0)
+    // Two requests: the continuation of the cut turn (round 3), then the
+    // new prompt. Rounds 1 and 2 never run again.
+    expect(lines(files.log)).toEqual(["3", "3"])
+    expect(lines(files.mark)).toEqual(["r1", "r2"])
+    // stdout is JSON lines only, and it carries the round 3 answer.
+    for (const line of resumed.stdout.split("\n").filter((l) => l.length > 0)) {
+      expect(() => JSON.parse(line)).not.toThrow()
+    }
+    expect(resumed.stdout).toContain("ROUND-3-ANSWER")
   }, 60000)
 })
 
