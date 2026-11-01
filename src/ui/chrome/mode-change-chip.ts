@@ -45,7 +45,7 @@ import { ANSI_CODES, ansiStyle as c } from "@minimal-agent/core/plugin-api/utils
  * `fromFgOpen` / `toFgOpen` are SGR open sequences for the source /
  * target modes' accent colors. `null` means "no color" : that side
  * falls back to dim (source) or bold faint-white (target). Live
- * callers resolve `"default"` / no-mode via `ModeManager.resolvedForId(null)`
+ * callers resolve `"default"` / no-mode via `modeLabelFgOpen(modeManager, null)`
  * which supplies the brand primary (same pigment as the prompt `❯`),
  * so the pure fallback is only for modes that truly declare no style.
  */
@@ -208,7 +208,7 @@ export function buildPendingModeChangeChip(
  *
  * Color extraction is a callback because the resolved-style cache lives
  * on `ModeManager` and we don't want this module to depend on it. The
- * caller passes `(id) => modeManager.resolvedForId(id)?.label.fgOpen ?? null`
+ * caller passes `(id) => modeLabelFgOpen(modeManager, id)` (from `ui/style/mode-prompt.ts`)
  * or equivalent.
  */
 export function eventToChipInput(

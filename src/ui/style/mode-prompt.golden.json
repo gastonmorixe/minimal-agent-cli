@@ -1,0 +1,1343 @@
+{
+  "dark/truecolor": {
+    "null": {
+      "prefix": "BASE ",
+      "prefixGlyph": "BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;199m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;199m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "ask": {
+      "prefix": "\u001b[1m\u001b[34mASK\u001b[0m \u001b[1m\u001b[34m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[34mASK\u001b[0m \u001b[1m\u001b[34m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "legacy": {
+      "prefix": "\u001b[1m\u001b[35mLEGACY\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[35mLEGACY\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[35m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "hex": {
+      "prefix": "\u001b[1m\u001b[38;2;255;136;0m\u001b[48;2;17;34;51mHEX\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[38;2;255;136;0m\u001b[48;2;17;34;51mHEX\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;2;255;136;0m",
+          "bgOpen": "\u001b[48;2;17;34;51m",
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": "\u001b[38;2;0;255;0m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": true
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "obj": {
+      "prefix": "\u001b[1m\u001b[38;2;1;2;3mOBJ\u001b[0m \u001b[1m\u001b[38;5;99m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[38;2;1;2;3mOBJ\u001b[0m \u001b[1m\u001b[38;5;99m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;2;1;2;3m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;99m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "objtok": {
+      "prefix": "\u001b[1m\u001b[36m\u001b[48;5;214mOBJTOK\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[36m\u001b[48;5;214mOBJTOK\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": "\u001b[48;5;214m",
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "badhex": {
+      "prefix": "\u001b[1mBAD\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1mBAD\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "sem": {
+      "prefix": "\u001b[1m\u001b[34m\u001b[48;5;199mSEM\u001b[0m \u001b[1m\u001b[31m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[34m\u001b[48;5;199mSEM\u001b[0m \u001b[1m\u001b[31m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": "\u001b[48;5;199m",
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[31m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "same": {
+      "prefix": "\u001b[1m\u001b[31mSAME\u001b[0m \u001b[1m\u001b[38;5;5m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[31mSAME\u001b[0m \u001b[1m\u001b[38;5;5m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[31m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;5m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "theme": {
+      "prefix": "\u001b[1m\u001b[36mTHEME\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[36mTHEME\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "plain": {
+      "prefix": "\u001b[1mPLAIN\u001b[22m BASE ",
+      "prefixGlyph": "\u001b[1mPLAIN\u001b[22m BASE ",
+      "resolved": null
+    },
+    "unknown": {
+      "prefix": "\u001b[1mUNK\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1mUNK\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "long": {
+      "prefix": "\u001b[1m\u001b[38;5;208mVERYL...\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;208mVERYL...\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;208m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "cjk": {
+      "prefix": "\u001b[1m\u001b[38;5;199m日本...\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;199m日本...\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;199m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "nolabel": {
+      "prefix": "\u001b[1m\u001b[33mNOLABEL\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[33mNOLABEL\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[33m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "proto": {
+      "prefix": "\u001b[1m\u001b[32mPROTO\u001b[0m \u001b[1m\u001b[38;5;45m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[32mPROTO\u001b[0m \u001b[1m\u001b[38;5;45m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[32m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;45m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "missing": {
+      "prefix": "BASE ",
+      "prefixGlyph": "BASE ",
+      "resolved": null
+    },
+    "active": {
+      "prefix": "\u001b[1m\u001b[34mASK\u001b[0m \u001b[1m\u001b[34m❯\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      },
+      "status": {
+        "fgOpen": null,
+        "bgOpen": null,
+        "bold": false,
+        "dim": false
+      }
+    },
+    "activeHex": {
+      "prefix": "\u001b[1m\u001b[38;2;255;136;0m\u001b[48;2;17;34;51mHEX\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;2;255;136;0m",
+          "bgOpen": "\u001b[48;2;17;34;51m",
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": "\u001b[38;2;0;255;0m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": true
+        },
+        "reset": "\u001b[0m"
+      },
+      "status": {
+        "fgOpen": "\u001b[38;2;0;255;0m",
+        "bgOpen": null,
+        "bold": false,
+        "dim": true
+      }
+    }
+  },
+  "light/ansi16": {
+    "null": {
+      "prefix": "BASE ",
+      "prefixGlyph": "BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;199m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;199m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "ask": {
+      "prefix": "\u001b[1m\u001b[34mASK\u001b[0m \u001b[1m\u001b[34m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[34mASK\u001b[0m \u001b[1m\u001b[34m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "legacy": {
+      "prefix": "\u001b[1m\u001b[35mLEGACY\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[35mLEGACY\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[35m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "hex": {
+      "prefix": "\u001b[1mHEX\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1mHEX\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": true
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "obj": {
+      "prefix": "\u001b[1m\u001b[38;5;42mOBJ\u001b[0m \u001b[1m\u001b[38;5;99m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;42mOBJ\u001b[0m \u001b[1m\u001b[38;5;99m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;42m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;99m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "objtok": {
+      "prefix": "\u001b[1m\u001b[36m\u001b[48;5;214mOBJTOK\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[36m\u001b[48;5;214mOBJTOK\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": "\u001b[48;5;214m",
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "badhex": {
+      "prefix": "\u001b[1m\u001b[38;5;7mBAD\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;7mBAD\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;7m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "sem": {
+      "prefix": "\u001b[1m\u001b[34m\u001b[48;5;199mSEM\u001b[0m \u001b[1m\u001b[31m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[34m\u001b[48;5;199mSEM\u001b[0m \u001b[1m\u001b[31m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": "\u001b[48;5;199m",
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[31m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "same": {
+      "prefix": "\u001b[1m\u001b[31mSAME\u001b[0m \u001b[1m\u001b[38;5;5m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[31mSAME\u001b[0m \u001b[1m\u001b[38;5;5m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[31m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;5m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "theme": {
+      "prefix": "\u001b[1m\u001b[2m\u001b[38;5;98mTHEME\u001b[0m \u001b[1m\u001b[38;5;118m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[2m\u001b[38;5;98mTHEME\u001b[0m \u001b[1m\u001b[38;5;118m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;98m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": true
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;118m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "plain": {
+      "prefix": "\u001b[1mPLAIN\u001b[22m BASE ",
+      "prefixGlyph": "\u001b[1mPLAIN\u001b[22m BASE ",
+      "resolved": null
+    },
+    "unknown": {
+      "prefix": "\u001b[1mUNK\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1mUNK\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "long": {
+      "prefix": "\u001b[1m\u001b[38;5;208mVERYL...\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;208mVERYL...\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;208m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "cjk": {
+      "prefix": "\u001b[1m\u001b[38;5;199m日本...\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;199m日本...\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;199m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "nolabel": {
+      "prefix": "\u001b[1m\u001b[33mNOLABEL\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[33mNOLABEL\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[33m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "proto": {
+      "prefix": "\u001b[1m\u001b[32mPROTO\u001b[0m \u001b[1m\u001b[38;5;45m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[32mPROTO\u001b[0m \u001b[1m\u001b[38;5;45m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[32m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;45m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "missing": {
+      "prefix": "BASE ",
+      "prefixGlyph": "BASE ",
+      "resolved": null
+    },
+    "active": {
+      "prefix": "\u001b[1m\u001b[34mASK\u001b[0m \u001b[1m\u001b[34m❯\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      },
+      "status": {
+        "fgOpen": null,
+        "bgOpen": null,
+        "bold": false,
+        "dim": false
+      }
+    },
+    "activeHex": {
+      "prefix": "\u001b[1mHEX\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": true
+        },
+        "reset": "\u001b[0m"
+      },
+      "status": {
+        "fgOpen": null,
+        "bgOpen": null,
+        "bold": false,
+        "dim": true
+      }
+    }
+  },
+  "high-contrast/ansi256": {
+    "null": {
+      "prefix": "BASE ",
+      "prefixGlyph": "BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;199m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;199m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "ask": {
+      "prefix": "\u001b[1m\u001b[34mASK\u001b[0m \u001b[1m\u001b[34m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[34mASK\u001b[0m \u001b[1m\u001b[34m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "legacy": {
+      "prefix": "\u001b[1m\u001b[35mLEGACY\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[35mLEGACY\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[35m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "hex": {
+      "prefix": "\u001b[1mHEX\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1mHEX\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": true
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "obj": {
+      "prefix": "\u001b[1m\u001b[38;5;42mOBJ\u001b[0m \u001b[1m\u001b[38;5;99m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;42mOBJ\u001b[0m \u001b[1m\u001b[38;5;99m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;42m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;99m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "objtok": {
+      "prefix": "\u001b[1m\u001b[36m\u001b[48;5;214mOBJTOK\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[36m\u001b[48;5;214mOBJTOK\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": "\u001b[48;5;214m",
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "badhex": {
+      "prefix": "\u001b[1m\u001b[38;5;7mBAD\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;7mBAD\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;7m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "sem": {
+      "prefix": "\u001b[1m\u001b[34m\u001b[48;5;199mSEM\u001b[0m \u001b[1m\u001b[31m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[34m\u001b[48;5;199mSEM\u001b[0m \u001b[1m\u001b[31m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": "\u001b[48;5;199m",
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[31m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "same": {
+      "prefix": "\u001b[1m\u001b[31mSAME\u001b[0m \u001b[1m\u001b[38;5;5m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[31mSAME\u001b[0m \u001b[1m\u001b[38;5;5m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[31m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;5m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "theme": {
+      "prefix": "\u001b[1m\u001b[36mTHEME\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[36mTHEME\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[36m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": "\u001b[38;5;45m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "plain": {
+      "prefix": "\u001b[1mPLAIN\u001b[22m BASE ",
+      "prefixGlyph": "\u001b[1mPLAIN\u001b[22m BASE ",
+      "resolved": null
+    },
+    "unknown": {
+      "prefix": "\u001b[1mUNK\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1mUNK\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "long": {
+      "prefix": "\u001b[1m\u001b[38;5;208mVERYL...\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;208mVERYL...\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;208m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "cjk": {
+      "prefix": "\u001b[1m\u001b[38;5;199m日本...\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[38;5;199m日本...\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[38;5;199m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "nolabel": {
+      "prefix": "\u001b[1m\u001b[33mNOLABEL\u001b[0m BASE ",
+      "prefixGlyph": "\u001b[1m\u001b[33mNOLABEL\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[33m",
+          "bgOpen": null,
+          "bold": true,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "proto": {
+      "prefix": "\u001b[1m\u001b[32mPROTO\u001b[0m \u001b[1m\u001b[38;5;45m❯\u001b[0m ",
+      "prefixGlyph": "\u001b[1m\u001b[32mPROTO\u001b[0m \u001b[1m\u001b[38;5;45m>\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[32m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[38;5;45m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      }
+    },
+    "missing": {
+      "prefix": "BASE ",
+      "prefixGlyph": "BASE ",
+      "resolved": null
+    },
+    "active": {
+      "prefix": "\u001b[1m\u001b[34mASK\u001b[0m \u001b[1m\u001b[34m❯\u001b[0m ",
+      "resolved": {
+        "label": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": "\u001b[34m",
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "reset": "\u001b[0m"
+      },
+      "status": {
+        "fgOpen": null,
+        "bgOpen": null,
+        "bold": false,
+        "dim": false
+      }
+    },
+    "activeHex": {
+      "prefix": "\u001b[1mHEX\u001b[0m BASE ",
+      "resolved": {
+        "label": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "arrow": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": false
+        },
+        "status": {
+          "fgOpen": null,
+          "bgOpen": null,
+          "bold": false,
+          "dim": true
+        },
+        "reset": "\u001b[0m"
+      },
+      "status": {
+        "fgOpen": null,
+        "bgOpen": null,
+        "bold": false,
+        "dim": true
+      }
+    }
+  }
+}

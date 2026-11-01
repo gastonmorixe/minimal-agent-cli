@@ -45,6 +45,7 @@ import {
   submittedAtEnabled,
 } from "./ui/scrollback-submitted-at.ts"
 import { c, faintThinkingChunk } from "./ui/style/ansi.ts"
+import { modeLabelFgOpen, modePromptPrefixForId } from "./ui/style/mode-prompt.ts"
 import { highlightReadBody } from "./ui/tool-transcript/code-highlight-render.ts"
 import {
   formatToolHeaderRows,
@@ -289,8 +290,8 @@ export async function replayToScrollback(
     const toMode = modeManager?.modeById(toId) ?? null
     const fromLabel = fromMode?.label ?? (fromId ? fromId.toUpperCase() : "default")
     const toLabel = toMode?.label ?? (toId ? toId.toUpperCase() : "default")
-    const fromFgOpen = modeManager?.resolvedForId(fromId)?.label.fgOpen ?? null
-    const toFgOpen = modeManager?.resolvedForId(toId)?.label.fgOpen ?? null
+    const fromFgOpen = modeManager ? modeLabelFgOpen(modeManager, fromId) : null
+    const toFgOpen = modeManager ? modeLabelFgOpen(modeManager, toId) : null
     // When the user-record timestamp is unknown, fall back to the Unix
     // epoch so the chip still renders with a (clearly-wrong-looking)
     // date. The alternative was a "(historical)" placeholder, but a
@@ -377,7 +378,7 @@ export async function replayToScrollback(
       activeModeId = modeAfter
       if (text.length > 0) {
         const arrow = modeManager
-          ? modeManager.promptPrefixForId(activeModeId, baseArrow)
+          ? modePromptPrefixForId(modeManager, activeModeId, baseArrow)
           : baseArrow
         const lines = [`${arrow}${text}`]
         const renderedLines =

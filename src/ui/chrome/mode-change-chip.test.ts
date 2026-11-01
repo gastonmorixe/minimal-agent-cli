@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test"
 
 import { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { ManifestMode } from "@minimal-agent/core/plugin-api/types/plugin"
+import { modeLabelFgOpen } from "../style/mode-prompt.ts"
 
 import {
   buildModeChangeChip,
@@ -194,7 +195,7 @@ describe("buildPendingModeChangeChip", () => {
   }
   const resolveLabel = (id: string | null): string =>
     id == null ? "default" : (labelMap[id] ?? id)
-  // Mirrors ModeManager.resolvedForId: null id → brand primary.
+  // Mirrors modeLabelFgOpen: null id → brand primary.
   const resolveFgOpen = (id: string | null): string | null =>
     id == null ? brand : (fgMap[id] ?? null)
   const at = new Date("2026-05-22T17:52:00")
@@ -244,10 +245,7 @@ describe("eventToChipInput", () => {
     expect(event).not.toBeNull()
     expect(event.at).toEqual(FIXED_AT)
 
-    const input = eventToChipInput(
-      event,
-      (mode) => m.resolvedForId(mode?.id ?? null)?.label.fgOpen ?? null,
-    )
+    const input = eventToChipInput(event, (mode) => modeLabelFgOpen(m, mode?.id ?? null))
     expect(input.fromLabel).toBe("default")
     expect(input.toLabel).toBe("ASK")
     // No-mode/"default" resolves to brand primary (prompt arrow pigment).
@@ -261,10 +259,7 @@ describe("eventToChipInput", () => {
     const m = new ModeManager([ASK_MODE, PLAN_MODE], "ask", undefined, () => FIXED_AT)
     m.setMode("plan")
     const event = m.lastTransition()!
-    const input = eventToChipInput(
-      event,
-      (mode) => m.resolvedForId(mode?.id ?? null)?.label.fgOpen ?? null,
-    )
+    const input = eventToChipInput(event, (mode) => modeLabelFgOpen(m, mode?.id ?? null))
     expect(input.fromLabel).toBe("ASK")
     expect(input.toLabel).toBe("PLAN")
   })
@@ -273,10 +268,7 @@ describe("eventToChipInput", () => {
     const m = new ModeManager([NOSTYLE_MODE], null, undefined, () => FIXED_AT)
     m.setMode("raw")
     const event = m.lastTransition()!
-    const input = eventToChipInput(
-      event,
-      (mode) => m.resolvedForId(mode?.id ?? null)?.label.fgOpen ?? null,
-    )
+    const input = eventToChipInput(event, (mode) => modeLabelFgOpen(m, mode?.id ?? null))
     expect(input.toFgOpen).toBeNull()
   })
 })
