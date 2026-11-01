@@ -87,7 +87,9 @@ async function loaderWithCommand(bus: EventBus): Promise<PluginLoader> {
       name: "xcmd",
       version: "0.1.0",
       description: "test",
-      commands: [{ name: "x", summary: "x cmd", handler: { type: "module", path: "./cmd.ts" } }],
+      headless: {
+        commands: [{ name: "x", summary: "x cmd", handler: { type: "module", path: "./cmd.ts" } }],
+      },
     }),
   )
   writeFileSync(join(dir, "cmd.ts"), HANDLER)
