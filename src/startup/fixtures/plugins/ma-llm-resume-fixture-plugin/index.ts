@@ -10,7 +10,15 @@
  * `RESUME_TEST_KILL_AT_ROUND`, the process kills itself with SIGKILL, as a
  * crash would.
  *
- * Env: `RESUME_TEST_LOG`, `RESUME_TEST_MARK`, `RESUME_TEST_KILL_AT_ROUND`.
+ * With `RESUME_TEST_SCRIPT=cutoff`, the provider scripts a kill while a tool
+ * runs (decision 31). Round 1 asks for a normal Bash call. Each later round
+ * asks for a Bash call that appends `c<round>` to the mark file and then
+ * kills the CLI process with SIGKILL, until the request holds two
+ * cut-off notes. Then it answers with the text `CUTOFF-ANSWER`. Each request
+ * appends its messages as one JSON line to `RESUME_TEST_REQS`.
+ *
+ * Env: `RESUME_TEST_LOG`, `RESUME_TEST_MARK`, `RESUME_TEST_KILL_AT_ROUND`,
+ * `RESUME_TEST_SCRIPT`, `RESUME_TEST_REQS`.
  *
  * @module startup/fixtures/plugins/ma-llm-resume-fixture-plugin
  */
@@ -72,12 +80,60 @@ function roundEvents(round: number): CanonicalEvent[] {
   ]
 }
 
+/** A text found once in each cut-off note that core adds on resume. */
+const CUTOFF_NOTE = "The process stopped while this tool call ran."
+
+/** One round of the `cutoff` script. See the module doc. */
+function cutoffEvents(req: CanonicalRequest): CanonicalEvent[] {
+  const json = JSON.stringify(req.messages)
+  const notes = json.split(CUTOFF_NOTE).length - 1
+  const round = 1 + (json.match(/"toolUseId"/g)?.length ?? 0)
+  const start: CanonicalEvent = {
+    type: "message_start",
+    messageId: `msg_${round}`,
+    modelId: RESUME_FIXTURE_MODEL,
+    initialUsage: USAGE,
+  }
+  const end = (stopReason: "tool_use" | "end_turn"): CanonicalEvent[] => [
+    { type: "message_delta", stopReason, usage: USAGE },
+    { type: "message_stop" },
+  ]
+  if (notes >= 2) {
+    const text = "CUTOFF-ANSWER"
+    return [
+      start,
+      { type: "text_start", index: 0 },
+      { type: "text_delta", index: 0, text },
+      { type: "text_stop", index: 0, finalText: text },
+      ...end("end_turn"),
+    ]
+  }
+  const markPath = process.env.RESUME_TEST_MARK ?? ""
+  const command =
+    round === 1
+      ? `echo r1 >> ${markPath} && echo TOOL''DONE-1`
+      : `echo c${round} >> ${markPath} && kill -9 ${process.pid}; sleep 5`
+  const input = { command }
+  return [
+    start,
+    { type: "tool_use_start", index: 0, id: `toolu_${round}`, name: "Bash" },
+    { type: "tool_use_input_delta", index: 0, partialJson: JSON.stringify(input) },
+    { type: "tool_use_stop", index: 0, input },
+    ...end("tool_use"),
+  ]
+}
+
 const adapter: ProviderAdapterView = {
   id: RESUME_FIXTURE_PROVIDER,
   displayName: "Resume Fixture",
   surfaces: [RESUME_FIXTURE_PROVIDER],
   validate: () => ({ ok: true, errors: [] }),
   async *run(req: CanonicalRequest): AsyncIterable<CanonicalEvent> {
+    if (process.env.RESUME_TEST_SCRIPT === "cutoff") {
+      appendFileSync(process.env.RESUME_TEST_REQS ?? "", `${JSON.stringify(req.messages)}\n`)
+      yield* cutoffEvents(req)
+      return
+    }
     const round = roundOf(req)
     appendFileSync(process.env.RESUME_TEST_LOG ?? "", `${round}\n`)
     if (round === Number(process.env.RESUME_TEST_KILL_AT_ROUND ?? "0")) {
