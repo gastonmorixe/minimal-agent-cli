@@ -118,7 +118,7 @@ import {
   type ResumedToolDisplay,
   type ResumeState,
 } from "./startup/resume-load.ts"
-import { isHostModeRun, isInteractiveResumeRun } from "./startup/resume-mode.ts"
+import { isHostModeRun, isInteractiveResumeRun, isReplRun } from "./startup/resume-mode.ts"
 import { runHostMode } from "./startup/run-host-mode.ts"
 import { runNonInteractivePrompt, selectStdioMode } from "./startup/run-non-interactive.ts"
 import { runStartupSubcommand } from "./startup/run-subcommand.ts"
@@ -671,12 +671,14 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // current value, never the boot value. Rebound to `agent.getModel()` below.
   let getLiveModelId: () => string = () => selectedModel
   let getLiveProviderId: () => string | undefined = () => selectedProviderId
+  // Only the REPL loads plugin `ui` modules and the terminal env (S35).
+  const replRoute = isReplRun(extractPromptFromArgs(args), commandPlan.command)
   const loader = await PluginLoader.load({
     // Every root comes from the CLI (S40), incl. the dev plugins checkout.
     roots: pluginRoots,
     // Terminal data for plugin handlers (palette, protocol). Core adds none
     // (S31). It goes away when S41 moves plugin UI code to ui/ folders.
-    handlerEnv: terminalHandlerEnv,
+    ...(replRoute ? { handlerEnv: terminalHandlerEnv } : {}),
     coreToolNames,
     // Single AgentContext shared with every plugin dispatch path.
     // Frozen value object; see createAgentContext + AgentContext docs.
@@ -706,6 +708,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   const pluginUi = await loadPluginUi({
     packages: loader.loadedPackages(),
     logger: (m) => diag.warn("plugin-ui", m),
+    importModules: replRoute,
   })
   // Per-turn attachment producers + content drains, contributed by
   // plugins through the loader's `turnAttachments` manifest seam (the
@@ -841,7 +844,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // duplicate the work and re-introduce the latency we're trying to
   // eliminate. The user-facing benefit: the live area shows up
   // instantly; the quota row populates a moment later.
-  const hasQuotaSlot = pluginUi.liveAreaSlots.some((s) => s.definition.id === "quota")
+  const hasQuotaSlot = pluginUi.slotIds.includes("quota")
   const shouldSkipQuota =
     !commandPlan.needsQuota ||
     // Only meaningful for a provider that declares a quota-probe seam. A

@@ -47,12 +47,20 @@ export interface LoadPluginUiOptions {
   readonly logger: (msg: string) => void
   /** The `ui.terminal` capability for each call. Default: {@link terminalUiCapability}. */
   readonly tui?: () => TerminalUiCapability
+  /**
+   * Import the `ui` entry modules (`setup` and slots). Default: true. With
+   * false, the loader reads the manifests only and runs no plugin code. Use false on routes
+   * with no live area (host mode, `--prompt`, json).
+   */
+  readonly importModules?: boolean
 }
 
 /** The loaded UI part of every plugin. */
 export interface PluginUi {
-  /** Live-area slots, in plugin load order, then manifest order. */
+  /** Live-area slots, in plugin load order, then manifest order. Empty with no import. */
   readonly liveAreaSlots: readonly ResolvedLiveAreaSlot[]
+  /** The ids of the valid live-area slots. With no import, the declared ids. */
+  readonly slotIds: readonly string[]
 }
 
 /** The `ui.terminal` capability: the live terminal width and the host palette. */
@@ -111,7 +119,7 @@ async function runUiSetup(
     const entry = parseUiSetup(raw, manifestPath)
     if (entry.type !== "module") return
     const abs = isAbsolute(entry.path) ? entry.path : resolve(pkg.packageDir, entry.path)
-    const mod = (await importPluginModule(abs)) as { default?: UiSetupHandler }
+    const mod = (await importPluginModule(abs, pkg.packageDir)) as { default?: UiSetupHandler }
     if (typeof mod.default !== "function") {
       logger(`${pkg.packageDir}: ui.setup ${abs} has no default export function`)
       return
@@ -140,6 +148,7 @@ function grantTui(
 export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi> {
   const tui = opts.tui ?? terminalUiCapability
   const liveAreaSlots: ResolvedLiveAreaSlot[] = []
+  const slotIds: string[] = []
   for (const pkg of opts.packages) {
     const manifestPath = join(pkg.packageDir, "manifest.json")
     let rawSlots: unknown[]
@@ -155,18 +164,27 @@ export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi>
       )
       continue
     }
-    if (ui?.setup !== undefined) await runUiSetup(ui.setup, pkg, manifestPath, tui, opts.logger)
+    if (ui?.setup !== undefined && opts.importModules !== false) {
+      await runUiSetup(ui.setup, pkg, manifestPath, tui, opts.logger)
+    }
     const seen = new Set<string>()
     for (let i = 0; i < rawSlots.length; i++) {
       try {
         const def = parseLiveAreaSlot(rawSlots[i], i, manifestPath, seen)
+        if (opts.importModules === false) {
+          slotIds.push(def.id)
+          continue
+        }
         const resolved = await resolveLiveAreaSlot(def, pkg.id, pkg.packageDir, opts.logger)
-        if (resolved) liveAreaSlots.push(grantTui(resolved, tui))
+        if (resolved) {
+          liveAreaSlots.push(grantTui(resolved, tui))
+          slotIds.push(def.id)
+        }
       } catch (e) {
         const msg = e instanceof UiManifestError || e instanceof Error ? e.message : String(e)
         opts.logger(`${pkg.packageDir}: live-area slot skipped: ${msg}`)
       }
     }
   }
-  return { liveAreaSlots }
+  return { liveAreaSlots, slotIds }
 }

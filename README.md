@@ -214,7 +214,7 @@ For a single run, use CLI flags (same precedence as other options: CLI > env > c
 ```bash
 minimal-agent --disable-plugin web-search,memory -p "review this"
 minimal-agent --enable-plugin interleave-thinking
-minimal-agent plugins list    # discover installed plugin ids
+minimal-agent plugins list    # discover installed plugin ids (incl. the dev checkout root)
 ```
 
 Environment mirrors:

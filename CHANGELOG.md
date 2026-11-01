@@ -19,6 +19,18 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ## [Unreleased]
 
+### Changed
+
+- 2026-11-01: `--list-plugins` (`plugins list`) also lists the plugins in the
+  dev checkout root: `../minimal-agent-plugins` next to the CLI repo, or the
+  dirs in `MINIMAL_AGENT_PLUGIN_SIBLINGS` (S40). Before, it did not show them.
+- 2026-11-01: only the interactive REPL loads plugin `ui` modules and passes
+  the terminal handler env (S35). Host mode, `--prompt`, and the json routes
+  import no `ui` module.
+- 2026-11-01: the plugin module loader checks real paths (S35). It refuses
+  core code (the installed core package, or any dir whose `package.json`
+  names `@minimal-agent/core`) and any module outside the plugin root.
+
 ### Added
 
 - 2026-10-31: `src/architecture/flag-ownership.test.ts` (spec S26). No flag

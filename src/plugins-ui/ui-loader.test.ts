@@ -193,3 +193,38 @@ export default (ctx) => { slots.install(ctx.tui.kit) }`,
     expect(logs.some((l) => l.includes("live-area slot skipped"))).toBe(true)
   })
 })
+
+describe("loadPluginUi with importModules: false (S35)", () => {
+  it("reads the slot ids from the manifest and imports nothing", async () => {
+    const root = mkdtempSync(join(tmpdir(), "cli-ui-no-import-"))
+    try {
+      // The module throws on import. A read with no import never runs it,
+      // as the setup entry or as a slot.
+      writeFileSync(join(root, "slot.ts"), 'throw new Error("imported")\n')
+      const entry = { type: "module", path: "./slot.ts" }
+      writeFileSync(
+        join(root, "manifest.json"),
+        JSON.stringify({
+          id: "u",
+          ui: { setup: entry, liveAreaSlots: [{ id: "quota", handler: entry }] },
+        }),
+      )
+      const logs: string[] = []
+      const packages = [{ id: "u", packageDir: root }]
+      const out = await loadPluginUi({
+        packages,
+        logger: (m) => logs.push(m),
+        importModules: false,
+      })
+      expect(out.liveAreaSlots).toEqual([])
+      expect(out.slotIds).toEqual(["quota"])
+      expect(logs).toEqual([])
+      // Control: with imports, the throwing module is imported and logged.
+      const loaded = await loadPluginUi({ packages, logger: (m) => logs.push(m) })
+      expect(loaded.slotIds).toEqual([])
+      expect(logs.join("\n")).toContain("imported")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})

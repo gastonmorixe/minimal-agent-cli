@@ -43,6 +43,15 @@ export function isHostModeRun(command: string): boolean {
 }
 
 /**
+ * True for an interactive REPL run: no prompt and no host mode. Only this
+ * route uses the live area, so only it loads plugin `ui` modules and the
+ * terminal handler env (S35).
+ */
+export function isReplRun(promptSource: PromptSource, command: string): boolean {
+  return promptSource.kind === "none" && !isHostModeRun(command)
+}
+
+/**
  * True when a failure should end stdout with the stream-json failure lines.
  * It reads the same parsed prompt source as {@link isInteractiveResumeRun}.
  * A run with no prompt enters the REPL, so it never gets JSON on the TTY,

@@ -61,7 +61,7 @@ export async function resolveLiveAreaSlot(
     }
     let mod: { default?: LiveAreaHandler }
     try {
-      mod = (await importPluginModule(abs)) as { default?: LiveAreaHandler }
+      mod = (await importPluginModule(abs, packageDir)) as { default?: LiveAreaHandler }
     } catch (e) {
       logger(
         `${packageDir}: failed to import live-area slot handler ${abs}: ${
