@@ -201,4 +201,24 @@ describe("prepareEntrypointArgs", () => {
     expect(h.writes.join("")).toContain("--effort requires a level")
     expect(h.writes.join("")).toContain('Got "--fast"')
   })
+
+  it("rejects a path-like --session-id with exit 2 before any session file is touched", () => {
+    for (const bad of ["../../x", "a/b", "a\\b", "x\u0000y"]) {
+      const h = makeHarness()
+      let code: number | undefined
+      try {
+        prepareEntrypointArgs({
+          rawArgv: ["--session-id", bad],
+          env: {},
+          cwd: "/tmp",
+          ...h.deps,
+        })
+      } catch (e) {
+        if (e instanceof ExitSignal) code = e.code
+        else throw e
+      }
+      expect(code).toBe(2)
+      expect(h.writes.join("")).toContain("setSessionId: not a UUID")
+    }
+  })
 })
