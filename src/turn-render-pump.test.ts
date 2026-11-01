@@ -138,12 +138,55 @@ describe("TurnRenderPump", () => {
     const timeout = new Promise<string>((resolve) => setTimeout(() => resolve("timeout"), 1000))
     expect(await Promise.race([consumed.then(() => "ended"), timeout])).toBe("ended")
     expect(await Promise.race([idle.then(() => "idle"), timeout])).toBe("idle")
-    // The abort drops the steps and text that waited behind the stuck step.
-    expect(trace).toEqual([])
+    // The abort runs the step that waited behind the stuck step, and drops the text.
+    expect(trace).toEqual(["pending row"])
     // A step after the abort runs at once.
     pump.step(() => {
       trace.push("abort notice")
     })
-    expect(trace).toEqual(["abort notice"])
+    expect(trace).toEqual(["pending row", "abort notice"])
+  })
+
+  it("on abort, runs the waiting steps in order and drops the waiting text", () => {
+    const controller = new AbortController()
+    const pump = new TurnRenderPump(controller.signal)
+    const trace: string[] = []
+    pump.step(() => new Promise<void>(() => {}))
+    pump.text("late")
+    pump.step(() => {
+      trace.push("queue echo")
+    })
+    pump.step(() => {
+      trace.push("text stop")
+    })
+    controller.abort()
+    // The queue echo (core already took its text) and the formatter end still show.
+    expect(trace).toEqual(["queue echo", "text stop"])
+  })
+
+  it("tells a step that ran before the abort that its later writes are stale", async () => {
+    const controller = new AbortController()
+    const pump = new TurnRenderPump(controller.signal)
+    const trace: string[] = []
+    let finishStuck: (() => void) | undefined
+    let finishLate: (() => void) | undefined
+    pump.step(async (live) => {
+      await new Promise<void>((resolve) => {
+        finishStuck = resolve
+      })
+      if (live()) trace.push("stale write")
+    })
+    controller.abort()
+    // A step after the abort is not stale.
+    pump.step(async (live) => {
+      await new Promise<void>((resolve) => {
+        finishLate = resolve
+      })
+      if (live()) trace.push("abort row")
+    })
+    finishStuck?.()
+    finishLate?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(trace).toEqual(["abort row"])
   })
 })

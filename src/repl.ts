@@ -50,6 +50,7 @@ import { StatusRenderer, type StatusSpinnerTheme } from "./ui/status/line-render
 import { c, faintThinkingChunk } from "./ui/style/ansi.ts"
 import { modePromptPrefix } from "./ui/style/mode-prompt.ts"
 import { formatTurnError } from "./ui/turn-error.ts"
+import type { StepLive } from "./turn-render-pump.ts"
 import { renderTurnNotice } from "./ui/turn-notice.ts"
 
 type MaybePromise<T> = T | Promise<T>
@@ -75,9 +76,10 @@ export interface ReplAgentLike {
        * out of the generator), in log order (S36). The REPLs build it with
        * `turnEventRenderer`: reasoning chunks, block edges, and notices
        * (`renderTurnNotice`). With no `onEvent`, a notice becomes a
-       * style-free `onTranscriptLine` one-liner.
+       * style-free `onTranscriptLine` one-liner. `live()` is false once a
+       * write of the step is stale (the turn aborted). Check it after an await.
        */
-      onEvent?: (event: AgentEvent) => MaybePromise<void>
+      onEvent?: (event: AgentEvent, live: StepLive) => MaybePromise<void>
       /**
        * Optional. User text the host queued during the turn. The loop
        * takes it at a tool boundary and adds it to the next request (the
@@ -677,11 +679,13 @@ export async function runRepl(
       }
       // Per-text-block formatter boundary. See `runReplLiveArea` for the
       // full rationale; this is the legacy `runRepl` (non-live-area) twin.
-      const textStop = async (): Promise<void> => {
+      const textStop = async (live?: StepLive): Promise<void> => {
         if (!formatter && !opts?.formatterCmd) return
         const old = formatter
         formatter = null
         if (old) await old.end()
+        // A stale end (the turn aborted) must not respawn a formatter.
+        if (live && !live()) return
         formatter = spawnMainFormatter()
       }
 
