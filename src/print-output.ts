@@ -1,7 +1,7 @@
 /**
  * Phase 4 host adapter: the imperative shell for non-interactive output.
  *
- * Turns the pure transforms in `src/sdk/print-mode.ts` into real bytes on
+ * Turns the pure transforms in `src/print-mode.ts` into real bytes on
  * `process.stdout` / `process.stderr`, following the Codex non-interactive
  * model my research distilled:
  *
@@ -33,7 +33,7 @@ import {
   renderEvent,
   selectOutputMode,
   shouldPrintFinalToStdout,
-} from "@minimal-agent/core/sdk/print-mode"
+} from "./print-mode.ts"
 
 /** A minimal writable sink (stdout / stderr satisfy this structurally). */
 export interface WriteStream {
