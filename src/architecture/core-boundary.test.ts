@@ -235,7 +235,14 @@ describe("CLI core architecture boundary", () => {
     expect(CORE_PUBLIC_CONTRACT.events).toEqual(["AgentEvent", "EventSink"])
     expect(CORE_PUBLIC_CONTRACT.ports).toContain("SessionPersistence")
     expect(CORE_PUBLIC_CONTRACT.engine).toEqual(["AgentCore"])
-    expect(CORE_PUBLIC_CONTRACT.blockedUntilProgram2).toContain("host-safe construction contract")
+    expect(CORE_PUBLIC_CONTRACT.coreSubpaths).toContain(".")
+    expect(CORE_PUBLIC_CONTRACT.construction).toEqual([
+      "createRuntime",
+      "Session",
+      "SessionOptions",
+    ])
+    expect(CORE_PUBLIC_CONTRACT.completion).toEqual(["TurnResult"])
+    expect(CORE_PUBLIC_CONTRACT).not.toHaveProperty("blockedUntilProgram2")
     expect(JSON.stringify(CORE_PUBLIC_CONTRACT)).not.toMatch(
       /createAgentRuntime|AgentRequest|SessionPort|PluginPort/,
     )
