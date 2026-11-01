@@ -11,12 +11,7 @@ import { beforeEach, describe, expect, it } from "bun:test"
 import type { Session } from "@minimal-agent/core"
 import { createRuntime } from "@minimal-agent/core"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
-import type {
-  ToolExecResult,
-  ToolExecutor,
-  ToolRegistry,
-  TranscriptSink,
-} from "@minimal-agent/core/sdk/ports"
+import type { ToolExecResult, ToolExecutor, ToolRegistry } from "@minimal-agent/core/sdk/ports"
 import type { ReplAgentLike } from "../repl.ts"
 import type { TestStreamedResponse as StreamedResponse } from "../test-utils/transport-types.ts"
 
@@ -39,10 +34,6 @@ class StubExecutor implements ToolExecutor {
   }
 }
 
-class DiscardTranscript implements TranscriptSink {
-  write(): void {}
-}
-
 /** Open a real `Session` that answers with one text turn. */
 function openSession(text: string, id: string): Session {
   const sendFn = async function* (): AsyncGenerator<string, StreamedResponse, undefined> {
@@ -59,7 +50,6 @@ function openSession(text: string, id: string): Session {
     model: "test-model",
     toolRegistry: EMPTY_REGISTRY,
     toolExecutor: new StubExecutor(),
-    transcriptSink: new DiscardTranscript(),
     sendFn,
     id,
   })
@@ -294,7 +284,6 @@ describe("runNonInteractivePrompt: stream-json failure lines", () => {
               model: "test-model",
               toolRegistry: EMPTY_REGISTRY,
               toolExecutor: new StubExecutor(),
-              transcriptSink: new DiscardTranscript(),
               sendFn,
               id: "sid-f",
             }),

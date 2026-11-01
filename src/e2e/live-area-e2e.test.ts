@@ -219,17 +219,17 @@ describe("live-area REPL (end to end)", () => {
     expect(output.text()).toContain("\x1b[?25h")
   })
 
-  it("onQueueInject does NOT re-render the prompt to scrollback (Bug 7)", async () => {
+  it("a queued-text injection does NOT re-render the prompt to scrollback (Bug 7)", async () => {
     // Regression for the "queue stuff renders twice" bug. ORIGINAL form:
     // the inject hook wrote a `❯ <text>` line to scrollback but the
     // editor's submit had ALREADY committed the same line → duplicate.
-    // The fix made `onQueueInject` a no-op. NEW form (post-Bug 393):
-    // `EditorController.submit()` no longer writes to scrollback at all;
-    // the scrollback commit happens at TURN START (or `drainQueuedUserText`
-    // call site) inside `runReplLiveArea`. `onQueueInject` REMAINS a
-    // no-op, so this test still passes : it now guards against a future
-    // regression where someone reactivates the hook for scrollback writes
-    // (which would double-commit alongside drainQueuedUserText).
+    // NEW form (post-Bug 393, S37): `EditorController.submit()` no longer
+    // writes to scrollback at all; the scrollback commit happens at TURN
+    // START (or in the `inputQueue.take` call) inside `runReplLiveArea`.
+    // The injection reaches the REPL only as a queued `user_message`
+    // event, and the REPL must not draw it : this test guards against a
+    // future regression where someone draws it (which would double-commit
+    // alongside the queue take).
     const stdin = new FakeTTYInput()
     const output = new FakeOutput()
     const compositor = new Compositor({ output: output as any })
@@ -242,12 +242,19 @@ describe("live-area REPL (end to end)", () => {
       output: output as any,
     })
 
-    // Capture the inject hook for direct invocation from inside agent.run.
+    // Capture the event handler for direct invocation from inside agent.run.
     let capturedInject: ((qtext: string) => void) | null = null
     const fakeAgent: ReplAgentLike = {
       pluginLoader: () => null,
       async *run(_text: string, opts?: any) {
-        capturedInject = opts?.onQueueInject ?? null
+        // The REPL's queue port has no `injected` hook.
+        expect(opts?.inputQueue?.injected).toBeUndefined()
+        const onEvent = opts?.onEvent
+        capturedInject = onEvent
+          ? (text: string) => {
+              void onEvent({ type: "user_message", text, queued: true })
+            }
+          : null
         yield "ok\n"
         return { blocks: [], text: "ok\n", stopReason: "end_turn" } as any
       },
@@ -268,7 +275,7 @@ describe("live-area REPL (end to end)", () => {
     stdin.send("\r")
     await new Promise((r) => setTimeout(r, 10))
 
-    // Snapshot output, fire the inject hook with a unique sentinel, and
+    // Snapshot output, fire the injection event with a unique sentinel, and
     // confirm no new bytes were written. A correct no-op leaves the output
     // length unchanged AND never emits the sentinel as a `❯ <sentinel>`
     // prompt line.
@@ -295,7 +302,7 @@ describe("live-area REPL (end to end)", () => {
     // had EditorController.submit() commit eagerly to scrollback at the
     // moment Enter was pressed, so a queued prompt sat in BOTH places
     // simultaneously. Fix: defer the scrollback commit to runReplLiveArea
-    // (turn-start dequeue, or drainQueuedUserText for in-flight drain).
+    // (turn-start dequeue, or the inputQueue take for in-flight drain).
     const stdin = new FakeTTYInput()
     const output = new FakeOutput()
     const compositor = new Compositor({ output: output as any })

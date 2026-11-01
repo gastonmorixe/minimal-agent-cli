@@ -6,7 +6,7 @@
  * calls `ports.reflectionGate?.beforeCheckpoint(round)` (see
  * `src/sdk/agent-core-helpers.ts`) and awaits whatever the host does with
  * that call. This module is one such host implementation, used by
- * {@link InteractiveSession}'s default `beforeReflectionCheckpoint` wiring.
+ * {@link InteractiveSession}'s default `reflectionGate` port wiring.
  * It owns the keyboard (the input capture stack) and the timer; neither
  * leaves the engine side anymore (moved out of the former
  * `src/agent/reflection.ts` in S30, which keeps only the pure ack-parsing

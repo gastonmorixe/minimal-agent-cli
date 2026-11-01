@@ -498,7 +498,7 @@ describe("replayToScrollback", () => {
     expect(sink.out).not.toContain("FMT[hi]")
   })
 
-  it("spawns a fresh formatter per text block to mirror the live onTextStop boundary", async () => {
+  it("spawns a fresh formatter per text block to mirror the live text block_stopped boundary", async () => {
     // Two text blocks in ONE assistant turn must each get wrapped
     // independently (`FMT[…]` per block), proving start+end ran twice
     // — not once with both blocks concatenated.

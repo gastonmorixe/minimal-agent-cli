@@ -180,7 +180,7 @@ describe("queue persistence : <sid>.queue snapshot across runReplLiveArea", () =
 
     // Start the REPL with the same sid. The restored queue should
     // become turn 1's input, with the second item draining as turn 2
-    // (the fake agent does not call drainQueuedUserText).
+    // (the fake agent does not call inputQueue.take).
     const stdin = new FakeTTYInput()
     const output = new FakeOutput()
     const compositor = new Compositor({ output: output as any })

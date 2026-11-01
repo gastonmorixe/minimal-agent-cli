@@ -31,7 +31,6 @@ import type {
   ToolExecResult,
   ToolExecutor,
   ToolRegistry,
-  TranscriptSink,
 } from "@minimal-agent/core/sdk/ports"
 import type { ReplAgentLike } from "../repl.ts"
 import type { TestStreamedResponse as StreamedResponse } from "../test-utils/transport-types.ts"
@@ -52,10 +51,6 @@ class StubExecutor implements ToolExecutor {
   async execute(): Promise<ToolExecResult> {
     return { content: "", isError: false }
   }
-}
-
-class DiscardTranscript implements TranscriptSink {
-  write(): void {}
 }
 
 /**
@@ -79,7 +74,6 @@ function openSession(text: string, chunks?: string[], id?: string): Session {
     model: "test-model",
     toolRegistry: EMPTY_REGISTRY,
     toolExecutor: new StubExecutor(),
-    transcriptSink: new DiscardTranscript(),
     sendFn,
     ...(id !== undefined ? { id } : {}),
   })
@@ -176,7 +170,6 @@ describe("runNonInteractivePrompt — structured route fatal error", () => {
               model: "test-model",
               toolRegistry: EMPTY_REGISTRY,
               toolExecutor: new StubExecutor(),
-              transcriptSink: new DiscardTranscript(),
               sendFn,
             }),
           ),
@@ -220,7 +213,6 @@ describe("runNonInteractivePrompt — structured route fatal error", () => {
               model: "test-model",
               toolRegistry: EMPTY_REGISTRY,
               toolExecutor: new StubExecutor(),
-              transcriptSink: new DiscardTranscript(),
               sendFn,
             }),
           ),
@@ -254,7 +246,6 @@ describe("runNonInteractivePrompt — structured route fatal error", () => {
               model: "test-model",
               toolRegistry: EMPTY_REGISTRY,
               toolExecutor: new StubExecutor(),
-              transcriptSink: new DiscardTranscript(),
               sendFn,
             }),
           ),
@@ -469,7 +460,6 @@ describe("runNonInteractivePrompt — structured event-stream route", () => {
       model: "test-model",
       toolRegistry,
       toolExecutor,
-      transcriptSink: new DiscardTranscript(),
       sendFn,
     })
     const out: string[] = []

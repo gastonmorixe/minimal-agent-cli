@@ -41,6 +41,7 @@ import type {
   StatusController,
 } from "./repl.ts"
 import { applyTurnWillStart, registerEditorPluginHooks } from "./repl-editor-hooks.ts"
+import { turnEventRenderer } from "./turn-event-render.ts"
 import { printGoodbye } from "./ui/chrome/goodbye-banner.ts"
 import { buildModeChangeChip } from "./ui/chrome/mode-change-chip.ts"
 import { buildPendingModeChangeDecoration } from "./ui/chrome/mode-change-pending-decoration.ts"
@@ -423,7 +424,7 @@ export async function runReplLiveArea(
 
   // Track whether a turn is currently running. Submits that arrive while
   // running become queued user input : eligible for mid-turn injection at
-  // the next agent tool-loop boundary (see drainQueuedUserText below) AND
+  // the next agent tool-loop boundary (see takeQueuedText below) AND
   // surfaced visually above the editor prompt via setDecorationLines.
   let running = false
 
@@ -470,7 +471,7 @@ export async function runReplLiveArea(
       if (row != null) lines.push(row)
     }
     // Clamp / clear the nav selection against the LIVE queue so a
-    // mid-turn drain (drainQueuedUserText) or any out-of-band mutation
+    // mid-turn drain (takeQueuedText) or any out-of-band mutation
     // can't leave a stale or out-of-range highlight.
     if (queueNavIndex !== null) {
       if (queue.length === 0) queueNavIndex = null
@@ -970,7 +971,7 @@ export async function runReplLiveArea(
       // would otherwise accumulate every text-block into one paragraph;
       // at `finish()` it then re-renders the *combined* buffer, smashing
       // unrelated sentences together with no separator. We respawn the
-      // formatter on every `onTextStop` boundary (defined below) : each
+      // formatter on every text-block stop (`textStop`, defined below) : each
       // text block gets its own subprocess, each gets its own `finish()`,
       // each paragraph commits independently and on its own row.
       let formatter: Formatter | null = null
@@ -1147,15 +1148,15 @@ export async function runReplLiveArea(
         compositor.writeStream(isBlockClose ? `${line}\n\n` : `${line}\n`)
         lastKind = "transcript"
       }
-      const onThinkingStart = (): void => {
+      const thinkingStart = (): void => {
         ensureThinkingFormatter()
       }
-      const onThinkingChunk = (chunk: string): void => {
+      const thinkingChunk = (chunk: string): void => {
         const active = ensureThinkingFormatter()
         if (active) active.write(chunk)
         else writeDirectSink(faintThinkingChunk(chunk))
       }
-      const onThinkingStop = async (): Promise<void> => {
+      const thinkingStop = async (): Promise<void> => {
         await endThinkingFormatter()
         // Guarantee exactly one blank line between the reasoning block and the
         // response text. Reasoning streams through `writeDirectSink` (lastKind
@@ -1174,7 +1175,7 @@ export async function runReplLiveArea(
       // us the semantic notice; render it as a loud banner through the
       // same transcript writer tool blocks use so boundary/newline
       // bookkeeping (lastKind, pending trailing newlines) stays correct.
-      const onNotice = (notice: TurnNotice): void => {
+      const renderNotice = (notice: TurnNotice): void => {
         onTranscriptLine(renderTurnNotice(notice))
       }
       // Mark the turn as running so submits arriving from this point on are
@@ -1191,7 +1192,7 @@ export async function runReplLiveArea(
       // between submits. Items not drained here (because no tool boundary
       // ever fired) fall through to next-turn processing via the
       // existing FIFO queue.shift() loop.
-      const drainQueuedUserText = (): string | null => {
+      const takeQueuedText = (): string | null => {
         if (queue.length === 0) return null
         const drained = queue.splice(0)
         // Persist the now-empty queue. Same micro-race-window caveat as
@@ -1212,14 +1213,10 @@ export async function runReplLiveArea(
         renderDecoration()
         return drained.map((i) => i.text).join("\n\n")
       }
-      // onQueueInject: NO-OP. Scrollback writes for drained items happen
-      // inside drainQueuedUserText (above). The hook is retained as a
-      // notification point in case future code wants to react to the
-      // injection, but it must not write to scrollback : that would
-      // double-commit the prompts (Bug 393, second-order regression).
-      const onQueueInject = (_qtext: string): void => {
-        /* intentionally empty : see comment above */
-      }
+      // The queue port has no `injected` hook here. Scrollback writes for
+      // drained items happen inside takeQueuedText (above). A write on
+      // injection would double-commit the prompts (Bug 393, second-order
+      // regression).
       // Begin a turn on the global abort bus. From this point on, the
       // editor's bare-Esc / Ctrl+C handlers (see `EditorController`) will
       // route to `abortBus.requestAbort(...)` instead of clearing the
@@ -1245,14 +1242,14 @@ export async function runReplLiveArea(
       }
       abortBus.once("abort", onBusAbort)
       // Per-text-block formatter boundary. See the `spawnMainFormatter`
-      // doc-cluster and the `onTextStop` field on `SendMessageOptions`:
+      // doc-cluster and the `block_stopped` event (itemType `text`):
       // ends the current main formatter (awaited : drains mdstream's
       // `finish()` output through `drainOutput` → `compositorSink`
       // synchronously w.r.t. our control flow) and respawns a fresh one
       // so the *next* text block starts with an empty `partial` paragraph
       // buffer. Without this, two text blocks in one `run()` get smashed
       // together at end-of-run by mdstream's final re-render.
-      const onTextStop = async (): Promise<void> => {
+      const textStop = async (): Promise<void> => {
         if (!formatter && !opts.formatterCmd) return
         const old = formatter
         formatter = null
@@ -1274,13 +1271,14 @@ export async function runReplLiveArea(
         const gen = agent.run(text, {
           signal: ctrl.signal,
           onTranscriptLine,
-          onThinkingStart,
-          onThinkingChunk,
-          onThinkingStop,
-          onTextStop,
-          onNotice,
-          drainQueuedUserText,
-          onQueueInject,
+          onEvent: turnEventRenderer({
+            thinkingStart,
+            thinkingChunk,
+            thinkingStop,
+            textStop,
+            notice: renderNotice,
+          }),
+          inputQueue: { take: takeQueuedText },
           ...(askUser ? { askUser } : {}),
         })
         while (true) {

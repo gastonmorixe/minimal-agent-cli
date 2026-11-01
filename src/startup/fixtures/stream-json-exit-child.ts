@@ -74,7 +74,6 @@ await runNonInteractivePrompt({
           list: () => [{ name: "Probe", description: "probe", input_schema: {} }],
         },
         toolExecutor: new OkExecutor(),
-        transcriptSink: { write: () => {} },
         sendFn,
         id: "exit-tail-sid",
       }),

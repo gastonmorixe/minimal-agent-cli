@@ -23,6 +23,7 @@ import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
 import type { Message } from "@minimal-agent/core/sdk/messages"
+import { formatTurnNoticePlain } from "@minimal-agent/core/sdk/turn-notice"
 import {
   InteractiveSession,
   type ReflectionCheckpointContext,
@@ -145,23 +146,21 @@ describe("InteractiveSession", () => {
     expect(session.rollbackPendingTurn()).toBe(false)
   })
 
-  it("forwards supplied interactive callbacks and signal on every transport invocation", async () => {
+  it("renders thinking, block edges, and notices from session events, in log order", async () => {
     let round = 0
     const transportOptions: SendOptions[] = []
-    const lifecycle: string[] = []
-    const queued: string[] = []
-    const notices: string[] = []
+    const trace: string[] = []
     const controller = new AbortController()
     const sendFn = async function* (
       opts: SendOptions,
     ): AsyncGenerator<string, StreamedResponse, undefined> {
       transportOptions.push(opts)
       round++
-      void opts.onThinkingStart?.()
-      void opts.onThinkingDelta?.(`thought-${round}`)
-      void opts.onThinkingStop?.()
-      void opts.onTextStop?.()
+      await opts.onBlockEdge?.({ block: "thinking", edge: "start" })
+      await opts.onThinkingDelta?.(`thought-${round}`)
+      await opts.onBlockEdge?.({ block: "thinking", edge: "stop" })
       if (round === 1) {
+        await opts.onBlockEdge?.({ block: "text", edge: "stop" })
         return {
           blocks: [{ type: "tool_use", id: "unknown", name: "NoSuchTool", input: {} }],
           text: "",
@@ -169,72 +168,182 @@ describe("InteractiveSession", () => {
         } as StreamedResponse
       }
       yield "done"
+      await opts.onBlockEdge?.({ block: "text", edge: "stop" })
       return response("done")
     }
     const session = await createSession(sendFn)
     const opts: RunOptions = {
-      onThinkingStart: () => {
-        lifecycle.push("thinking-start")
-      },
-      onThinkingChunk: (chunk) => {
-        lifecycle.push(chunk)
-      },
-      onThinkingStop: () => {
-        lifecycle.push("thinking-stop")
-      },
-      onTextStop: () => {
-        lifecycle.push("text-stop")
-      },
-      onNotice: (notice) => {
-        notices.push(notice.kind)
-      },
-      drainQueuedUserText: () => "queued prompt",
-      onQueueInject: (text) => {
-        queued.push(text)
+      onEvent: (event) => {
+        switch (event.type) {
+          case "thinking_delta":
+            trace.push(event.text)
+            return
+          case "block_started":
+          case "block_stopped":
+            trace.push(`${event.type}:${event.itemType}`)
+            return
+          case "notice":
+            trace.push(`notice:${event.notice.kind}`)
+            return
+          default:
+            return
+        }
       },
       signal: controller.signal,
     }
 
-    await drain(session.run("go", opts))
+    const gen = session.run("go", opts)
+    for (;;) {
+      const next = await gen.next()
+      if (next.done) break
+      trace.push(`text:${next.value}`)
+    }
 
-    expect(lifecycle).toEqual([
-      "thinking-start",
+    expect(trace).toEqual([
+      "block_started:thinking",
       "thought-1",
-      "thinking-stop",
-      "text-stop",
-      "thinking-start",
+      "block_stopped:thinking",
+      "block_stopped:text",
+      "notice:max_tokens_salvaged",
+      "block_started:thinking",
       "thought-2",
-      "thinking-stop",
-      "text-stop",
+      "block_stopped:thinking",
+      "text:done",
+      "block_stopped:text",
     ])
     expect(transportOptions).toHaveLength(2)
     // `Session.run()` wraps the caller's `signal` in its own AbortController
     // (so `session.abort()` can also stop the run) and forwards THAT wrapper
     // to the transport, not the caller's raw signal object. Every round of
     // one run shares the one wrapper, and aborting the caller's controller
-    // still aborts it -- checked below, since that propagation (not object
-    // identity) is the real contract `InteractiveSession.run` promises.
+    // still aborts it.
     const forwardedSignal = transportOptions[0]?.signal
     expect(forwardedSignal).toBeInstanceOf(AbortSignal)
     for (const invocation of transportOptions) {
       expect(invocation.signal).toBe(forwardedSignal)
-      expect(invocation.onThinkingStart).toBe(opts.onThinkingStart)
-      expect(invocation.onThinkingStop).toBe(opts.onThinkingStop)
-      expect(invocation.onTextStop).toBe(opts.onTextStop)
-      // `AgentCore` wraps `onThinkingDelta` itself to also emit a
-      // `thinking_delta` event when `emitDeltas` is on (`Session.run()`'s
-      // default, since its own event log needs the delta stream) -- so
-      // this is no longer the SAME function reference as `onThinkingChunk`.
-      // The `lifecycle` assertion above already proves the wrapped
-      // function still calls through with the right text.
-      expect(typeof invocation.onThinkingDelta).toBe("function")
-      expect(invocation.onThinkingDelta).not.toBe(opts.onThinkingChunk)
     }
     expect(forwardedSignal?.aborted).toBe(false)
     controller.abort()
     expect(forwardedSignal?.aborted).toBe(true)
+  })
+
+  it("feeds queued user text through the inputQueue port of the run", async () => {
+    let round = 0
+    const sent: Message[][] = []
+    const sendFn = async function* (
+      opts: SendOptions,
+    ): AsyncGenerator<string, StreamedResponse, undefined> {
+      sent.push(structuredClone(opts.messages) as Message[])
+      round++
+      if (round === 1) {
+        return {
+          blocks: [{ type: "tool_use", id: "unknown", name: "NoSuchTool", input: {} }],
+          text: "",
+          stopReason: "tool_use",
+        } as StreamedResponse
+      }
+      yield "done"
+      return response("done")
+    }
+    const session = await createSession(sendFn)
+    const queued: string[] = []
+    const injected: string[] = []
+    let pending: string | null = "queued prompt"
+
+    await drain(
+      session.run("go", {
+        inputQueue: {
+          take: () => {
+            const text = pending
+            pending = null
+            return text
+          },
+          injected: (text) => injected.push(text),
+        },
+        onEvent: (event) => {
+          if (event.type === "user_message" && event.queued) queued.push(event.text)
+        },
+      }),
+    )
+    // A later run without a queue takes nothing.
+    pending = "not taken"
+    await drain(session.run("again"))
+
+    expect(injected).toEqual(["queued prompt"])
     expect(queued).toEqual(["queued prompt"])
-    expect(notices).toEqual(["max_tokens_salvaged"])
+    expect(JSON.stringify(sent[1])).toContain("queued prompt")
+    expect(JSON.stringify(sent.at(-1))).not.toContain("not taken")
+  })
+
+  it("writes a plain notice line to the transcript when the run has no onEvent", async () => {
+    let round = 0
+    const sendFn = async function* (): AsyncGenerator<string, StreamedResponse, undefined> {
+      round++
+      if (round === 1) return response("", "max_tokens")
+      yield "done"
+      return response("done")
+    }
+    const session = await createSession(sendFn)
+    const transcript: string[] = []
+    await drain(session.run("go", { onTranscriptLine: (line) => transcript.push(line) }))
+    expect(transcript).toHaveLength(1)
+    const [line] = transcript
+    expect(line?.startsWith("\n  [max_tokens]")).toBe(true)
+    expect(line).toContain("auto-continuing (1/")
+    // The same plain text core gives every text host.
+    expect(line?.slice(3)).toBe(
+      formatTurnNoticePlain({
+        kind: "max_tokens_continuing",
+        severity: "warn",
+        attempt: 1,
+        cap: Number(line?.match(/\(1\/(\d+)\)/)?.[1]),
+      }),
+    )
+  })
+
+  it("keeps a tool row behind an async block-stop step", async () => {
+    let round = 0
+    const sendFn = async function* (
+      opts: SendOptions,
+    ): AsyncGenerator<string, StreamedResponse, undefined> {
+      round++
+      if (round === 1) {
+        yield "before tool"
+        await opts.onBlockEdge?.({ block: "text", edge: "stop" })
+        return {
+          blocks: [
+            { type: "text", text: "before tool" },
+            { type: "tool_use", id: "unknown", name: "NoSuchTool", input: {} },
+          ],
+          text: "before tool",
+          stopReason: "tool_use",
+        } as StreamedResponse
+      }
+      yield "after"
+      return response("after")
+    }
+    const session = await createSession(sendFn)
+    const trace: string[] = []
+    const gen = session.run("go", {
+      onTranscriptLine: (line) => {
+        if (line.includes("NoSuchTool")) trace.push("tool-row")
+      },
+      onEvent: async (event) => {
+        if (event.type !== "block_stopped") return
+        trace.push("stop:begin")
+        await new Promise<void>((resolve) => setTimeout(resolve, 5))
+        trace.push("stop:end")
+      },
+    })
+    for (;;) {
+      const next = await gen.next()
+      if (next.done) break
+      trace.push(`text:${next.value}`)
+    }
+    const firstRow = trace.indexOf("tool-row")
+    expect(trace.slice(0, 3)).toEqual(["text:before tool", "stop:begin", "stop:end"])
+    expect(firstRow).toBeGreaterThan(2)
+    expect(trace.at(-1)).toBe("text:after")
   })
 
   it("restores transcript routing across sequential leases, throws, aborts, and early close", () => {

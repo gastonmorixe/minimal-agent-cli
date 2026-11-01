@@ -150,7 +150,9 @@ export function renderHumanProgressLine(event: AgentEvent): string {
     }
     case "text_delta":
     case "thinking_delta":
-      // Per-token deltas are the realtime `stream-json` surface, not a human
+    case "block_started":
+    case "block_stopped":
+      // Per-token deltas and their block edges are the realtime `stream-json` surface, not a human
       // progress line: rendering one line per token would flood stderr. The
       // completed item (or the streamed stdout) carries the body.
       return ""

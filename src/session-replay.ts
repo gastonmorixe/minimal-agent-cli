@@ -85,7 +85,7 @@ export interface ReplayOptions {
    * omitted, text blocks are written raw (the historical behavior).
    *
    * One formatter is spawned per text block (and per thinking block),
-   * mirroring the live agent's per-text-block `onTextStop` boundary so
+   * mirroring the live REPL's per-text-block `block_stopped` boundary so
    * each block starts with mdstream's `partial` paragraph buffer empty.
    * Without this boundary, two text blocks in one assistant turn would
    * be smashed together at end-of-render — see memory `#mp0pnjih-16b0`.
@@ -397,7 +397,7 @@ export async function replayToScrollback(
         if (formatterCmd && textFormatterOutput) {
           // Per-text-block formatter cycle: spawn → write → end (await
           // drain). End-and-respawn at every text-block boundary mirrors
-          // the live agent's `onTextStop` callback (see `agent.ts`
+          // the live REPL's text `block_stopped` step (see
           // `spawnMainFormatter`) — without it, two adjacent text blocks
           // would share one mdstream `partial` buffer and get smashed
           // together by `finish()`'s erase_partial + render_line on EOF.
@@ -426,7 +426,7 @@ export async function replayToScrollback(
           f.start()
           f.write(thinkingText)
           await f.end()
-          // Live `onThinkingStop` writes a trailing `\n` for breathing
+          // The live thinking `block_stopped` step writes a trailing `\n` for breathing
           // room between the thinking block and whatever follows.
           sink.write("\n")
         } else {
