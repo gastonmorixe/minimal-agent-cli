@@ -13,6 +13,8 @@
  * @module startup/session-store-boot
  */
 
+import { dirname } from "node:path"
+
 import { AGENT_VERSION } from "@minimal-agent/core/host/build-info"
 import { loadSession } from "@minimal-agent/core/host/session-restore"
 import { BlobStore, loadBlobStoreConfig } from "@minimal-agent/core/host-kit/blob-store"
@@ -285,4 +287,17 @@ export async function bootSessionStores(
   }
 
   return { store, blobStore, fileTrackingStore }
+}
+
+/**
+ * The `resumeSession` target of a `--resume` run (S50): the id and the
+ * directory of the store that {@link bootSessionStores} opened or forked.
+ * Null when the run does not resume, or when no store could be opened.
+ */
+export function resumeTargetOf(
+  store: SessionStore | null,
+  resumeSid: string | null,
+): { sid: string; dir: string } | null {
+  if (store === null || resumeSid === null) return null
+  return { sid: store.sid, dir: dirname(store.path) }
 }

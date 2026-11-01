@@ -99,6 +99,11 @@ export interface ReplAgentLike {
       askUser?: (
         issue: import("@minimal-agent/core/sdk/provider").PreflightIssue,
       ) => Promise<string | null>
+      /**
+       * Optional. Continue the unfinished turn of a resumed session at its
+       * next round (S50). `userText` is not used.
+       */
+      resume?: boolean
     },
   ): AsyncGenerator<string, TurnResult, undefined>
   /** Optional: current model id (for diagnostics/recovery prompts). */

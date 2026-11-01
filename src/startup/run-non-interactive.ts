@@ -255,6 +255,13 @@ export interface RunNonInteractivePromptInput {
   readonly diagnostics?: boolean
   /** Where the guard's failure note goes. Defaults to `process.stderr`. */
   readonly stderr?: (chunk: string) => void
+  /**
+   * `--resume` of a session whose last turn is unfinished (S50). The run
+   * first continues that turn at its next round, with no new user text.
+   * No human is assumed, so this needs no input. Then it runs `prompt` as
+   * a new turn, when `prompt` is not empty.
+   */
+  readonly continueTurn?: boolean
 }
 
 /**
@@ -329,7 +336,6 @@ async function runGuardedEventStream(
   // thinking_delta events. json stays buffered (no deltas) so its event stream
   // matches Phase 2 and the frozen SDK golden.
   const isStreamJson = input.outputFormat === "stream-json"
-  const emitDeltas = isStreamJson
   // stream-json also keeps the closing run_finished line. json stays frozen.
   const keep = isStreamJson ? STREAM_JSON_EVENT_KIND_SET : LEGACY_EVENT_KIND_SET
   // --diagnostics: json lines become whole session log entries (S39).
@@ -348,8 +354,48 @@ async function runGuardedEventStream(
 
   const session = await openSession()
 
+  // A continued turn goes first. A new turn follows only when the
+  // continued one did not pause or fail.
+  const turns: Array<{ text: string; resume: boolean }> = []
+  if (input.continueTurn) turns.push({ text: "", resume: true })
+  if (input.prompt.length > 0) turns.push({ text: input.prompt, resume: false })
+  for (const turn of turns) {
+    const ok = await runEventStreamTurn(session, turn, { write, keep, entryLines, isStreamJson })
+    if (!ok) {
+      fail(1)
+      break
+    }
+  }
+  // A dropped stray write means some code tried to put a non-protocol line
+  // on stdout. Fail the run so the bug cannot pass unseen.
+  const strays = guard.strays()
+  if (strays > 0) {
+    const stderr = input.stderr ?? ((chunk: string) => void process.stderr.write(chunk))
+    stderr(`error: the JSON route dropped ${strays} stray stdout write(s)\n`)
+    fail(1)
+  }
+}
+
+/**
+ * Run one turn of the event-stream route and write its kept entries.
+ * Returns false when the turn paused or failed (exit 1).
+ */
+async function runEventStreamTurn(
+  session: Session,
+  turn: { text: string; resume: boolean },
+  out: {
+    write: (chunk: string) => void
+    keep: ReadonlySet<string>
+    entryLines: boolean
+    isStreamJson: boolean
+  },
+): Promise<boolean> {
+  const { write, keep, entryLines, isStreamJson } = out
   try {
-    const run = session.run(input.prompt, { emitDeltas })
+    const run = session.run(turn.text, {
+      emitDeltas: isStreamJson,
+      ...(turn.resume ? { resume: true } : {}),
+    })
     for await (const entry of run) {
       // Text chunks are carried by the event stream (item_completed); the
       // raw yield channel is not written to stdout in structured mode. The
@@ -371,21 +417,13 @@ async function runGuardedEventStream(
     const result = await run.result
     // A paused run (permanent error) already emitted its `error` event.
     // Nobody can answer a one-shot run, so exit non-zero like a failure.
-    if (result.outcome === "waiting") fail(1)
+    return result.outcome !== "waiting"
   } catch (err) {
     // The core already surfaced the fatal error on the stream as an `error`
     // event (with code/hint). Keep stdout a clean JSONL document (no stack
     // trace), but exit non-zero so scripts see the failure. An abort is not
     // a failure of the run itself.
-    if (fatalErrorFields(err)) fail(1)
-  }
-  // A dropped stray write means some code tried to put a non-protocol line
-  // on stdout. Fail the run so the bug cannot pass unseen.
-  const strays = guard.strays()
-  if (strays > 0) {
-    const stderr = input.stderr ?? ((chunk: string) => void process.stderr.write(chunk))
-    stderr(`error: the JSON route dropped ${strays} stray stdout write(s)\n`)
-    fail(1)
+    return !fatalErrorFields(err)
   }
 }
 
@@ -411,7 +449,11 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
   const exit = input.exit ?? ((code: number): never => process.exit(code))
 
   // Parity with REPL: `turn.willStart` may rewrite or halt before the model.
-  const turn = await applyTurnWillStart(loader, input.prompt)
+  // A continued turn has no new user text, so no hook runs for it.
+  const turn =
+    input.prompt.length > 0
+      ? await applyTurnWillStart(loader, input.prompt)
+      : { text: "", halted: false }
   if (turn.halted) {
     process.stderr.write(`${TURN_BLOCKED_MESSAGE}\n`)
     // stream-json still ends stdout with error and run_finished failed lines.
@@ -466,17 +508,30 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
   const pluginStream = loader ? new PluginStream(baseSink, loader, input.cwd) : null
 
   let finalText = ""
+  // A continued turn goes first (S50), then the new turn. The answer is
+  // the text of the last turn.
+  const runs: Array<() => ReturnType<ReplAgentLike["run"]>> = []
+  if (input.continueTurn) runs.push(() => agent.run("", { resume: true }))
+  if (prompt.length > 0) runs.push(() => agent.run(prompt))
   try {
-    const gen = agent.run(prompt)
-    while (true) {
-      const { done, value } = await gen.next()
-      if (done) break
-      finalText += value
+    const emit = async (value: string): Promise<void> => {
       if (pluginStream) {
         const p = pluginStream.feed(value)
         if (p) await p
       } else {
         baseSink(value)
+      }
+    }
+    for (const [index, start] of runs.entries()) {
+      // A blank line keeps the answer of the continued turn apart.
+      if (index > 0) await emit("\n\n")
+      finalText = ""
+      const gen = start()
+      while (true) {
+        const { done, value } = await gen.next()
+        if (done) break
+        finalText += value
+        await emit(value)
       }
     }
     if (pluginStream) await pluginStream.end()

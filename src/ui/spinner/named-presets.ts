@@ -11,6 +11,7 @@
  * @module spinner/named-presets
  */
 
+import { c } from "../style/ansi.ts"
 import type { BlinkingNerdSpinnerTheme } from "./blinking-nerd.ts"
 import { BlinkingNerdSpinner } from "./blinking-nerd.ts"
 import {
@@ -150,4 +151,22 @@ export function getSpinnerPreset(id: string): NamedSpinnerPreset | null {
 /** All registered preset ids in declaration order. */
 export function listSpinnerPresetIds(): string[] {
   return SPINNER_PRESETS.map((p) => p.id)
+}
+
+/**
+ * Build the spinner for `--spinner <id>`. An unknown id gives `warn` one
+ * warning line and gives `undefined`, so the REPL uses its default spinner.
+ */
+export function resolveSpinnerPreset(
+  id: string | undefined,
+  warn: (line: string) => void,
+): Spinner<BlinkingNerdSpinnerTheme> | undefined {
+  if (!id) return undefined
+  const preset = getSpinnerPreset(id)
+  if (preset) return preset.factory()
+  warn(
+    `  ${c.boldRed("warn")} unknown spinner preset "${id}". ` +
+      `Run with ${c.cyan("--list-spinners")} to see available ids.`,
+  )
+  return undefined
 }
