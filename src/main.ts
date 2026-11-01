@@ -822,7 +822,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     // Use the manifest's `label` (e.g. "ASK") rather than the lowercase
     // `id` so the startup row matches the prompt prefix the user sees a
     // moment later (`ASK ❯ `). Falls back to upper-cased id when label
-    // isn't declared, mirroring `ModeManager.computePromptPrefix`.
+    // isn't declared, mirroring `modePromptPrefixForId` (`ui/style/mode-prompt.ts`).
     const m = modeManager.active()!
     const label = m.label ?? m.id.toUpperCase()
     printStartupRow("mode", c.bold(c.cyan(label)))

@@ -18,7 +18,7 @@ const fgMap: Record<string, string | null> = {
   plan: "\x1b[38;5;208m",
 }
 const resolveLabel = (id: string | null): string => (id == null ? "default" : (labelMap[id] ?? id))
-// Mirrors ModeManager.resolvedForId: null id → brand primary.
+// Mirrors modeLabelFgOpen: null id → brand primary.
 const resolveFgOpen = (id: string | null): string | null =>
   id == null ? brand : (fgMap[id] ?? null)
 

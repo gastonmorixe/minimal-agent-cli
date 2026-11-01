@@ -22,7 +22,6 @@ import { PluginStream } from "@minimal-agent/core/host-kit/plugin-stream"
 import type { ResolvedLiveAreaSlot } from "@minimal-agent/core/plugin-api/types/plugin"
 import type { ModelInfo } from "@minimal-agent/core/sdk/transport-types"
 import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
-
 import { type AskUserFn, type AskUserHostEditor, createAskUserHost } from "./ask-user-host.ts"
 import { type AbortReason, abortBus } from "./bus/abort-bus.ts"
 import {
@@ -56,6 +55,7 @@ import {
 import type { Spinner } from "./ui/spinner/index.ts"
 import type { StatusSpinnerTheme } from "./ui/status/line-renderer.ts"
 import { c, faintThinkingChunk, formatAbortedEcho } from "./ui/style/ansi.ts"
+import { modeLabelFgOpen, modePromptPrefix } from "./ui/style/mode-prompt.ts"
 import { isOuterFrameClose } from "./ui/tool-transcript/format.ts"
 import { formatTurnError } from "./ui/turn-error.ts"
 import { renderTurnNotice } from "./ui/turn-notice.ts"
@@ -116,7 +116,7 @@ export async function runReplLiveArea(
   const continuationPromptForRebuild = process.env.MINIMAL_AGENT_CONTINUATION_PROMPT ?? "  "
   const baseArrow = `${c.bold(c.pink("❯"))} `
   const resolveBasePrompt = () => ({
-    prompt: modeManager?.hasModes() ? modeManager.promptPrefix(baseArrow) : baseArrow,
+    prompt: modeManager?.hasModes() ? modePromptPrefix(modeManager, baseArrow) : baseArrow,
     continuationPrompt: continuationPromptForRebuild,
   })
   let promptOverride: { prompt: string; continuationPrompt?: string } | null = null
@@ -405,8 +405,8 @@ export async function runReplLiveArea(
     const chip = buildModeChangeChip({
       fromLabel,
       toLabel,
-      fromFgOpen: modeManager.resolvedForId(event.fromId)?.label.fgOpen ?? null,
-      toFgOpen: modeManager.resolvedForId(event.toId)?.label.fgOpen ?? null,
+      fromFgOpen: modeLabelFgOpen(modeManager, event.fromId),
+      toFgOpen: modeLabelFgOpen(modeManager, event.toId),
       at: event.at,
     })
     compositor.writeStream(`\n${chip}\n`)
@@ -465,7 +465,7 @@ export async function runReplLiveArea(
       const row = buildPendingModeChangeDecoration(
         modeManager.peekPendingAttachment(),
         (id) => (id == null ? "default" : (modeManager.modeById(id)?.label ?? id.toUpperCase())),
-        (id) => modeManager.resolvedForId(id)?.label.fgOpen ?? null,
+        (id) => modeLabelFgOpen(modeManager, id),
       )
       if (row != null) lines.push(row)
     }

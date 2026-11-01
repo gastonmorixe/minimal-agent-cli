@@ -42,6 +42,7 @@ import { promptModelPicker } from "./ui/model-picker.ts"
 import type { Spinner } from "./ui/spinner/index.ts"
 import { StatusRenderer, type StatusSpinnerTheme } from "./ui/status/line-renderer.ts"
 import { c, faintThinkingChunk } from "./ui/style/ansi.ts"
+import { modePromptPrefix } from "./ui/style/mode-prompt.ts"
 import { formatTurnError } from "./ui/turn-error.ts"
 import { renderTurnNotice } from "./ui/turn-notice.ts"
 
@@ -433,7 +434,8 @@ export async function runRepl(
   const continuationPrompt = process.env.MINIMAL_AGENT_CONTINUATION_PROMPT ?? ""
   const baseArrow = `${c.bold(c.pink("❯"))} `
   const modeManager = agent.modes?.() ?? null
-  const buildPrompt = (): string => (modeManager ? modeManager.promptPrefix(baseArrow) : baseArrow)
+  const buildPrompt = (): string =>
+    modeManager ? modePromptPrefix(modeManager, baseArrow) : baseArrow
   // ❯
   const input = opts?.input ?? new RawInput(buildPrompt(), continuationPrompt)
   const statusRenderer: StatusController | null =

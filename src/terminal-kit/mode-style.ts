@@ -1,61 +1,57 @@
 /**
- * Mode-style resolver.
+ * Mode-style SGR mapper.
  *
- * Bridges the *declarative* `ModeStyleRequest` from a plugin manifest to a
- * concrete `ResolvedModeStyle` the TUI can render without making any color
- * decisions of its own.
- *
- * Layering (see `work/mode-style-spec.md` §2):
+ * Core's `ModeManager` resolves a plugin manifest's declarative
+ * `ModeStyleRequest` to host-neutral {@link ModeStyle} tokens (core
+ * `src/modes/mode-style.ts`, decision 26). Core holds no terminal code.
+ * This module maps those tokens to concrete SGR sequences, so the TUI can
+ * render a mode without making any color decisions of its own.
  *
  *   manifest.json  ──parse──▶  ModeStyleRequest
  *                                    │
- *                          resolveModeStyle(request, env)
+ *              core resolveModeStyleTokens(request, theme)
  *                                    │
  *                                    ▼
- *                              ResolvedModeStyle  ──▶  TUI render
+ *                       ModeStyle (tokens)
+ *                                    │
+ *                     modeStyleToSgr(style, env)
+ *                                    │
+ *                                    ▼
+ *                       ResolvedModeStyle  ──▶  TUI render
  *
- * The resolver is the *policy* layer: it owns the palette, picks SGR
- * sequences from terminal capability, drops backgrounds that fail contrast,
- * truncates over-long labels, etc. Plugins never paint pixels.
+ * This module is the terminal *policy* layer: it owns the palette, picks
+ * SGR sequences from terminal capability, drops a background that is the
+ * same as the foreground, and truncates over-long labels.
  *
- * # MVP scope
+ * # Scope
  *
  * Per the user's instruction ("don't hardcode hexes now, use the ANSI ones
- * so it keeps as it renders now"), the resolver currently emits only the
- * SGR sequences from the existing `c.*` helpers in `agent.ts`. Semantic
- * tokens (`accent`, `accent-soft`, `danger`, `muted`) are mapped to legacy
- * ANSI names so the user's terminal theme stays in charge of the actual
- * pigment. Hex values from manifests are passed through as 24-bit truecolor
- * SGR; the contrast/identity guards still apply.
+ * so it keeps as it renders now"), the mapper emits only the SGR sequences
+ * from the shared palette. Semantic tokens (`accent`, `accent-soft`,
+ * `brand`, `danger`, `muted`) map to palette names, so the user's terminal
+ * theme stays in charge of the actual pigment. Hex values pass through as
+ * 24-bit truecolor SGR on truecolor terminals only.
  *
- * The mdstream rainbow palette (`work/mode-style-spec.md` §4.4 future work)
- * is the planned upgrade path once we have theme detection and a real test
- * harness.
- *
- * Moved from `@minimal-agent/core/plugin-api/utils/mode-style` to this
- * package's `terminal-kit` (spec S33): resolving a style request to ANSI
- * is terminal rendering, a CLI concern. The declarative request shape
- * (`ModeStyleRequest`, `ColorRequest`, `ThemeKey`) stays in core's
- * plugin-api (`types/plugin`) since that is the manifest contract a
- * plugin author writes against, not rendering code. `ansi`, `palette`,
- * and `term-width` stay in core's plugin-api too, for now: real sibling
- * plugins still depend on them directly for tool-handler output, not
- * just cosmetics (see the S33 session report), so this file still
- * imports them from there rather than from sibling `terminal-kit`
- * modules.
+ * `ansi`, `palette`, and `term-width` stay in core's plugin-api for now:
+ * real sibling plugins still depend on them for tool-handler output (see
+ * the S33 session report), so this file imports them from there.
  *
  * @module terminal-kit/mode-style
  */
 
-import type {
-  ColorRequest,
-  ModeStyleRequest,
-  ThemeKey,
-} from "@minimal-agent/core/plugin-api/types/plugin"
-
+import {
+  type ModeColor,
+  type ModeColorToken,
+  type ModeStyle,
+  type ModeSurfaceStyle,
+  resolveModeStyleTokens,
+} from "@minimal-agent/core/host-kit/modes"
+import type { ModeStyleRequest, ThemeKey } from "@minimal-agent/core/plugin-api/types/plugin"
 import { ANSI_CODES } from "@minimal-agent/core/plugin-api/utils/ansi"
 import { PALETTE, SEMANTIC } from "@minimal-agent/core/plugin-api/utils/palette"
 import { truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
+
+export { styleFromLegacyColor } from "@minimal-agent/core/host-kit/modes"
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -85,7 +81,7 @@ export interface ResolvedModeStyle {
   reset: string
 }
 
-/** Inputs to the resolver. */
+/** Inputs to the mapper. */
 export interface StyleEnv {
   theme: ThemeKey
   capability: "truecolor" | "ansi256" | "ansi16"
@@ -105,16 +101,13 @@ const RESET = ANSI_CODES.RESET
 export const MAX_LABEL_WIDTH = 8
 
 /**
- * SGR open sequences per legacy color name. Mirrors the bodies of the
- * `c.*` helpers in `agent.ts`. Kept in sync by hand — there are only 12
- * entries and they don't change often.
- *
- * Keeping the open sequence (not a wrapper function) lets us compose with
- * background and bold/dim without nesting resets.
+ * SGR open sequence for each color token. Palette names come from the
+ * shared plugin-api palette, so host UI and plugin chrome can never drift.
+ * Semantic tokens map to a palette name. `accent` prefers calm blue over
+ * the broad semantic sky. `brand` is the pigment of the default prompt
+ * arrow (`❯`).
  */
-// SGR open sequences per palette name. Sourced from the shared plugin-api
-// palette so host UI and plugin chrome can never drift.
-const LEGACY_FG_OPEN: Record<string, string> = {
+export const TOKEN_FG_OPEN: Readonly<Record<ModeColorToken, string>> = {
   cyan: PALETTE.cyan,
   blue: PALETTE.blue,
   magenta: PALETTE.magenta,
@@ -127,21 +120,11 @@ const LEGACY_FG_OPEN: Record<string, string> = {
   lime: PALETTE.lime,
   sky: PALETTE.sky,
   gold: PALETTE.gold,
-}
-
-/**
- * Semantic token → palette color name. Subset of `SEMANTIC` in
- * the shared plugin-api palette — the resolver only honors tokens that map
- * to a color name we expose for mode style. Override locally if a mode-style
- * surface should pick a different pigment than the broad semantic.
- */
-const SEMANTIC_TO_LEGACY: Record<string, string> = {
-  accent: "blue", // mode-style prefers calm blue over the brand sky
-  "accent-soft": SEMANTIC["accent-soft"],
-  // Brand primary — same pigment as the default prompt arrow (`❯`).
-  brand: SEMANTIC.brand,
-  danger: SEMANTIC.danger,
-  muted: SEMANTIC.muted,
+  accent: PALETTE.blue,
+  "accent-soft": PALETTE[SEMANTIC["accent-soft"]],
+  brand: PALETTE[SEMANTIC.brand],
+  danger: PALETTE[SEMANTIC.danger],
+  muted: PALETTE[SEMANTIC.muted],
 }
 
 // ---------------------------------------------------------------------------
@@ -149,7 +132,7 @@ const SEMANTIC_TO_LEGACY: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Detect the resolver's environment from process state.
+ * Detect the mapper's environment from process state.
  *
  * - `theme` from `MINIMAL_AGENT_THEME` (`dark` | `light` | `high-contrast`),
  *   defaulting to `dark` when unset/invalid. We don't sniff `COLORFGBG` or
@@ -173,98 +156,50 @@ export function detectStyleEnv(env: NodeJS.ProcessEnv = process.env): StyleEnv {
 }
 
 /**
+ * Map host-neutral mode style tokens to concrete SGR sequences.
+ *
+ * Each surface maps alone. For each color the mapper picks the richest
+ * form the terminal supports: hex on truecolor, then the 256-color index,
+ * then the token. A hex on a terminal without truecolor maps to `null`, so
+ * the terminal default shows instead of a wrong color. When `fg` and `bg`
+ * map to the same color, the mapper drops `bg`.
+ */
+export function modeStyleToSgr(
+  style: ModeStyle,
+  env: StyleEnv = detectStyleEnv(),
+): ResolvedModeStyle {
+  return {
+    label: surfaceToSgr(style.label, env),
+    arrow: surfaceToSgr(style.arrow, env),
+    status: surfaceToSgr(style.status, env),
+    reset: RESET,
+  }
+}
+
+/**
  * Resolve a mode's declarative style request to concrete ANSI sequences.
- *
- * Steps:
- *
- * 1. Merge the base request with the active theme override (theme wins
- *    surface-by-surface, surface-by-key).
- * 2. Resolve `fg`/`bg` color requests to SGR open strings using the palette
- *    and capability.
- * 3. Apply policy: identity guard (`bg == fg` → drop bg), contrast guard
- *    (currently a no-op in ANSI-only mode — we don't know hex values for
- *    legacy colors), label width cap is enforced at the call site
- *    in `ModeManager.promptPrefix`.
- * 4. **No implicit inheritance** between surfaces. If a mode wants its
- *    arrow blue, it must say so. This keeps the A/B knob honest: "label
- *    only" means *only* the label is repainted; the agent's default arrow
- *    styling stays in charge. (Earlier drafts inherited `arrow.fg` from
- *    `label.fg`; that defeated the toggle and was reverted.)
+ * Core resolves the request to tokens for `env.theme`. Then
+ * {@link modeStyleToSgr} maps the tokens.
  */
 export function resolveModeStyle(
   request: ModeStyleRequest,
   env: StyleEnv = detectStyleEnv(),
 ): ResolvedModeStyle {
-  // 1. Theme merge.
-  const merged = mergeWithTheme(request, env.theme)
-
-  // 2. Resolve each surface independently. No implicit inheritance — a
-  //    mode that sets only `label` does NOT also recolor arrow/status.
-  const label = resolveSurface(merged.label ?? {}, env)
-  const arrow = resolveSurface(merged.arrow ?? {}, env)
-  const status = resolveSurface(merged.status ?? {}, env)
-
-  return { label, arrow, status, reset: RESET }
-}
-
-/**
- * Synthesize a `ModeStyleRequest` from the legacy `color` shorthand.
- *
- * Pre-style-block rendering colored the *label only* — the arrow and
- * status stayed at the agent's defaults. Mirror that exactly so manifests
- * that only declare `color` render bit-identically before/after this
- * change. Plugin authors who want a colored arrow opt in by upgrading to
- * `style.arrow.fg`.
- *
- * Returns `null` when `color` is null/undefined.
- */
-export function styleFromLegacyColor(color: string | null | undefined): ModeStyleRequest | null {
-  if (!color) return null
-  return { label: { fg: color, bold: true } }
+  return modeStyleToSgr(resolveModeStyleTokens(request, env.theme), env)
 }
 
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
 
-/**
- * Merge a `ModeStyleRequest`'s base shape with its `theme[active]` override.
- * Per-surface, per-key, with the theme override taking precedence. Returns
- * a flattened request without the `theme` field.
- */
-function mergeWithTheme(req: ModeStyleRequest, theme: ThemeKey): ModeStyleRequest {
-  const override = req.theme?.[theme]
-  if (!override) {
-    const { theme: _drop, ...rest } = req
-    return rest
-  }
-  const merged: ModeStyleRequest = {}
-  for (const surface of ["label", "arrow", "status"] as const) {
-    const base = req[surface]
-    const over = override[surface]
-    if (base || over) {
-      merged[surface] = { ...(base ?? {}), ...(over ?? {}) }
-    }
-  }
-  return merged
-}
-
-function resolveSurface(
-  req: { fg?: ColorRequest; bg?: ColorRequest; bold?: boolean; dim?: boolean },
-  env: StyleEnv,
-): ResolvedSurfaceStyle {
-  const fgOpen = req.fg !== undefined ? colorRequestToFgSgr(req.fg, env) : null
-  let bgOpen = req.bg !== undefined ? colorRequestToBgSgr(req.bg, env) : null
+function surfaceToSgr(surface: ModeSurfaceStyle, env: StyleEnv): ResolvedSurfaceStyle {
+  const fgOpen = surface.fg ? colorToFgSgr(surface.fg, env) : null
+  let bgOpen = surface.bg ? colorToBgSgr(surface.bg, env) : null
 
   // Identity guard: if fg and bg resolve to the *same* sequence, drop bg.
   if (fgOpen && bgOpen && sameColorPayload(fgOpen, bgOpen)) bgOpen = null
 
-  return {
-    fgOpen,
-    bgOpen,
-    bold: req.bold ?? false,
-    dim: req.dim ?? false,
-  }
+  return { fgOpen, bgOpen, bold: surface.bold, dim: surface.dim }
 }
 
 /** Strip the leading "3" or "4" of an SGR color so fg and bg compare. */
@@ -275,29 +210,16 @@ function sameColorPayload(fg: string, bg: string): boolean {
   return norm(fg) === norm(bg)
 }
 
-function colorRequestToFgSgr(req: ColorRequest, env: StyleEnv): string | null {
-  if (req === "transparent") return null
-  if (typeof req === "string") {
-    // Legacy or token or hex.
-    if (req in LEGACY_FG_OPEN) return LEGACY_FG_OPEN[req]
-    if (req in SEMANTIC_TO_LEGACY) return LEGACY_FG_OPEN[SEMANTIC_TO_LEGACY[req]]
-    if (/^#[0-9a-fA-F]{6}$/.test(req)) return hexToFgSgr(req, env)
-    return null
-  }
-  // Object form: prefer richest the terminal supports.
-  if (env.capability === "truecolor" && req.hex) return hexToFgSgr(req.hex, env)
-  if (req.ansi256 != null) return `\x1b[38;5;${req.ansi256}m`
-  if (req.token) {
-    if (req.token in LEGACY_FG_OPEN) return LEGACY_FG_OPEN[req.token]
-    if (req.token in SEMANTIC_TO_LEGACY) return LEGACY_FG_OPEN[SEMANTIC_TO_LEGACY[req.token]]
-  }
-  if (req.hex) return hexToFgSgr(req.hex, env)
+function colorToFgSgr(color: ModeColor, env: StyleEnv): string | null {
+  if (env.capability === "truecolor" && color.hex) return hexToFgSgr(color.hex, env)
+  if (color.ansi256 != null) return `\x1b[38;5;${color.ansi256}m`
+  if (color.token) return TOKEN_FG_OPEN[color.token]
+  if (color.hex) return hexToFgSgr(color.hex, env)
   return null
 }
 
-function colorRequestToBgSgr(req: ColorRequest, env: StyleEnv): string | null {
-  if (req === "transparent") return null
-  const fg = colorRequestToFgSgr(req, env)
+function colorToBgSgr(color: ModeColor, env: StyleEnv): string | null {
+  const fg = colorToFgSgr(color, env)
   if (!fg) return null
   // Convert fg SGR → bg SGR. `\x1b[3Nm` → `\x1b[4Nm`; `\x1b[38;5;Nm` → `\x1b[48;5;Nm`;
   // `\x1b[38;2;R;G;Bm` → `\x1b[48;2;R;G;Bm`.
