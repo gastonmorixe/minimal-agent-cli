@@ -13,6 +13,8 @@
 import type { AgentEvent } from "@minimal-agent/core/sdk/events"
 import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
 
+import type { StepLive } from "./turn-render-pump.ts"
+
 type MaybePromise<T> = T | Promise<T>
 
 /** What a REPL does for each shown event. */
@@ -23,8 +25,11 @@ export interface TurnRenderHandlers {
   thinkingChunk(chunk: string): MaybePromise<void>
   /** A reasoning block closed (`block_stopped`, thinking). */
   thinkingStop(): MaybePromise<void>
-  /** A text block closed (`block_stopped`, text). End its markdown paragraph. */
-  textStop(): MaybePromise<void>
+  /**
+   * A text block closed (`block_stopped`, text). End its markdown paragraph.
+   * `live()` is false once the turn aborted. Skip writes after an await then.
+   */
+  textStop(live?: StepLive): MaybePromise<void>
   /** A turn notice (`notice`). */
   notice(notice: TurnNotice): MaybePromise<void>
 }
@@ -32,15 +37,15 @@ export interface TurnRenderHandlers {
 /** Build the `onEvent` function a REPL passes to `ReplAgentLike.run`. */
 export function turnEventRenderer(
   handlers: TurnRenderHandlers,
-): (event: AgentEvent) => MaybePromise<void> {
-  return (event) => {
+): (event: AgentEvent, live?: StepLive) => MaybePromise<void> {
+  return (event, live) => {
     switch (event.type) {
       case "thinking_delta":
         return handlers.thinkingChunk(event.text)
       case "block_started":
         return event.itemType === "thinking" ? handlers.thinkingStart() : undefined
       case "block_stopped":
-        return event.itemType === "thinking" ? handlers.thinkingStop() : handlers.textStop()
+        return event.itemType === "thinking" ? handlers.thinkingStop() : handlers.textStop(live)
       case "notice":
         return handlers.notice(event.notice)
       default:

@@ -12,16 +12,31 @@
  * - A step waits when an earlier text chunk is still with the consumer, or
  *   an earlier step still runs (it returned a promise). The drain loop then
  *   runs it in order, between the text chunks.
- * - When the turn signal aborts, the pump drops the items that wait, and
- *   stops waiting for a step that runs. A stuck step cannot block the turn.
+ * - When the turn signal aborts, the pump runs the steps that wait, in
+ *   order, and does not wait for them. It drops the text that waits. So a
+ *   queue echo whose text core already took, and a formatter end, still
+ *   show. The pump stops waiting for a step that runs. A stuck step cannot
+ *   block the turn.
+ * - Each step gets `live`. After the abort, `live()` is false for a step
+ *   that started before or during the abort. Such a step checks `live()`
+ *   after each await and skips its later writes.
  *
  * @module turn-render-pump
  */
 
 type MaybePromise<T> = T | Promise<T>
 
+/**
+ * True while the writes of a step are current. False after the turn
+ * aborts, for a step that started before or during the abort.
+ */
+export type StepLive = () => boolean
+
 /** One render step: write a row, feed a formatter, end a block. */
-export type RenderStep = () => MaybePromise<void>
+export type RenderStep = (live: StepLive) => MaybePromise<void>
+
+/** The `live` of a step that started after the abort. */
+const ALWAYS_LIVE: StepLive = () => true
 
 type Item = { kind: "text"; text: string } | { kind: "step"; run: RenderStep }
 
@@ -43,6 +58,10 @@ export class TurnRenderPump {
   private wake: (() => void) | null = null
   private closed = false
   private abandoned = false
+  /** True after the turn signal aborts. */
+  private signalAborted = false
+  /** The `live` of a step that started before the abort. */
+  private readonly liveBeforeAbort: StepLive = () => !this.signalAborted
   private failed = false
   private failure: unknown
   private readonly idleWaiters: Array<() => void> = []
@@ -54,7 +73,7 @@ export class TurnRenderPump {
     this.aborted = new Promise<void>((resolve) => {
       if (!signal) return
       const onAbort = () => {
-        this.abandon()
+        this.flushOnAbort()
         resolve()
       }
       if (signal.aborted) onAbort()
@@ -72,7 +91,7 @@ export class TurnRenderPump {
   /** Run a render step now, or after the items before it. */
   step(run: RenderStep): void {
     if (this.abandoned || (!this.busy && this.items.length === 0)) {
-      this.runNow(run)
+      this.runNow(run, this.signalAborted ? ALWAYS_LIVE : this.liveBeforeAbort)
       return
     }
     this.items.push({ kind: "step", run })
@@ -93,6 +112,21 @@ export class TurnRenderPump {
   abandon(): void {
     this.abandoned = true
     this.items.length = 0
+    this.notify()
+  }
+
+  /**
+   * The turn signal aborted. Run the steps that wait, in order, with no wait
+   * for a promise they return. Drop the text that waits. Then act as
+   * {@link abandon}.
+   */
+  private flushOnAbort(): void {
+    this.signalAborted = true
+    const waiting = this.items.splice(0)
+    this.abandoned = true
+    for (const item of waiting) {
+      if (item.kind === "step") this.runNow(item.run, this.liveBeforeAbort)
+    }
     this.notify()
   }
 
@@ -134,7 +168,7 @@ export class TurnRenderPump {
           yield item.text
         } else {
           try {
-            await this.untilAbort(item.run())
+            await this.untilAbort(item.run(this.liveBeforeAbort))
           } catch (error) {
             this.fail(error)
           }
@@ -162,10 +196,10 @@ export class TurnRenderPump {
     for (const resolve of this.idleWaiters.splice(0)) resolve()
   }
 
-  private runNow(run: RenderStep): void {
+  private runNow(run: RenderStep, live: StepLive): void {
     let result: unknown
     try {
-      result = run()
+      result = run(live)
     } catch (error) {
       this.fail(error)
       return

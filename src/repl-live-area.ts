@@ -42,6 +42,7 @@ import type {
 } from "./repl.ts"
 import { applyTurnWillStart, registerEditorPluginHooks } from "./repl-editor-hooks.ts"
 import { turnEventRenderer } from "./turn-event-render.ts"
+import type { StepLive } from "./turn-render-pump.ts"
 import { printGoodbye } from "./ui/chrome/goodbye-banner.ts"
 import { buildModeChangeChip } from "./ui/chrome/mode-change-chip.ts"
 import { buildPendingModeChangeDecoration } from "./ui/chrome/mode-change-pending-decoration.ts"
@@ -1266,11 +1267,13 @@ export async function runReplLiveArea(
       // so the *next* text block starts with an empty `partial` paragraph
       // buffer. Without this, two text blocks in one `run()` get smashed
       // together at end-of-run by mdstream's final re-render.
-      const textStop = async (): Promise<void> => {
+      const textStop = async (live?: StepLive): Promise<void> => {
         if (!formatter && !opts.formatterCmd) return
         const old = formatter
         formatter = null
         if (old) await old.end()
+        // A stale end (the turn aborted) must not respawn a formatter.
+        if (live && !live()) return
         // Discard the OLD formatter's trailing tail. The next text block
         // (if any) starts with a freshly-spawned formatter; any pending
         // `\n\n` from the OLD render belongs to the boundary between this

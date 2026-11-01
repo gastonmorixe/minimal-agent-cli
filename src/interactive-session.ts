@@ -49,7 +49,7 @@ import { TOOL_PRESENTATION } from "./plugins-ui/tool-presentation.ts"
 import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
 import { createPluginEventsPort, createStatusPort } from "./startup/host-ports.ts"
-import { TurnRenderPump } from "./turn-render-pump.ts"
+import { type StepLive, TurnRenderPump } from "./turn-render-pump.ts"
 import * as TOOL_TRANSCRIPT_FORMAT from "./ui/tool-transcript/format.ts"
 
 type MaybePromise<T> = T | Promise<T>
@@ -415,7 +415,7 @@ export class InteractiveSession implements ReplAgentLike {
     userText: string,
     opts?: {
       onTranscriptLine?: (line: string) => void
-      onEvent?: (event: AgentEvent) => MaybePromise<void>
+      onEvent?: (event: AgentEvent, live: StepLive) => MaybePromise<void>
       inputQueue?: InputQueuePort
       signal?: AbortSignal
       askUser?: (issue: PreflightIssue) => Promise<string | null>
@@ -435,7 +435,7 @@ export class InteractiveSession implements ReplAgentLike {
         if (entry.ch !== "event") return
         const event = entry.data
         if (event.type === "text_delta") pump.text(event.text)
-        else if (onEvent) pump.step(() => onEvent(event))
+        else if (onEvent) pump.step((live) => onEvent(event, live))
         else if (event.type === "notice") {
           this.transcript.write(`\n  ${formatTurnNoticePlain(event.notice)}`)
         }

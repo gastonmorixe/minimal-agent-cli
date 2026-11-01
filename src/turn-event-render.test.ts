@@ -61,4 +61,19 @@ describe("turnEventRenderer", () => {
     await result
     expect(done).toBe(true)
   })
+
+  it("passes the pump's live check to textStop, so a stale end skips its writes", async () => {
+    const seen: Array<boolean | undefined> = []
+    const render = turnEventRenderer({
+      thinkingStart: () => {},
+      thinkingChunk: () => {},
+      thinkingStop: () => {},
+      textStop: (live) => {
+        seen.push(live?.())
+      },
+      notice: () => {},
+    })
+    await render({ type: "block_stopped", itemType: "text", id: "1:text" }, () => false)
+    expect(seen).toEqual([false])
+  })
 })
