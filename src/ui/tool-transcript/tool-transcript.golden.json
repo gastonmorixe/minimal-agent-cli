@@ -1,0 +1,201 @@
+{
+  "bash-stream": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ printf 'one\\ntwo\\nthree\\n'\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mone\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mtwo\u001b[22m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2mthree\u001b[22m"
+    ],
+    "content": "one\ntwo\nthree",
+    "isError": false
+  },
+  "bash-long": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ seq 1 30\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m3\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m4\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m5\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m6\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m7\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m8\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m9\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m10\u001b[22m",
+      "  \u001b[2;36m┊\u001b[22;39m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2mshown 10/30 L\u001b[22m"
+    ],
+    "content": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n\n<ma::agent::output-preview shown=\"10\" total=\"30\" tool=\"Bash\">the user only saw a fraction of this output. If you used Bash to render visual content (ASCII art, ANSI TUI preview, formatted tables) for the user, put it in your text reply instead : the user reads that in full.</ma::agent::output-preview>",
+    "isError": false
+  },
+  "bash-empty": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ true\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m(no output)\u001b[22m"
+    ],
+    "content": "",
+    "isError": false
+  },
+  "bash-error": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ echo oops >&2; exit 3\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[31moops\u001b[39m"
+    ],
+    "content": "oops",
+    "isError": true
+  },
+  "read-plain": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mRead\u001b[39m\u001b[22m  \u001b[2m<ROOT>/example.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1   const x: number = 1\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2   return x\u001b[22m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m3   \u001b[22m"
+    ],
+    "content": "1\tconst x: number = 1\n2\treturn x\n3\t",
+    "isError": false
+  },
+  "read-highlight": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mRead\u001b[39m\u001b[22m  \u001b[2m<ROOT>/example.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m   \u001b[38;2;10;20;30mconst x: number = 1\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m   \u001b[38;2;10;20;30mreturn x\u001b[0m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m3\u001b[22m   \u001b[38;2;10;20;30m\u001b[0m"
+    ],
+    "content": "1\tconst x: number = 1\n2\treturn x\n3\t",
+    "isError": false
+  },
+  "edit-diff": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/edit.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1m--- a/<ROOT>/edit.ts\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1m+++ b/<ROOT>/edit.ts\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[36m@@ -1,3 +1,3 @@\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m  alpha",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;199m-beta\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;118m+BETA\u001b[0m",
+      "  \u001b[2;36m╰\u001b[22;39m  gamma"
+    ],
+    "content": "File edited: <ROOT>/edit.ts (1 replacement(s))",
+    "isError": false
+  },
+  "edit-diff-highlight": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/edit-hl.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1m--- a/<ROOT>/edit-hl.ts\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1m+++ b/<ROOT>/edit-hl.ts\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[36m@@ -1,3 +1,3 @@\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m  \u001b[38;2;10;20;30mone\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[48;2;56;0;38m\u001b[38;5;199m-\u001b[0m\u001b[48;2;56;0;38m\u001b[38;2;10;20;30mtwo\u001b[0m\u001b[48;2;56;0;38m\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[48;2;29;56;0m\u001b[38;5;118m+\u001b[0m\u001b[48;2;29;56;0m\u001b[38;2;10;20;30mTWO\u001b[0m\u001b[48;2;29;56;0m\u001b[0m",
+      "  \u001b[2;36m╰\u001b[22;39m  \u001b[38;2;10;20;30mthree\u001b[0m"
+    ],
+    "content": "File edited: <ROOT>/edit-hl.ts (1 replacement(s))",
+    "isError": false
+  },
+  "write-new": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mWrite\u001b[39m\u001b[22m  \u001b[2m<ROOT>/new.txt\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1mNew file: <ROOT>/new.txt\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m────────────────────────────────────────────────────────────\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1m--- a/<ROOT>/new.txt\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1m+++ b/<ROOT>/new.txt\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[36m@@ -1,0 +1,2 @@\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;118m+fresh\u001b[0m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[38;5;118m+file\u001b[0m"
+    ],
+    "content": "File written: <ROOT>/new.txt",
+    "isError": false
+  },
+  "input-error": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mRead\u001b[39m\u001b[22m  \u001b[2m\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m"
+    ],
+    "content": "Read error: (root): missing required property \"file_path\"",
+    "isError": true
+  },
+  "policy-deny": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ echo never\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1;31m⊘\u001b[22;39m \u001b[2mblocked here\u001b[22m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m(refused by policy)\u001b[22m"
+    ],
+    "content": "blocked here",
+    "isError": true
+  },
+  "mode-refusal": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ echo never\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1;31m⊘\u001b[22;39m \u001b[2mTool \"Bash\" is not permitted in ASK mode.\u001b[22m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m(refused by ask)\u001b[22m"
+    ],
+    "content": "Tool \"Bash\" is not permitted in ASK mode.\n\n<ma::agent::mode-active id=\"ask\" since=\"2026-05-22T17:52:30.000Z\" />",
+    "isError": true
+  },
+  "mode-tool": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mMode\u001b[39m\u001b[22m  \u001b[2m\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2mactive mode: ASK\u001b[22m"
+    ],
+    "content": "{\n  \"id\": \"ask\",\n  \"label\": \"ASK\",\n  \"since\": \"2026-05-22T17:52:30.000Z\",\n  \"permissions\": {\n    \"tools\": [\n      {\n        \"tool\": \"*\",\n        \"allow\": true\n      },\n      {\n        \"tool\": \"Bash\",\n        \"allow\": false\n      }\n    ],\n    \"source\": \"manifest\"\n  }\n}\n\n<ma::agent::mode-active id=\"ask\" since=\"2026-05-22T17:52:30.000Z\" />",
+    "isError": false
+  },
+  "diagnostics": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/diag.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1m--- a/<ROOT>/diag.ts\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[1m+++ b/<ROOT>/diag.ts\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[36m@@ -1,1 +1,1 @@\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;199m-let a = 1\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;118m+const a = 1\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;214m●\u001b[39m \u001b[2m1\u001b[22m a is unused",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[38;5;214m▲\u001b[39m \u001b[38;5;214m1 warning\u001b[39m"
+    ],
+    "content": "File edited: <ROOT>/diag.ts (1 replacement(s))\n\n<ma::agent::diagnostics count=\"1\">\na is unused\n</ma::agent::diagnostics>",
+    "isError": false
+  },
+  "plugin-deferred": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;118m◉\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;118mTask\u001b[39m\u001b[22m + added 2 tasks",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m [ ] one",
+      "  \u001b[2;36m│\u001b[22;39m [ ] two",
+      "  \u001b[2;36m╰\u001b[22;39m 0/2 done"
+    ],
+    "content": "added 2 tasks",
+    "isError": false
+  },
+  "plugin-early": {
+    "rows": [
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;45m⤓\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;45mFetch\u001b[39m\u001b[22m  \u001b[2mhttps://example.com/a\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 0\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 1\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 2\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 3\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 4\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 5\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 6\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 7\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 8\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mpage line 9\u001b[22m",
+      "  \u001b[2;36m┊\u001b[22;39m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2mshown 10/40 L\u001b[22m"
+    ],
+    "content": "page line 0\npage line 1\npage line 2\npage line 3\npage line 4\npage line 5\npage line 6\npage line 7\npage line 8\npage line 9\npage line 10\npage line 11\npage line 12\npage line 13\npage line 14\npage line 15\npage line 16\npage line 17\npage line 18\npage line 19\npage line 20\npage line 21\npage line 22\npage line 23\npage line 24\npage line 25\npage line 26\npage line 27\npage line 28\npage line 29\npage line 30\npage line 31\npage line 32\npage line 33\npage line 34\npage line 35\npage line 36\npage line 37\npage line 38\npage line 39\n\n<ma::agent::output-preview shown=\"10\" total=\"40\" tool=\"Fetch\">the user only saw a fraction of this output. If you intended this for the user, summarize the key parts in your text reply (the user reads it in full).</ma::agent::output-preview>",
+    "isError": false
+  }
+}

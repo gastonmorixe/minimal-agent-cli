@@ -1,19 +1,39 @@
 import { basename } from "node:path"
-import type {
-  CodeHighlighter,
-  CodeHighlightRequest,
-  UnifiedDiffHighlightRequest,
-} from "@minimal-agent/core/host-kit/tool-executor-adapter"
 import type { FileSink, Subprocess } from "bun"
 
-// The highlighter port types live in core. The tool executor and
-// buildAgentCore take a CodeHighlighter, so both sides share one type.
-export type {
-  CodeHighlighter,
-  CodeHighlightRequest,
-  UnifiedDiffColors,
-  UnifiedDiffHighlightRequest,
-} from "@minimal-agent/core/host-kit/tool-executor-adapter"
+// The highlighter port is CLI-owned (spec S24): core sends plain tool view
+// events, and the CLI tool view highlights Read and Edit/Write bodies.
+
+/** One code-highlight request: the source text and its language id. */
+export interface CodeHighlightRequest {
+  language: string
+  code: string
+}
+
+/** Semantic colors accepted by the unified-diff highlight mode. */
+export interface UnifiedDiffColors {
+  inserted?: string
+  deleted?: string
+}
+
+/** Mixed syntax + unified-diff highlight request. */
+export interface UnifiedDiffHighlightRequest extends CodeHighlightRequest {
+  colors?: UnifiedDiffColors
+  diffStyle?: "marker-fg" | "bg-wash"
+}
+
+/**
+ * Fail-closed port for presentation-only tool-output highlighting. Each
+ * method returns `null` on any failure, so the plain render stays.
+ */
+export interface CodeHighlighter {
+  /** Start syntax/theme initialization before the first tool result needs it. */
+  warmup(): Promise<boolean>
+  highlight(request: CodeHighlightRequest): Promise<string | null>
+  /** Optional native mixed-diff mode. Null means unsupported or failed. */
+  highlightUnifiedDiff?(request: UnifiedDiffHighlightRequest): Promise<string | null>
+  close(): Promise<void>
+}
 
 export interface MdstreamCodeHighlighterOptions {
   /** Maximum time for the ready line and each highlight response. */
