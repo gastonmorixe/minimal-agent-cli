@@ -9,7 +9,7 @@
  * @module plugins-ui/handler-env
  */
 
-import { paletteEnvJson } from "@minimal-agent/core/plugin-api/utils/palette"
+import { paletteEnvJson } from "../terminal-kit/palette.ts"
 
 /** The terminal entries of a plugin handler env, read at each call. */
 export function terminalHandlerEnv(): Record<string, string> {

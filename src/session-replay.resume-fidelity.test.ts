@@ -147,10 +147,8 @@ describe("--resume fidelity: tool display payload survives the JSONL round-trip"
     expect(plain).toContain("+NEW")
     expect(plain).not.toMatch(/^\s*│\s+File edited:/m)
 
-    // 4. The header carries the tool name. (It no longer carries a cosmetic
-    // icon: S29/S31 dropped `icon`/`color` from `ToolDefinition`, so the
-    // presentation map built above is always empty until the CLI's own
-    // static map, S41, replaces it.)
+    // 4. The header carries the tool name. (Edit has no icon: the CLI's
+    // static presentation map, S41, holds plugin tools only.)
     expect(plain).toMatch(/╭ Edit/)
   })
 

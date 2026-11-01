@@ -72,6 +72,18 @@ function parseHandlerEntry(raw: unknown, at: string, manifestPath: string): Mani
 }
 
 /**
+ * Validate the `ui.setup` entry (S41). It must be a module handler: the
+ * setup runs in the CLI process and fills the plugin's style slots.
+ */
+export function parseUiSetup(raw: unknown, manifestPath: string): ManifestHandlerEntry {
+  const handler = parseHandlerEntry(raw, "ui.setup", manifestPath)
+  if (handler.type !== "module") {
+    throw new ManifestError("ui.setup.handler: ui.setup must be a module handler", manifestPath)
+  }
+  return handler
+}
+
+/**
  * Validate a single `liveAreaSlots[i]` entry.
  */
 export function parseLiveAreaSlot(

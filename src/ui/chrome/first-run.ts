@@ -26,7 +26,7 @@
 
 import { existsSync } from "node:fs"
 import { resolveAgentHome } from "@minimal-agent/core/plugin-api/utils/agent-paths"
-import { ansiStyle as A } from "@minimal-agent/core/plugin-api/utils/ansi"
+import { ansiStyle as A } from "../../terminal-kit/ansi.ts"
 
 // Keep this module free of agent runtime imports so the cold path stays light.
 

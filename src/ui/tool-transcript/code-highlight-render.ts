@@ -1,5 +1,5 @@
-import { ANSI_CODES } from "@minimal-agent/core/plugin-api/utils/ansi"
-import { PALETTE } from "@minimal-agent/core/plugin-api/utils/palette"
+import { ANSI_CODES } from "../../terminal-kit/ansi.ts"
+import { PALETTE } from "../../terminal-kit/palette.ts"
 
 import type { CodeHighlighter, UnifiedDiffColors } from "../formatter/mdstream-code-highlighter.ts"
 import { c } from "../style/ansi.ts"

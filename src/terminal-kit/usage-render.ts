@@ -19,7 +19,6 @@
  * @module terminal-kit/usage-render
  */
 
-import { ansiStyle as c } from "@minimal-agent/core/plugin-api/utils/ansi"
 import { displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import {
   USAGE_PERIODS,
@@ -28,6 +27,7 @@ import {
   type UsageReport,
   type UsageTotals,
 } from "@minimal-agent/core/plugin-api/utils/usage-report"
+import { ansiStyle as c } from "./ansi.ts"
 
 /** 1/8th-block ramp (shared visual language with quota-status). */
 const SLICES = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"] as const

@@ -25,7 +25,7 @@ import {
   USAGE_PERIODS,
   type UsagePeriod,
 } from "@minimal-agent/core/host/usage-stats"
-import { ansiStyle as c } from "@minimal-agent/core/plugin-api/utils/ansi"
+import { ansiStyle as c } from "../terminal-kit/ansi.ts"
 import { renderUsageReport } from "../terminal-kit/usage-render.ts"
 import { type CommandOutput, writeCommandRows } from "../ui/command-output.ts"
 

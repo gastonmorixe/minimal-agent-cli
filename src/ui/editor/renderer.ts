@@ -14,7 +14,6 @@
  * @module ui/editor/renderer
  */
 
-import { ansiStyle as c } from "@minimal-agent/core/plugin-api/utils/ansi"
 import {
   codePointWidth,
   cursorRowOffset,
@@ -24,6 +23,7 @@ import {
 } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { BufferStyleSpan } from "../../editor/types.ts"
 import type { EditorBuffer } from "../../input/editor-buffer.ts"
+import { ansiStyle as c } from "../../terminal-kit/ansi.ts"
 
 export interface EditorRendererOptions {
   prompt: string

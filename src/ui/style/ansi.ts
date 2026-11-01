@@ -13,7 +13,7 @@
  * @module ui/style/ansi
  */
 
-import { ansiStyle } from "@minimal-agent/core/plugin-api/utils/ansi"
+import { ansiStyle } from "../../terminal-kit/ansi.ts"
 
 /**
  * Palette of ANSI-wrapped color and attribute helpers. Every entry is a

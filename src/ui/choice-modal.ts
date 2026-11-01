@@ -17,9 +17,9 @@
  * @module ui/choice-modal
  */
 
-import { ANSI_CODES, color as colorText } from "@minimal-agent/core/plugin-api/utils/ansi"
-import { PALETTE } from "@minimal-agent/core/plugin-api/utils/palette"
 import { displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { ANSI_CODES, color as colorText } from "../terminal-kit/ansi.ts"
+import { PALETTE } from "../terminal-kit/palette.ts"
 
 import type { LiveOverlay, OverlayKey } from "./overlay.ts"
 

@@ -1,6 +1,7 @@
 /**
  * The CLI plugin UI loader (S35): `ctx.tui` is absent for headless entries
- * and present for `ui` entries. Old flat live-area slots are read until S41.
+ * and present for `ui` entries. A `ui.setup` module fills the plugin's
+ * style slots from `ctx.tui.kit` (S41). Flat manifests get no ui part.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
@@ -113,15 +114,62 @@ describe("loadPluginUi (S35)", () => {
     expect(logs).toEqual([])
   })
 
-  it("reads old flat live-area slots, with one warning", async () => {
-    const dir = writePlugin("flat-probe", { tuis: [TOOL_ENTRY], liveAreaSlots: [SLOT_ENTRY] })
+  it("loads no ui part for a flat manifest (S41)", async () => {
+    writePlugin("flat-probe", { tuis: [TOOL_ENTRY], liveAreaSlots: [SLOT_ENTRY] })
     const { ui, logs } = await boot()
-    expect(ui.liveAreaSlots.map((s) => s.pluginId)).toEqual(["flat-probe"])
-    const out = await ui.liveAreaSlots[0]?.invoke(slotCtx(dir))
-    expect(JSON.parse(out ?? "{}").hasTui).toBe(true)
-    expect(
-      logs.filter((l) => l.includes("flat-probe") && l.includes("read until S41")).length,
-    ).toBe(1)
+    expect(ui.liveAreaSlots).toEqual([])
+    expect(logs.some((l) => l.includes("flat-probe"))).toBe(true)
+  })
+
+  it("ui.setup fills the style slots that the headless handler reads (S41)", async () => {
+    const dir = writePlugin("style-probe", {
+      headless: {
+        tools: [{ ...TOOL_ENTRY, handler: { ...TOOL_ENTRY.handler, path: "./styled.ts" } }],
+      },
+      ui: { setup: { type: "module", path: "./ui/setup.ts" } },
+    })
+    mkdirSync(join(dir, "ui"), { recursive: true })
+    writeFileSync(
+      join(dir, "style.ts"),
+      `import { createStyleSlots } from "@minimal-agent/core/plugin-api/utils/style-slots"
+export const slots = createStyleSlots()`,
+    )
+    writeFileSync(
+      join(dir, "styled.ts"),
+      `import { slots } from "./style.ts"
+export default async () => ({ kind: "tool_result", content: "plain", display: slots.styles.dim("body") })`,
+    )
+    writeFileSync(
+      join(dir, "ui", "setup.ts"),
+      `import { slots } from "../style.ts"
+export default (ctx) => { slots.install(ctx.tui.kit) }`,
+    )
+    const logs: string[] = []
+    const loader = await PluginLoader.load({
+      roots: { embedded: [pluginsDir] },
+      logger: (m) => logs.push(m),
+    })
+    const call = { type: "tool" as const, name: "UiProbe", input: {}, tool_use_id: "t1" }
+    const before = await loader.dispatch(call, dir)
+    if (before.kind !== "tool_result") throw new Error("unreachable")
+    expect(before.display).toBe("body")
+    await loadPluginUi({ packages: loader.loadedPackages(), logger: (m) => logs.push(m) })
+    const after = await loader.dispatch(call, dir)
+    if (after.kind !== "tool_result") throw new Error("unreachable")
+    expect(after.content).toBe("plain")
+    expect(after.display).toBe("\x1b[2mbody\x1b[22m")
+    expect(logs).toEqual([])
+  })
+
+  it("logs a ui.setup without a default export and keeps the slots", async () => {
+    const dir = writePlugin("nosetup-probe", {
+      headless: {},
+      ui: { setup: { type: "module", path: "./slot-none.ts" }, liveAreaSlots: [SLOT_ENTRY] },
+    })
+    writeFileSync(join(dir, "slot-none.ts"), "export const x = 1")
+    const { ui, logs } = await boot()
+    expect(ui.liveAreaSlots.map((s) => s.definition.id)).toEqual(["probe_slot"])
+    expect(logs.some((l) => l.includes("ui.setup") && l.includes("no default export"))).toBe(true)
   })
 
   it("loads no ui part for a plugin that core did not accept", async () => {

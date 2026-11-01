@@ -3,30 +3,35 @@
  *
  * Core loads only the `headless` part of a plugin manifest (S31). This
  * loader reads the `ui` part of each plugin that core accepted and loads
- * its entries. Today a `ui` block holds live-area slots.
+ * its entries: one optional `setup` module (S41) and live-area slots.
+ * The setup module runs once per plugin, before its slots load. It fills
+ * the plugin's style slots from `ctx.tui.kit`.
  *
  * Only this loader grants the `ui.terminal` capability. It sets `ctx.tui`
  * on every call of a `ui` entry. Headless entries (tools, hooks, events,
  * fragments, commands) run in core and never get `ctx.tui`.
  *
- * Until S41, a legacy flat manifest still has its live-area slots at the
- * top level. This loader reads them with one warning per plugin.
+ * A flat manifest (no `headless` block) is not supported since S41. This
+ * loader logs it and skips its `ui` part.
  *
  * @module plugins-ui/ui-loader
  */
 
 import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import { isAbsolute, join, resolve } from "node:path"
 
 import type {
   LiveAreaHandlerContext,
   ResolvedLiveAreaSlot,
   TerminalUiCapability,
+  UiSetupHandler,
 } from "@minimal-agent/core/plugin-api/types/plugin"
-import { paletteEnvJson } from "@minimal-agent/core/plugin-api/utils/palette"
+import { TERMINAL_KIT } from "../terminal-kit/kit.ts"
+import { paletteEnvJson } from "../terminal-kit/palette.ts"
 
+import { importPluginModule } from "./plugin-module.ts"
 import { resolveLiveAreaSlot } from "./resolve-slot.ts"
-import { isObject, parseLiveAreaSlot, UiManifestError } from "./ui-manifest.ts"
+import { isObject, parseLiveAreaSlot, parseUiSetup, UiManifestError } from "./ui-manifest.ts"
 
 /** One plugin package that core accepted (`PluginLoader.loadedPackages()`). */
 export interface AcceptedPackage {
@@ -38,7 +43,7 @@ export interface AcceptedPackage {
 export interface LoadPluginUiOptions {
   /** Accepted packages, in load order. */
   readonly packages: readonly AcceptedPackage[]
-  /** Sink for load problems and legacy warnings. */
+  /** Sink for load problems. */
   readonly logger: (msg: string) => void
   /** The `ui.terminal` capability for each call. Default: {@link terminalUiCapability}. */
   readonly tui?: () => TerminalUiCapability
@@ -56,33 +61,65 @@ export function terminalUiCapability(): TerminalUiCapability {
     capability: "ui.terminal",
     columns: process.stdout.columns ?? 80,
     paletteJson: paletteEnvJson(),
+    kit: TERMINAL_KIT,
   }
 }
 
-/** The raw live-area slot list of a manifest: `ui.liveAreaSlots`, else legacy flat. */
-function rawSlotsOf(
-  raw: Record<string, unknown>,
-  id: string,
-  logger: (msg: string) => void,
-): unknown[] {
-  if (raw.headless !== undefined || raw.ui !== undefined) {
-    const ui = raw.ui
-    if (ui === undefined) return []
-    if (!isObject(ui)) throw new Error("ui must be an object if present")
-    if (ui.liveAreaSlots == null) return []
-    if (!Array.isArray(ui.liveAreaSlots)) {
-      throw new Error("ui.liveAreaSlots must be an array if present")
-    }
-    return ui.liveAreaSlots as unknown[]
+/** Flat (pre-S31) top-level keys. Core rejects a manifest that has one (S41). */
+const FLAT_KEYS: readonly string[] = ["tuis", "liveAreaSlots"]
+
+/** The `ui` block of a manifest, or `undefined` when it has none. */
+function uiBlockOf(raw: Record<string, unknown>): Record<string, unknown> | undefined {
+  const flat = FLAT_KEYS.filter((k) => raw[k] !== undefined)
+  if (flat.length > 0) {
+    throw new Error(
+      `flat manifest keys ${flat.join(", ")} are not supported since S41 (use headless and ui blocks)`,
+    )
   }
-  if (raw.liveAreaSlots == null) return []
-  if (!Array.isArray(raw.liveAreaSlots))
-    throw new Error("liveAreaSlots must be an array if present")
-  logger(
-    `plugin "${id}": manifest.json has flat liveAreaSlots; move them to the ui block ` +
-      "(read until S41)",
-  )
-  return raw.liveAreaSlots as unknown[]
+  const ui = raw.ui
+  if (ui === undefined) return undefined
+  if (!isObject(ui)) throw new Error("ui must be an object if present")
+  for (const k of Object.keys(ui)) {
+    if (k !== "setup" && k !== "liveAreaSlots") {
+      throw new Error(`unknown ui key: ${JSON.stringify(k)}`)
+    }
+  }
+  return ui
+}
+
+/** The raw live-area slot list of a `ui` block. */
+function rawSlotsOf(ui: Record<string, unknown> | undefined): unknown[] {
+  if (ui?.liveAreaSlots == null) return []
+  if (!Array.isArray(ui.liveAreaSlots)) {
+    throw new Error("ui.liveAreaSlots must be an array if present")
+  }
+  return ui.liveAreaSlots as unknown[]
+}
+
+/**
+ * Run the `ui.setup` module of one plugin (S41). A missing module, a bad
+ * export, or a throw is logged. The plugin then paints plain text.
+ */
+async function runUiSetup(
+  raw: unknown,
+  pkg: AcceptedPackage,
+  manifestPath: string,
+  tui: () => TerminalUiCapability,
+  logger: (msg: string) => void,
+): Promise<void> {
+  try {
+    const entry = parseUiSetup(raw, manifestPath)
+    if (entry.type !== "module") return
+    const abs = isAbsolute(entry.path) ? entry.path : resolve(pkg.packageDir, entry.path)
+    const mod = (await importPluginModule(abs)) as { default?: UiSetupHandler }
+    if (typeof mod.default !== "function") {
+      logger(`${pkg.packageDir}: ui.setup ${abs} has no default export function`)
+      return
+    }
+    await mod.default({ tui: tui(), pluginId: pkg.id, packageDir: pkg.packageDir })
+  } catch (e) {
+    logger(`${pkg.packageDir}: ui.setup skipped: ${e instanceof Error ? e.message : String(e)}`)
+  }
 }
 
 /** Wrap a slot so every call gets `ctx.tui` (the `ui.terminal` grant). */
@@ -106,16 +143,19 @@ export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi>
   for (const pkg of opts.packages) {
     const manifestPath = join(pkg.packageDir, "manifest.json")
     let rawSlots: unknown[]
+    let ui: Record<string, unknown> | undefined
     try {
       const raw: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"))
       if (!isObject(raw)) continue
-      rawSlots = rawSlotsOf(raw, pkg.id, opts.logger)
+      ui = uiBlockOf(raw)
+      rawSlots = rawSlotsOf(ui)
     } catch (e) {
       opts.logger(
         `${pkg.packageDir}: ui block skipped: ${e instanceof Error ? e.message : String(e)}`,
       )
       continue
     }
+    if (ui?.setup !== undefined) await runUiSetup(ui.setup, pkg, manifestPath, tui, opts.logger)
     const seen = new Set<string>()
     for (let i = 0; i < rawSlots.length; i++) {
       try {

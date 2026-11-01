@@ -47,9 +47,9 @@ import {
   resolveModeStyleTokens,
 } from "@minimal-agent/core/host-kit/modes"
 import type { ModeStyleRequest, ThemeKey } from "@minimal-agent/core/plugin-api/types/plugin"
-import { ANSI_CODES } from "@minimal-agent/core/plugin-api/utils/ansi"
-import { PALETTE, SEMANTIC } from "@minimal-agent/core/plugin-api/utils/palette"
 import { truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { ANSI_CODES } from "./ansi.ts"
+import { PALETTE, SEMANTIC } from "./palette.ts"
 
 export { styleFromLegacyColor } from "@minimal-agent/core/host-kit/modes"
 
