@@ -19,7 +19,7 @@ import type { AuthResult } from "@minimal-agent/core/host/auth"
 import type { ToolExecResult, ToolExecutor, ToolRegistry } from "@minimal-agent/core/sdk/ports"
 import { resolveStdioMode } from "../cli/output-format.ts"
 import type { ReplAgentLike } from "../repl.ts"
-import type { TestStreamedResponse as StreamedResponse } from "../test-utils/transport-types.ts"
+import type { TestSendResult as StreamedResponse } from "../test-utils/transport-types.ts"
 
 import { planDiagnosticSinks } from "./diagnostic-sinks.ts"
 import {

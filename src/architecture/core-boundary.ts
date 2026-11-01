@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { ChildProcess } from "node:child_process"
+import { existsSync } from "node:fs"
 import { readdir } from "node:fs/promises"
 import { isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -21,7 +22,7 @@ import {
   type SourceFile,
   SyntaxKind,
 } from "typescript/unstable/ast"
-import { API, type Project } from "typescript/unstable/sync"
+import { API } from "typescript/unstable/sync"
 
 import { LEGACY_CORE_TRANSPORT_CONTRACTS } from "./core-public-contract.ts"
 
@@ -157,35 +158,38 @@ function inspectSourceFile(sourceFile: SourceFile): CoreBoundaryViolation[] {
   return violations
 }
 
-const NON_PRODUCTION_DIRECTORY_NAMES = new Set([
-  "__fixtures__",
+/**
+ * Directory names the scan skips. They hold installed, built, or vendored
+ * code that this repo does not write. Tests and fixtures are not in this
+ * list: a deep core import in test code must fail the boundary too (S3).
+ */
+const SKIPPED_DIRECTORY_NAMES = new Set([
   "build",
   "coverage",
   "dist",
-  "fixture",
-  "fixtures",
   "generated",
   "node_modules",
   "vendor",
 ])
 
-function isProductionSourceDirectory(name: string): boolean {
-  return !name.startsWith(".") && !NON_PRODUCTION_DIRECTORY_NAMES.has(name)
+function isScannedDirectory(name: string): boolean {
+  return !name.startsWith(".") && !SKIPPED_DIRECTORY_NAMES.has(name)
 }
 
-/** Enumerate production TypeScript files under a source root. */
-export async function productionTypeScriptFiles(root: string): Promise<string[]> {
+/**
+ * Enumerate the TypeScript files under a root that the boundary checks.
+ * The list includes production files, `*.test.ts` files, and fixtures.
+ */
+export async function boundaryTypeScriptFiles(root: string): Promise<string[]> {
   const files: string[] = []
   async function walk(directory: string): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name)
       if (entry.isDirectory()) {
-        if (isProductionSourceDirectory(entry.name)) await walk(path)
+        if (isScannedDirectory(entry.name)) await walk(path)
         continue
       }
-      if (entry.name.endsWith(".ts") && !/\.(?:test|spec)\.ts$/u.test(entry.name)) {
-        files.push(path)
-      }
+      if (entry.name.endsWith(".ts")) files.push(path)
     }
   }
   await walk(root)
@@ -200,16 +204,19 @@ export async function productionTypeScriptFiles(root: string): Promise<string[]>
  */
 export const PLUGIN_CODE_LOADER_FILES: readonly string[] = ["plugins-ui/plugin-module.ts"]
 
-/** Check production sources for forbidden core-boundary dependencies. */
+/** Find the parsed source of `file`. Return `undefined` when no project has it. */
+export type SourceFileLookup = (file: string) => SourceFile | undefined
+
+/** Check every file under `root` for forbidden core-boundary dependencies. */
 export async function checkCoreBoundary(
-  project: Project,
+  lookup: SourceFileLookup,
   root: string,
 ): Promise<CoreBoundaryViolation[]> {
-  const files = new Set((await productionTypeScriptFiles(root)).map((file) => resolve(file)))
+  const files = (await boundaryTypeScriptFiles(root)).map((file) => resolve(file))
   const violations: CoreBoundaryViolation[] = []
   for (const file of files) {
-    const sourceFile = project.program.getSourceFile(file)
-    if (!sourceFile) throw new Error(`TypeScript project does not include production file: ${file}`)
+    const sourceFile = lookup(file)
+    if (!sourceFile) throw new Error(`TypeScript does not include file: ${file}`)
     const exempt = PLUGIN_CODE_LOADER_FILES.includes(relative(root, file).replaceAll("\\", "/"))
     for (const v of inspectSourceFile(sourceFile)) {
       if (exempt && v.rule === "computed-loader") continue
@@ -258,18 +265,41 @@ async function closeApi(api: API): Promise<void> {
   api.close()
 }
 
+/** Read every value that follows `flag` in `argv`. */
+function flagValues(argv: readonly string[], flag: string): string[] {
+  const values: string[] = []
+  argv.forEach((arg, index) => {
+    const value = argv[index + 1]
+    if (arg === flag && value !== undefined) values.push(value)
+  })
+  return values
+}
+
+/**
+ * The roots the boundary scans when no `--root` is given. `src` holds the
+ * production code, the bin (`src/index.ts`), and the tests. `scripts` is
+ * outside the TypeScript project, so its files load as open files.
+ */
+const DEFAULT_ROOTS = ["src", "scripts"]
+
 async function main(argv: readonly string[]): Promise<number> {
-  const rootArg = argv[argv.indexOf("--root") + 1] ?? "src"
-  const configArg = argv[argv.indexOf("--config") + 1] ?? "tsconfig.json"
-  const root = resolve(rootArg)
-  const config = resolve(configArg)
+  const rootArgs = flagValues(argv, "--root")
+  const roots = (rootArgs.length > 0 ? rootArgs : DEFAULT_ROOTS)
+    .map((root) => resolve(root))
+    .filter((root) => existsSync(root))
+  const config = resolve(flagValues(argv, "--config")[0] ?? "tsconfig.json")
+  const files = (await Promise.all(roots.map(boundaryTypeScriptFiles))).flat()
   const api = new API()
   try {
-    const snapshot = api.updateSnapshot({ openProjects: [config] })
+    const snapshot = api.updateSnapshot({ openProjects: [config], openFiles: files })
     try {
       const project = snapshot.getProject(config)
       if (!project) throw new Error(`TypeScript could not open project: ${config}`)
-      const violations = await checkCoreBoundary(project, root)
+      const lookup: SourceFileLookup = (file) =>
+        project.program.getSourceFile(file) ??
+        snapshot.getDefaultProjectForFile(file)?.program.getSourceFile(file)
+      const violations: CoreBoundaryViolation[] = []
+      for (const root of roots) violations.push(...(await checkCoreBoundary(lookup, root)))
       for (const violation of violations) {
         const file = isAbsolute(violation.file)
           ? relative(process.cwd(), violation.file)

@@ -23,8 +23,8 @@ import { buildAgentCore } from "@minimal-agent/core/host-kit/build-agent-core"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import type { AgentEvent, EventSink } from "@minimal-agent/core/sdk/events"
 import type {
-  TestSendOptions as SendOptions,
-  TestStreamedResponse as StreamedResponse,
+  TestSendParams as SendOptions,
+  TestSendResult as StreamedResponse,
 } from "../test-utils/transport-types.ts"
 
 const AUTH: AuthResult = { type: "api-key", token: "test-token" }

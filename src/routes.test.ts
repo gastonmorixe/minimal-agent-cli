@@ -40,8 +40,8 @@ import {
 } from "./startup/run-non-interactive.ts"
 import { resetStreamJsonWriterForTests } from "./startup/stream-json-writer.ts"
 import type {
-  TestSendOptions as SendOptions,
-  TestStreamedResponse as StreamedResponse,
+  TestSendParams as SendOptions,
+  TestSendResult as StreamedResponse,
 } from "./test-utils/transport-types.ts"
 
 const AUTH: AuthResult = { type: "api-key", token: "test-token" }

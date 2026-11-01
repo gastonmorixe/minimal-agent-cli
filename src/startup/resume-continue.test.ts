@@ -21,8 +21,8 @@ import type { BuildAgentCoreDeps } from "@minimal-agent/core/host-kit/build-agen
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
 import { InteractiveSession } from "../interactive-session.ts"
 import type {
-  TestSendOptions as SendOptions,
-  TestStreamedResponse as StreamedResponse,
+  TestSendParams as SendOptions,
+  TestSendResult as StreamedResponse,
 } from "../test-utils/transport-types.ts"
 
 const CLI_ROOT = join(import.meta.dir, "..", "..")

@@ -5,7 +5,7 @@ import { join } from "node:path"
 
 import { importPluginModule } from "../plugins-ui/plugin-module.ts"
 
-import { PLUGIN_CODE_LOADER_FILES, productionTypeScriptFiles } from "./core-boundary.ts"
+import { boundaryTypeScriptFiles, PLUGIN_CODE_LOADER_FILES } from "./core-boundary.ts"
 import { CORE_PUBLIC_CONTRACT } from "./core-public-contract.ts"
 import {
   architectureNodeExecutable,
@@ -33,10 +33,14 @@ afterAll(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-async function inspect(source: string): Promise<{ exitCode: number; output: string }> {
+async function inspect(
+  source: string,
+  extraRoots: readonly string[] = [],
+): Promise<{ exitCode: number; output: string }> {
   await writeFile(join(directory, "src", "subject.ts"), source)
+  const roots = [join(directory, "src"), ...extraRoots].flatMap((root) => ["--root", root])
   const process = Bun.spawn(
-    [node, checker, "--root", join(directory, "src"), "--config", join(directory, "tsconfig.json")],
+    [node, checker, ...roots, "--config", join(directory, "tsconfig.json")],
     { stdout: "pipe", stderr: "pipe" },
   )
   const [exitCode, stdout, stderr] = await Promise.all([
@@ -159,16 +163,62 @@ describe("CLI core architecture boundary", () => {
     expect(result).toEqual({ exitCode: 0, output: "" })
   })
 
-  test("enumerates production TypeScript only", async () => {
-    await writeFile(join(directory, "src", "ignored.test.ts"), "export {}")
-    expect(
-      (await productionTypeScriptFiles(join(directory, "src"))).map((file) =>
-        file.split("/").at(-1),
-      ),
-    ).toEqual(["subject.ts"])
+  test("rejects a deep core import inside a test file (S3 negative control)", async () => {
+    const testFile = join(directory, "src", "deep.test.ts")
+    await writeFile(testFile, 'import { x } from "@minimal-agent/core/src/x.ts"\nexport { x }\n')
+    try {
+      const result = await inspect("export {}")
+      expect(result.exitCode).toBe(1)
+      expect(result.output).toContain("deep.test.ts:1:1 core-source-import")
+    } finally {
+      await rm(testFile)
+    }
   })
 
-  test("skips dependency, generated, build, vendor, fixture, and hidden trees", async () => {
+  test("rejects a deep core import inside a fixture file", async () => {
+    const fixtures = join(directory, "src", "fixtures")
+    await mkdir(fixtures, { recursive: true })
+    await writeFile(join(fixtures, "child.ts"), 'import "minimal-agent-core/src/runtime.ts"\n')
+    try {
+      const result = await inspect("export {}")
+      expect(result.exitCode).toBe(1)
+      expect(result.output).toContain("child.ts:1:1 core-source-import")
+    } finally {
+      await rm(fixtures, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects a deep core import in a root outside the TypeScript project", async () => {
+    const scripts = join(directory, "scripts")
+    await mkdir(scripts, { recursive: true })
+    await writeFile(join(scripts, "tool.ts"), 'import "@minimal-agent/core/src/x.ts"\n')
+    try {
+      const result = await inspect("export {}", [scripts])
+      expect(result.exitCode).toBe(1)
+      expect(result.output).toContain("tool.ts:1:1 core-source-import")
+    } finally {
+      await rm(scripts, { recursive: true, force: true })
+    }
+  })
+
+  test("enumerates production, test, and fixture TypeScript", async () => {
+    const fixtures = join(directory, "src", "fixtures")
+    await mkdir(fixtures, { recursive: true })
+    await writeFile(join(fixtures, "child.ts"), "export {}")
+    await writeFile(join(directory, "src", "included.test.ts"), "export {}")
+    try {
+      expect(
+        (await boundaryTypeScriptFiles(join(directory, "src"))).map((file) =>
+          file.slice(join(directory, "src").length + 1),
+        ),
+      ).toEqual(["fixtures/child.ts", "included.test.ts", "subject.ts"])
+    } finally {
+      await rm(fixtures, { recursive: true, force: true })
+      await rm(join(directory, "src", "included.test.ts"))
+    }
+  })
+
+  test("skips dependency, generated, build, vendor, and hidden trees", async () => {
     const skippedDirectories = [
       "node_modules",
       ".cache",
@@ -177,9 +227,6 @@ describe("CLI core architecture boundary", () => {
       "coverage",
       "generated",
       "vendor",
-      "fixture",
-      "fixtures",
-      "__fixtures__",
     ]
     await Promise.all(
       skippedDirectories.map(async (name) => {
@@ -193,7 +240,7 @@ describe("CLI core architecture boundary", () => {
     await writeFile(join(production, "included.ts"), "export {}")
 
     expect(
-      (await productionTypeScriptFiles(join(directory, "src"))).map((file) =>
+      (await boundaryTypeScriptFiles(join(directory, "src"))).map((file) =>
         file.slice(join(directory, "src").length + 1),
       ),
     ).toEqual(["feature/included.ts", "subject.ts"])
@@ -217,7 +264,7 @@ describe("CLI core architecture boundary", () => {
     )
   })
 
-  test("current production sources satisfy the boundary", async () => {
+  test("current sources, tests, and scripts satisfy the boundary", async () => {
     const process = Bun.spawn([node, checker], {
       cwd: join(import.meta.dir, "..", ".."),
       stderr: "pipe",
@@ -230,7 +277,7 @@ describe("CLI core architecture boundary", () => {
   })
 
   test("publishes the exported machine-readable contract without invented names", () => {
-    expect(CORE_PUBLIC_CONTRACT.status).toBe("exported")
+    expect(CORE_PUBLIC_CONTRACT.exportState).toBe("exported")
     expect(CORE_PUBLIC_CONTRACT.resolvableFromCurrentCorePackage).toBeTrue()
     expect(CORE_PUBLIC_CONTRACT.packages).toEqual(["@minimal-agent/core"])
     expect(CORE_PUBLIC_CONTRACT.coreSubpaths).toContain("./plugin-api")
@@ -244,6 +291,10 @@ describe("CLI core architecture boundary", () => {
       "SessionOptions",
     ])
     expect(CORE_PUBLIC_CONTRACT.completion).toEqual(["TurnResult"])
+    expect(CORE_PUBLIC_CONTRACT.coreSubpaths).toContain("./host/diagnostics")
+    expect(CORE_PUBLIC_CONTRACT.coreSubpaths).toContain("./host/status-bus")
+    expect(CORE_PUBLIC_CONTRACT.diagnostics).toContain("DiagnosticBus")
+    expect(CORE_PUBLIC_CONTRACT.status).toContain("StatusBus")
     expect(CORE_PUBLIC_CONTRACT).not.toHaveProperty("blockedUntilProgram2")
     expect(JSON.stringify(CORE_PUBLIC_CONTRACT)).not.toMatch(
       /createAgentRuntime|AgentRequest|SessionPort|PluginPort/,

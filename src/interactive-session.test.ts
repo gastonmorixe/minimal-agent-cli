@@ -30,8 +30,8 @@ import {
   TranscriptRouter,
 } from "./interactive-session.ts"
 import type {
-  TestSendOptions as SendOptions,
-  TestStreamedResponse as StreamedResponse,
+  TestSendParams as SendOptions,
+  TestSendResult as StreamedResponse,
 } from "./test-utils/transport-types.ts"
 
 function fakeModel(id: string): ModelEntry {
