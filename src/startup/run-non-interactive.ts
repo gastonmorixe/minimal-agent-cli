@@ -43,7 +43,7 @@
  *
  * The `Session` is built by an INJECTED factory, not constructed here: the
  * host (index.ts) closes over its collaborators and calls the
- * `openAgentCoreSession(deps)` seam (core `src/adapters/build-agent-core.ts`)
+ * `openAgentCoreSession(deps)` seam (core `src/loops/assemble.ts`)
  * — the same host collaborators `buildAgentCore` wires, handed to
  * `createRuntime().openSession(...)` instead of `new AgentCore(...)`. That
  * keeps this file free of the core `src/adapters/` lane and lets `json`/
@@ -222,7 +222,7 @@ export interface RunNonInteractivePromptInput {
   /**
    * Injected `Session` factory for the structured event-stream path. The host
    * closes over its collaborators and calls the `openAgentCoreSession(deps)`
-   * seam (core `src/adapters/build-agent-core.ts`) — the same host
+   * seam (core `src/loops/assemble.ts`) — the same host
    * collaborators `buildAgentCore` wires, over `createRuntime().openSession`
    * instead of `new AgentCore(...)`. Absent until the entry point wires it,
    * in which case `json`/`stream-json` fall back to the legacy path so
