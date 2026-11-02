@@ -3,41 +3,26 @@
  * point.
  *
  * Split out of `src/index.ts` to keep that file under the `max-lines`
- * lint budget. Pure presentation + read-only fs, no startup state.
+ * lint budget. Pure presentation, no startup state.
  *
  * @module startup/help
  */
 
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
-
 import { AGENT_VERSION } from "@minimal-agent/core/host/build-info"
+import pkg from "../../package.json" with { type: "json" }
 import { type CommandOutput, writeCommandRows } from "../ui/command-output.ts"
 import { type HelpSection, renderHelpSections } from "../ui/help/render.ts"
 import { c } from "../ui/style/ansi.ts"
 
 /**
- * Read the agent's semver from the embedded `<repo>/package.json` next
- * to the source tree. Returns `"0.0.0"` on any failure (missing file,
- * malformed JSON, missing `version` field) so the AgentContext factory
- * never throws on a dev tree with a broken manifest. Called once at boot.
+ * The CLI's semver from its own `package.json`, or `"0.0.0"` when the
+ * field is missing. The manifest is a static JSON import, not a file read:
+ * Bun inlines it at build time, so a `bun build --compile` binary (which has
+ * no `package.json` on disk) reports the same version as a run from source.
  */
-export function readEmbeddedPackageVersion(embeddedDir: string): string {
-  try {
-    const raw = readFileSync(join(embeddedDir, "package.json"), "utf8")
-    const parsed: unknown = JSON.parse(raw)
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      "version" in parsed &&
-      typeof (parsed as { version: unknown }).version === "string"
-    ) {
-      return (parsed as { version: string }).version
-    }
-  } catch {
-    // Best-effort. Fall through to default below.
-  }
-  return "0.0.0"
+export function readEmbeddedPackageVersion(): string {
+  const version: unknown = (pkg as { version?: unknown }).version
+  return typeof version === "string" ? version : "0.0.0"
 }
 
 /** Render the full `--help` usage text without writing to stdout. */
