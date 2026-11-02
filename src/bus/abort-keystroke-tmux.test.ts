@@ -51,7 +51,10 @@ function pasteBytes(session: string, bytes: string): void {
   // `tmux load-buffer -` reads from stdin. We pipe the raw bytes in.
   const load = spawnSync("tmux", ["load-buffer", "-"], { input: bytes })
   expect(load.status).toBe(0)
-  const paste = spawnSync("tmux", ["paste-buffer", "-t", session])
+  // tmux >= 3.7 passes pasted bytes through vis(3), so ESC arrives as the
+  // text "^[". `-S` turns that off. Older tmux rejects `-S`, so fall back.
+  let paste = spawnSync("tmux", ["paste-buffer", "-S", "-t", session])
+  if (paste.status !== 0) paste = spawnSync("tmux", ["paste-buffer", "-t", session])
   expect(paste.status).toBe(0)
 }
 
