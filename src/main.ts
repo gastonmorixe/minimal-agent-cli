@@ -541,13 +541,6 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // provider resolution) — because the LLM providers now ship IN the cloned
   // plugins repo, so they must exist before auth/sign-in. See both blocks above.
 
-  // Embedded plugins ship inside the agent's own checkout: `<repo>/plugins/`.
-  // `import.meta.dirname` (Bun + Node 20+) of this file is `<repo>/src`, so
-  // climb one level. This makes ask-mode/diff-view/env-info/memory work
-  // regardless of the user's cwd, not just when cwd === <repo>.
-  const thisFileDir = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url))
-  const embeddedDir = dirname(thisFileDir)
-
   // Construct the single AgentContext shared across every plugin
   // dispatch path (tool handlers, prompt fragments, event subs, hook
   // subs, live-area slots, plus their subprocess counterparts). The
@@ -558,11 +551,11 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   //   - sessionId : metadata.getSessionId() (cached UUIDv4)
   //   - pid       : process.pid (Bun process)
   //   - model     : selectedModel (resolved above by resolveModelId)
-  //   - version   : <embeddedDir>/package.json#version, "0.0.0" if missing
+  //   - version   : the CLI package.json version (static import)
   //
   // The object is frozen by createAgentContext, so it can be passed
   // around without defensive copies.
-  const agentVersion = readEmbeddedPackageVersion(embeddedDir)
+  const agentVersion = readEmbeddedPackageVersion()
   // Values for the stream-json session_started line. No auth, token,
   // credential name, or env values go here. A forked `--resume` adds
   // `resumedFrom` below, once the source session id is resolved.
