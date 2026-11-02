@@ -259,3 +259,152 @@ export function formatRelative(ms: number): string {
   const remHr = hr % 24
   return remHr > 0 ? `${day}d ${remHr}h` : `${day}d`
 }
+
+/**
+ * Plan view for one credential. Mirrors core's plugin-api `AccountPlanInfo`
+ * field for field. Declared here because the pinned core predates that type;
+ * switch to the core import when the pin moves past it.
+ */
+export interface AccountPlanInfo {
+  readonly accountId?: string
+  readonly email?: string
+  readonly organizationId?: string
+  readonly organizationName?: string
+  readonly role?: string
+  readonly plan?: string
+  readonly hasPlan?: boolean
+  readonly windows?: readonly { id: string; utilization: number; resetAtMs?: number }[]
+  readonly overage?: { enabled: boolean; reason?: string }
+  readonly details?: readonly { key: string; label: string; value: string }[]
+}
+
+/**
+ * One credential row for `auth-status plan`. `plan` is set on success,
+ * `error` on failure, and neither when the provider has no plan hook or
+ * the credential kind cannot be inspected (`skipped`).
+ */
+export interface AuthPlanRowView {
+  readonly providerId: string
+  readonly credentialName: string
+  readonly kind: "oauth" | "api-key"
+  readonly plan?: AccountPlanInfo
+  readonly error?: string
+  readonly skipped?: string
+  /** Other credential names that share this account and organization. */
+  readonly sameAccountAs?: readonly string[]
+}
+
+function percent(utilization: number): string {
+  return `${Math.round(utilization * 100)}%`
+}
+
+function resetIn(resetAtMs: number | undefined, now: number): string {
+  if (resetAtMs === undefined) return ""
+  const delta = resetAtMs - now
+  return delta > 0 ? `resets in ${formatRelative(delta)}` : "reset due"
+}
+
+function colorUse(utilization: number, text: string): string {
+  if (utilization >= 0.9) return c.red(text)
+  if (utilization >= 0.7) return c.yellow(text)
+  return c.green(text)
+}
+
+function planHeadline(plan: AccountPlanInfo): string {
+  const label = safeText(plan.plan ?? "unknown plan")
+  if (plan.hasPlan === true) return c.green(label)
+  if (plan.hasPlan === false) return c.red(label)
+  return label
+}
+
+function planIdentity(plan: AccountPlanInfo): string {
+  const org = plan.organizationName ?? plan.organizationId
+  const parts = [plan.email, org ? `@ ${org}` : undefined, plan.role ? `(${plan.role})` : undefined]
+  return safeText(parts.filter((v): v is string => Boolean(v)).join(" "))
+}
+
+function planWindows(plan: AccountPlanInfo, now: number): string {
+  return (plan.windows ?? [])
+    .map((w) => {
+      const reset = resetIn(w.resetAtMs, now)
+      const use = colorUse(w.utilization, percent(w.utilization))
+      return `${safeText(w.id)} ${use}${reset ? ` ${c.dim(reset)}` : ""}`
+    })
+    .join(c.dim(" · "))
+}
+
+function planOverage(plan: AccountPlanInfo): string {
+  if (!plan.overage) return ""
+  if (plan.overage.enabled) return "on"
+  return plan.overage.reason ? `off (${safeText(plan.overage.reason)})` : "off"
+}
+
+/** Render `auth-status plan` human rows. */
+export function renderAuthPlanRows(rows: readonly AuthPlanRowView[], now: number): string[] {
+  if (rows.length === 0) return ["", "  no stored credentials"]
+  const out: string[] = [""]
+  for (const r of rows) {
+    const name = c.bold(safeText(r.credentialName))
+    const provider = c.sky(`(${safeText(r.providerId)})`)
+    if (r.error) {
+      out.push(`  ${name} ${provider} ${c.red("error")} ${c.dim(safeText(r.error))}`)
+      continue
+    }
+    if (!r.plan) {
+      out.push(`  ${name} ${provider} ${c.dim(safeText(r.skipped ?? "no plan info"))}`)
+      continue
+    }
+    out.push(`  ${name} ${provider} ${planHeadline(r.plan)}`)
+    const identity = planIdentity(r.plan)
+    if (identity) out.push(`    ${identity}`)
+    const windows = planWindows(r.plan, now)
+    if (windows) out.push(`    ${windows}`)
+    const overage = planOverage(r.plan)
+    if (overage) out.push(`    ${c.dim("overage")} ${overage}`)
+    for (const d of r.plan.details ?? []) {
+      out.push(`    ${c.dim(safeText(d.label))} ${safeText(d.value)}`)
+    }
+    if (r.sameAccountAs && r.sameAccountAs.length > 0) {
+      out.push(
+        `    ${c.yellow("shares quota with")} ${r.sameAccountAs.map((n) => safeText(n)).join(", ")}`,
+      )
+    }
+  }
+  return out
+}
+
+/**
+ * Render `auth-status plan --table` as a Markdown pipe table. Plain text, no
+ * ANSI. Columns: provider, credential, plan, seat, account, role, usage,
+ * overage, note.
+ */
+export function renderAuthPlanMarkdown(rows: readonly AuthPlanRowView[], now: number): string[] {
+  const out = [
+    "| provider | credential | plan | seat | account | role | usage | overage | note |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  ]
+  for (const r of rows) {
+    const p = r.plan
+    const seat = p?.hasPlan === true ? "yes" : p?.hasPlan === false ? "no" : ""
+    const account = p
+      ? [p.email, p.organizationName ?? p.organizationId].filter(Boolean).join(" @ ")
+      : ""
+    const usage = (p?.windows ?? [])
+      .map((w) => {
+        const reset = resetIn(w.resetAtMs, now)
+        return `${w.id} ${percent(w.utilization)}${reset ? ` (${reset})` : ""}`
+      })
+      .join("; ")
+    const note = [
+      r.error ? `error: ${r.error}` : "",
+      r.skipped ?? "",
+      r.sameAccountAs?.length ? `shares quota with ${r.sameAccountAs.join(", ")}` : "",
+    ]
+      .filter((v) => v.length > 0)
+      .join("; ")
+    out.push(
+      `| ${markdownCell(r.providerId)} | ${markdownCell(r.credentialName)} | ${markdownCell(p?.plan ?? "")} | ${seat} | ${markdownCell(account)} | ${markdownCell(p?.role ?? "")} | ${markdownCell(usage)} | ${markdownCell(p ? planOverage(p) : "")} | ${markdownCell(note)} |`,
+    )
+  }
+  return out
+}

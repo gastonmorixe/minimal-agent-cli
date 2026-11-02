@@ -303,6 +303,10 @@ function buildHelpSections(): HelpSection[] {
           "Refresh all stored OAuth credentials (max 8)",
         ),
         row(
+          `${c.cyan("auth-status")} ${c.cyan("plan")} ${c.dim("[<credential>] [--all] [--table] [--parallel <n>]")}`,
+          "Show plan, seat, role, and usage limits (spends no quota)",
+        ),
+        row(
           `${c.cyan("auth-status")} ${c.cyan("prune")} ${c.dim("--dry-run|--force [--table] [--parallel <n>]")}`,
           "Delete stored credentials the server rejects (dry run lists only)",
         ),

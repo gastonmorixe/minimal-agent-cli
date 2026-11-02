@@ -20,6 +20,7 @@ import type { CommandPlan } from "../cli/command-plan.ts"
 import type { PrintFormat } from "../cli/print-format.ts"
 import {
   runAuthStatusCommand,
+  runAuthStatusPlanCommand,
   runAuthStatusPruneCommand,
   runAuthStatusRefreshAllCommand,
   runAuthStatusRefreshCommand,
@@ -168,6 +169,21 @@ export async function runStartupSubcommand(ctx: SubcommandContext): Promise<bool
           dryRun: args.includes("--dry-run") ? true : undefined,
           force: args.includes("--force") ? true : undefined,
           table: table ? true : undefined,
+          parallel: Number.isFinite(parsed) ? parsed : 4,
+        })
+        process.exit(code)
+      }
+      if (args.includes("plan")) {
+        const positionals = args.filter(
+          (a) => !a.startsWith("-") && a !== "auth-status" && a !== "plan",
+        )
+        const parallelRaw = readFlagValue("--parallel")
+        const parsed = parallelRaw ? Number.parseInt(parallelRaw, 10) : 4
+        const credential = positionals[0] ?? readFlagValue("--name")
+        const code = await runAuthStatusPlanCommand({
+          ...(credential ? { credential } : {}),
+          table: table ? true : undefined,
+          all: args.includes("--all") ? true : undefined,
           parallel: Number.isFinite(parsed) ? parsed : 4,
         })
         process.exit(code)
