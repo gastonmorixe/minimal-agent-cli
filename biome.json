@@ -2,7 +2,14 @@
   "$schema": "https://biomejs.dev/schemas/2.5.3/schema.json",
   "files": {
     "ignoreUnknown": true,
-    "includes": ["src/**", "package.json", "tsconfig.json", "biome.json", ".oxlintrc.json"]
+    "includes": [
+      "src/**",
+      "scripts/compile.ts",
+      "package.json",
+      "tsconfig.json",
+      "biome.json",
+      ".oxlintrc.json"
+    ]
   },
   "formatter": {
     "enabled": true,
