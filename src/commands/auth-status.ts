@@ -20,6 +20,10 @@ import {
 import { findProviderPlugin } from "@minimal-agent/core/host/provider-plugin"
 import type { ProviderAuth } from "@minimal-agent/core/sdk/provider"
 import {
+  type AccountPlanInfo,
+  type AuthPlanRowView,
+  renderAuthPlanMarkdown,
+  renderAuthPlanRows,
   renderAuthPruneMarkdown,
   renderAuthPruneRows,
   renderAuthStatusMarkdown,
@@ -457,4 +461,200 @@ export async function runAuthStatusRefreshAllCommand(
     if (line.includes(": failed")) failures += 1
   }
   return failures === 0 ? 0 : 1
+}
+
+export interface AuthStatusPlanDeps extends AuthStatusDeps {
+  /** Only this credential (name, label, or provider id). Absent means all. */
+  credential?: string
+  /** Max parallel lookups (default 4, max 8). */
+  parallel?: number
+  /** Keep rows for credentials with no plan lookup (hidden by default). */
+  all?: boolean
+  /**
+   * Plan lookup (tests). Defaults to the provider plugin's
+   * `fetchAccountPlan` hook with a 15s timeout. Resolve `undefined` when the
+   * provider has no hook, `null` when it cannot inspect this credential.
+   */
+  fetchPlan?: (
+    providerId: string,
+    auth: ProviderAuth,
+  ) => Promise<AccountPlanInfo | null | undefined>
+  /**
+   * Whether a provider has a plan lookup (tests). Checked before any token
+   * refresh so credentials of other providers are never touched. Defaults to
+   * the plugin hook check.
+   */
+  supportsPlan?: (providerId: string) => boolean
+}
+
+const PLAN_TIMEOUT_MS = 15_000
+
+/**
+ * The optional `ProviderPlugin.fetchAccountPlan` hook, read structurally.
+ * The pinned core's `ProviderPlugin` type predates the hook, so the host
+ * checks for it at runtime instead of through the type.
+ */
+type PlanHook = (
+  auth: ProviderAuth,
+  ctx?: { signal?: AbortSignal },
+) => Promise<AccountPlanInfo | null>
+
+function planHook(providerId: string): PlanHook | undefined {
+  const plugin = findProviderPlugin(providerId) as { fetchAccountPlan?: unknown } | undefined
+  const hook = plugin?.fetchAccountPlan
+  return typeof hook === "function" ? (hook.bind(plugin) as PlanHook) : undefined
+}
+
+/** Default plan lookup through the provider plugin's optional hook. */
+async function defaultFetchPlan(
+  providerId: string,
+  auth: ProviderAuth,
+): Promise<AccountPlanInfo | null | undefined> {
+  const hook = planHook(providerId)
+  if (!hook) return undefined
+  return hook(auth, { signal: AbortSignal.timeout(PLAN_TIMEOUT_MS) })
+}
+
+/** Error text for a plan row. A rejected refresh token gets a login hint. */
+function planError(err: unknown, providerId: string, credentialName: string): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  if (msg.includes("invalid_grant")) {
+    return `refresh token rejected. Run \`provider ${providerId} login --name ${credentialName}\``
+  }
+  if (err instanceof Error && err.name === "TimeoutError") return "timed out after 15s"
+  return shortReason(err)
+}
+
+/**
+ * Mark rows whose plan reports the same account and organization. Those
+ * credentials draw on one quota, so using both does not add capacity.
+ */
+function markSharedAccounts(rows: AuthPlanRowView[]): AuthPlanRowView[] {
+  const groups = new Map<string, string[]>()
+  for (const r of rows) {
+    const key = accountKey(r)
+    if (!key) continue
+    const list = groups.get(key)
+    if (list) list.push(r.credentialName)
+    else groups.set(key, [r.credentialName])
+  }
+  return rows.map((r) => {
+    const key = accountKey(r)
+    const peers = key ? (groups.get(key) ?? []).filter((n) => n !== r.credentialName) : []
+    return peers.length > 0 ? { ...r, sameAccountAs: peers } : r
+  })
+}
+
+function accountKey(r: AuthPlanRowView): string | undefined {
+  const p = r.plan
+  if (!p?.accountId || !p.organizationId) return undefined
+  return `${r.providerId}\u0000${p.accountId}\u0000${p.organizationId}`
+}
+
+/**
+ * Show plan, seat, role, and usage windows for stored credentials. Calls
+ * provider account endpoints only, never a model, so it spends no quota.
+ * Never prints tokens. Returns 0 when every lookup succeeds or is skipped,
+ * 1 when a lookup fails or the named credential is missing.
+ */
+export async function runAuthStatusPlanCommand(deps: AuthStatusPlanDeps = {}): Promise<number> {
+  const out = deps.output ?? { write: (s: string) => process.stderr.write(s) }
+  const now = deps.now ? deps.now() : Date.now()
+  const discover = deps.discover ?? discoverCredentialedProviders
+  const resolveAuth =
+    deps.resolveAuth ??
+    ((providerId: string, credentialName?: string) =>
+      tryResolveProviderAuth(providerId, "", credentialName))
+  const fetchPlan = deps.fetchPlan ?? defaultFetchPlan
+  const supportsPlan =
+    deps.supportsPlan ??
+    (deps.fetchPlan ? () => true : (providerId: string) => planHook(providerId) !== undefined)
+
+  let entries = discover()
+  if (deps.credential) {
+    entries = resolveRefreshTarget(entries, deps.credential)
+    if (entries.length === 0) {
+      out.write(`no stored credential "${deps.credential}"\n`)
+      return 1
+    }
+  }
+
+  const limit = Math.min(8, Math.max(1, Math.floor(deps.parallel ?? 4)))
+  const rows: AuthPlanRowView[] = new Array(entries.length)
+  let cursor = 0
+  async function worker(): Promise<void> {
+    while (cursor < entries.length) {
+      const index = cursor
+      cursor += 1
+      const entry = entries[index] as CredentialedProvider
+      const credentialName = entry.credentialName ?? entry.credentialLabel ?? entry.providerId
+      const base = { providerId: entry.providerId, credentialName, kind: entry.authKind }
+      if (!supportsPlan(entry.providerId)) {
+        rows[index] = { ...base, skipped: "provider has no plan lookup" }
+        continue
+      }
+      let auth = resolveAuth(entry.providerId, entry.credentialName)
+      if (!auth) {
+        rows[index] = { ...base, skipped: "credential unreadable" }
+        continue
+      }
+      try {
+        // Refresh an expired OAuth token first, the same way the request
+        // path does. The refreshed token is written back to the store.
+        const expiresAt = entry.credentialInfo?.expiresAt
+        const expired =
+          typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt - now < 60_000
+        if (expired && auth.kind === "oauth" && typeof auth.refresh === "function") {
+          await auth.refresh()
+          auth = resolveAuth(entry.providerId, entry.credentialName) ?? auth
+        }
+        let plan: AccountPlanInfo | null | undefined
+        try {
+          plan = await fetchPlan(entry.providerId, auth)
+        } catch (err) {
+          // One retry after a refresh when the server rejects the token.
+          if (
+            !/\b401\b/.test(shortReason(err)) ||
+            auth.kind !== "oauth" ||
+            typeof auth.refresh !== "function"
+          ) {
+            throw err
+          }
+          await auth.refresh()
+          auth = resolveAuth(entry.providerId, entry.credentialName) ?? auth
+          plan = await fetchPlan(entry.providerId, auth)
+        }
+        if (plan === undefined) rows[index] = { ...base, skipped: "provider has no plan lookup" }
+        else if (plan === null)
+          rows[index] = { ...base, skipped: `no plan lookup for ${auth.kind}` }
+        else rows[index] = { ...base, plan }
+      } catch (err) {
+        rows[index] = { ...base, error: planError(err, entry.providerId, credentialName) }
+      }
+    }
+  }
+  const pool: Promise<void>[] = []
+  for (let i = 0; i < Math.min(limit, Math.max(1, entries.length)); i += 1) pool.push(worker())
+  await Promise.allSettled(pool)
+
+  const finished = markSharedAccounts(
+    rows.map(
+      (r, i) =>
+        r ?? {
+          providerId: (entries[i] as CredentialedProvider).providerId,
+          credentialName: (entries[i] as CredentialedProvider).credentialName ?? "?",
+          kind: (entries[i] as CredentialedProvider).authKind,
+          error: "lookup failed",
+        },
+    ),
+  )
+  // Skipped rows are noise in a full listing (every API key of a provider
+  // with no account endpoint). Keep them when asked, or when one credential
+  // was named so the user sees why nothing came back.
+  const shown = deps.all === true || deps.credential ? finished : finished.filter((r) => !r.skipped)
+  writeCommandRows(
+    deps.table ? renderAuthPlanMarkdown(shown, now) : renderAuthPlanRows(shown, now),
+    out,
+  )
+  return finished.some((r) => r.error) ? 1 : 0
 }
