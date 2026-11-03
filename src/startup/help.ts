@@ -34,15 +34,15 @@ export function renderHelp(): string[] {
     `  ${c.faintWhite(c.italic("github.com/gastonmorixe/minimal-agent"))}`,
     "",
     `  ${c.bold("Start here")}`,
-    `    ${c.dim("$")} minimal-agent                                      ${c.dim("interactive REPL")}`,
-    `    ${c.dim("$")} minimal-agent ${c.cyan('"explain this codebase"')}       ${c.dim("one prompt, then exit")}`,
+    `    ${c.dim("$")} minimal-agent                             ${c.dim("interactive REPL")}`,
+    `    ${c.dim("$")} minimal-agent ${c.cyan('"explain this codebase"')}     ${c.dim("one prompt, then exit")}`,
     `    ${c.dim("$")} echo ${c.cyan('"summarize stdin"')} | minimal-agent ${c.cyan("-")}  ${c.dim("read a prompt from stdin")}`,
     "",
     `  ${c.bold("Command map")}`,
     `    ${c.cyan("providers")} ${c.dim("·")} ${c.cyan("providers models")} ${c.dim("·")} ${c.cyan("providers models-live")}  ${c.dim("discover models and providers")}`,
-    `    ${c.cyan("sessions")} ${c.dim("·")} ${c.cyan("sessions dump")} ${c.dim("·")} ${c.cyan("resume")} ${c.dim("·")} ${c.cyan("usage")}                    ${c.dim("inspect or continue past work")}`,
-    `    ${c.cyan("provider <id> login")} ${c.dim("·")} ${c.cyan("logout")} ${c.dim("·")} ${c.cyan("auth-status")}       ${c.dim("manage provider credentials")}`,
-    `    ${c.cyan("plugins")} ${c.dim("·")} ${c.cyan("flags")} ${c.dim("·")} ${c.cyan("spinners")} ${c.dim("·")} ${c.cyan("help")}                         ${c.dim("inspect the local installation")}`,
+    `    ${c.cyan("sessions")} ${c.dim("·")} ${c.cyan("sessions dump")} ${c.dim("·")} ${c.cyan("resume")} ${c.dim("·")} ${c.cyan("usage")}             ${c.dim("inspect or continue past work")}`,
+    `    ${c.cyan("provider <id> login")} ${c.dim("·")} ${c.cyan("logout")} ${c.dim("·")} ${c.cyan("auth-status")}            ${c.dim("manage provider credentials")}`,
+    `    ${c.cyan("plugins")} ${c.dim("·")} ${c.cyan("flags")} ${c.dim("·")} ${c.cyan("spinners")} ${c.dim("·")} ${c.cyan("help")}                     ${c.dim("inspect the local installation")}`,
     "",
     `  ${c.dim("Every command also accepts --help. Flags win over a positional prompt.")}`,
     "",
@@ -142,10 +142,8 @@ function buildHelpSections(): HelpSection[] {
           "Constrain the final answer to a JSON Schema",
           [
             "run exits non-zero if the answer is absent or non-conforming",
-            "enforces a SUBSET: type, required, properties,",
-            "additionalProperties, items, enum (deep-equal)",
-            "accepted but NOT enforced: minimum/maxLength/pattern/",
-            "anyOf/oneOf/allOf/not/$ref/format/const, don't rely on them",
+            "enforces a SUBSET: type, required, properties, additionalProperties, items, enum (deep-equal)",
+            "accepted but NOT enforced: minimum/maxLength/pattern/anyOf/oneOf/allOf/not/$ref/format/const, don't rely on them",
           ],
         ),
         row(`${c.cyan("--mode")} ${c.dim("<id|none>")}`, "Initial mode", [
@@ -300,11 +298,9 @@ function buildHelpSections(): HelpSection[] {
           `${c.cyan("--email")}, ${c.cyan("--email-hint")} ${c.dim("<address>")}`,
           "Pre-fill login email",
         ),
-        row(
-          `${c.cyan("--name")} ${c.dim("<label>")}`,
-          "Label a credential during login (e.g. Work or Personal)",
-          ["e.g. --name work-account"],
-        ),
+        row(`${c.cyan("--name")} ${c.dim("<label>")}`, "Label a credential during login", [
+          "e.g. --name work-account",
+        ]),
       ],
     },
     {
@@ -317,17 +313,20 @@ function buildHelpSections(): HelpSection[] {
         row(
           `${c.cyan("providers models")} ${c.dim("[<id>]")}`,
           "List registered models (offline, no network)",
-          ["also: models [list], aliases: --list-models, --models"],
+          ["also: models [list], provider <id> models, aliases: --list-models, --models"],
         ),
         row(
           `${c.cyan("providers models-live")} ${c.dim("[<id>]")}`,
           "List live provider catalogs (network)",
-          ["also: models-live [list], aliases: --list-models-live, --models-live"],
+          [
+            "also: models-live [list], provider <id> models-live",
+            "aliases: --list-models-live, --models-live",
+          ],
         ),
         row(
           `${c.cyan("--print-format")} ${c.dim("<text|json|md|xml>")}`,
-          "Inspection command output shape (models, …)",
-          ["default: text; aliases: tui/console/stdout"],
+          "Output shape for providers models",
+          ["default: text; aliases: tui/console/stdout; or MINIMAL_AGENT_PRINT_FORMAT"],
         ),
         row(
           `${c.cyan("plugins")} ${c.dim("[list]")}`,
@@ -364,7 +363,10 @@ function buildHelpSections(): HelpSection[] {
     {
       title: c.bold("Env"),
       rows: [
-        row(c.cyan("DEBUG=1"), "Verbose request/response logging to stderr"),
+        row(c.cyan("DEBUG=1"), "Verbose request/response debug diagnostics", [
+          "session log file, stderr with MINIMAL_AGENT_LOG_STDERR=1",
+        ]),
+        row(c.cyan("MINIMAL_AGENT_LOG_STDERR=1"), "Mirror every diagnostic to stderr"),
         row(c.cyan("MINIMAL_AGENT_TRANSPORT"), "Transport: http2 or fetch", [
           "default: http2; plaintext http:// auto-routes to HTTP/1.1",
         ]),
@@ -439,6 +441,13 @@ function buildHelpSections(): HelpSection[] {
         ),
         row(c.cyan("MINIMAL_AGENT_SKIP_QUOTA=1"), "Skip startup quota check"),
         row(c.cyan("MINIMAL_AGENT_NO_PLUGIN_SYNC=1"), "Skip the first-run extended-plugins clone"),
+        row(c.cyan("MINIMAL_AGENT_PLUGIN_SIBLINGS"), "Dev plugin checkout dirs (colon-separated)", [
+          "default: ../minimal-agent-plugins next to the CLI repo",
+        ]),
+        row(c.cyan("MINIMAL_AGENT_AUTO_ASK=0"), "Turn off automatic ASK mode in the REPL", [
+          "or config autoAsk: false",
+        ]),
+        row(c.cyan("MINIMAL_AGENT_AUTO_COMPACT=0"), "Turn off auto compact on a context overflow"),
         row(
           c.cyan("MINIMAL_AGENT_DISABLE_PLUGINS"),
           "Comma-separated plugin ids to skip this run",
@@ -468,13 +477,12 @@ function buildHelpSections(): HelpSection[] {
         row(c.cyan("MINIMAL_AGENT_SUBAGENT_AUTO_TIER=1"), "Let specialists pick a per-role model", [
           "default off",
         ]),
-        row(c.cyan("NERD_FONT=1"), "Enable Nerd Font glyphs in TUI"),
         row(
           c.cyan("MINIMAL_AGENT_SYSTEM_*"),
           "Override system-prompt parts (see System prompt section)",
           [
-            "_INSTRUCTIONS, _IDENTITY, _LOOP_SAFETY, _TOOL_OUTPUT_CONVENTIONS,",
-            "_SESSION_CONTEXT, _PROMPT; each also *_FILE for a path; empty = omit",
+            "_INSTRUCTIONS, _IDENTITY, _LOOP_SAFETY, _TOOL_OUTPUT_CONVENTIONS, _SESSION_CONTEXT, _PROMPT",
+            "also MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE; each also *_FILE for a path; empty = omit",
           ],
         ),
       ],
@@ -494,17 +502,21 @@ function buildHelpSections(): HelpSection[] {
         row(c.dim("Built-in"), c.dim("ask-mode, config, diff-view, env-info, file-lock,")),
         row("", c.dim("history, memory, model-info, quota-status, schedule,")),
         row("", c.dim("session-info, sub-agents, tasks, usage, web-search")),
-        row(c.dim("Disabled"), `interleave-thinking ${c.dim("(opt in to use, see Opt in above)")}`),
+        row(
+          c.dim("Disabled"),
+          `interleave-thinking, security, minimal-agent-cloud ${c.dim("(opt in to use, see Opt in above)")}`,
+        ),
       ],
     },
     {
       title: c.bold("Docs"),
       rows: [
-        row(c.dim("docs/CHANGELOG.md"), "Release notes, newest first"),
+        row(c.dim("CHANGELOG.md"), "CLI release notes, newest first (minimal-agent-cli repo)"),
         row(c.dim("docs/tui/"), "Terminal renderer architecture (compositor, live area, editor)"),
-        row(c.dim("docs/network/"), "HTTP transport, retry, and wire-capture notes"),
-        row(c.dim("docs/sub-agents-prompt.md"), "How the sub-agents system prompt composes"),
-        row(c.dim("docs/changes/"), "Per-change write-ups, dated"),
+        row(c.dim("core docs/CHANGELOG.md"), "Core release notes (minimal-agent-core repo)"),
+        row(c.dim("core docs/network/"), "HTTP transport, retry, and wire-capture notes"),
+        row(c.dim("core docs/sub-agents-prompt.md"), "How the sub-agents system prompt composes"),
+        row(c.dim("core docs/changes/"), "Per-change write-ups, dated"),
       ],
     },
   ]
