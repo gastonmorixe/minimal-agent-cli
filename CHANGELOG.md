@@ -6,7 +6,7 @@ status: living
 scope: cli
 working-dir: "."
 created-at: "2026-08-07T13:45:26-0400"
-updated-at: "2026-10-31T00:00:00-0400"
+updated-at: "2026-11-03T00:00:00-0500"
 format: "Keep a Changelog (pragmatic, date-stamped)"
 ---
 
@@ -19,8 +19,59 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ## [Unreleased]
 
+### Added
+
+- 2026-11-02: `auth-status plan [<credential>] [--all] [--table] [--parallel <n>]`.
+  It shows the plan, seat, role, usage windows with reset times, and
+  overage for each stored credential whose provider plugin has a
+  `fetchAccountPlan` hook. It calls account endpoints only, so it spends no
+  model quota. It refreshes an expired OAuth token first and retries once
+  on HTTP 401. It marks credentials that share one account and
+  organization, because they share one quota. Rows with no plan lookup are
+  hidden unless you pass `--all` or name one credential. `--parallel` is 4
+  by default, 8 at most.
+- 2026-11-02: `bun run compile:dev`, `bun run compile:release`, and
+  `bun run compile:release:all` build a standalone binary into `dist/`
+  (`scripts/compile.ts`). `compile:dev` bundles the core working tree at
+  `../minimal-agent-core`. `compile:release` bundles a `git archive` of the
+  core commit pinned in `package.json`. `compile:release:all` builds every
+  release target (darwin-arm64, darwin-x64, linux-x64, linux-arm64). The
+  binary does not read `bunfig.toml` or `.env` from its cwd. Each native
+  build is smoke-tested (`--help`, `plugins`) and then checked by
+  `scripts/compile-e2e.sh`. Only a build that passes replaces the binary at
+  the output path. `compile:release` fails its checks until the core pin
+  holds the core embedded-prompts and host-core-modules commits.
+- 2026-11-02: `scripts/compile-e2e.sh [BINARY]` runs a compiled binary the
+  way a user does: a copy outside the repo, a fresh HOME, a hostile
+  `bunfig.toml` and `.env` in the cwd, a disk plugin that imports core,
+  `-p`, and the REPL in tmux (skipped without tmux). The default binary is
+  `dist/minimal-agent`.
+
+### Fixed
+
+- 2026-11-02: the CLI version comes from a static import of its
+  `package.json`. A compiled binary now shows the same version as a run
+  from source. Before, it read `package.json` from disk and a binary
+  showed `0.0.0`.
+- 2026-11-01: a second `--resume` keeps each tool call that a kill cut off,
+  with its note, once and in place. Before, the second resume dropped the
+  cut-off `tool_use`. The fix needs core `c0a35af`.
+- 2026-11-01: plugin `ui` modules load by the path text. Under a linked
+  path (for example macOS `/var` to `/private/var`), plugin styles from
+  `ui.setup` now reach the handler.
+- 2026-11-01: a plain Edit or Write diff from core gets diff colors when no
+  code highlighter is active (S41).
+
 ### Changed
 
+- 2026-11-03: `--help` text fixes. The `Start here` and `Command map`
+  columns line up. The `Docs` section names the real paths (this repo has
+  `CHANGELOG.md` and `docs/tui/`, the other docs are in core). New env
+  rows: `MINIMAL_AGENT_LOG_STDERR`, `MINIMAL_AGENT_PLUGIN_SIBLINGS`,
+  `MINIMAL_AGENT_AUTO_ASK`, `MINIMAL_AGENT_AUTO_COMPACT`. The `NERD_FONT`
+  row is gone (no code reads it). `--print-format` says it applies to
+  `providers models`. The disabled-plugin row lists every plugin that ships
+  off.
 - 2026-11-01: `--list-plugins` (`plugins list`) also lists the plugins in the
   dev checkout root: `../minimal-agent-plugins` next to the CLI repo, or the
   dirs in `MINIMAL_AGENT_PLUGIN_SIBLINGS` (S40). Before, it did not show them.

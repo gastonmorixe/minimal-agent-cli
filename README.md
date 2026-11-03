@@ -39,13 +39,16 @@ echo "summarize stdin" | bun run src/index.ts -
 bun run src/index.ts -p "hi" --output-format stream-json
 ```
 
-Other commands (each one also accepts `--help`):
+Other commands (`--help` anywhere prints the full help):
 
-- **Resume:** `resume <sid|last>` (alias `--resume`)
+- **Resume:** `resume <sid|last>` (alias `--resume`), `resume-same <sid|last>`
 - **Sessions:** `sessions`, `sessions dump <sid|last>` (alias `--dump`)
-- **Models:** `providers models` (alias `--list-models`)
+- **Usage:** `usage [today|last-day|last-month|ytd|year|all]`
+- **Models:** `providers models` (alias `--list-models`), `providers models-live`
 - **Plugins:** `plugins list`
 - **Login:** `provider <id> login`, `provider <id> logout`, `auth-status`
+- **Credentials:** `auth-status plan`, `auth-status refresh-all`,
+  `auth-status prune --dry-run`
 
 Useful flags:
 
@@ -233,9 +236,11 @@ the BSDs, illumos, AIX), and `windows`.
 {
   "id": "ma-chrome-cdp",
   "platforms": ["macos"],        // whole plugin only loads on macOS
-  "tuis": [
-    { "id": "t", "platforms": ["macos", "linux"], /* this tool gates separately */ }
-  ]
+  "headless": {
+    "tools": [
+      { "id": "t", "platforms": ["macos", "linux"], /* this tool gates separately */ }
+    ]
+  }
 }
 ```
 
@@ -251,7 +256,8 @@ force-enable; name the right platform or use `all`.
 
 Common environment variables:
 
-- **`DEBUG=1`:** Log request and response debug output as Debug diagnostics (session log file; stderr with `MINIMAL_AGENT_LOG_STDERR=1`).
+- **`DEBUG=1`:** Log request and response debug output as Debug diagnostics (session log file, or stderr with `MINIMAL_AGENT_LOG_STDERR=1`).
+- **`MINIMAL_AGENT_LOG_STDERR=1`:** Mirror every diagnostic to stderr.
 - **`VERBOSE=1`:** Avoid truncating debug output.
 - **`MINIMAL_AGENT_CONFIG`:** Use a custom config file.
 - **`MINIMAL_AGENT_TRANSPORT`:** Select `http2` or `fetch`.
@@ -366,12 +372,57 @@ Captures are written under `~/.minimal-agent/net-dbg/` (or `$MINIMAL_AGENT_HOME/
 when the home is relocated), one file per request and response, for diffing
 against real traffic.
 
-Prompt cache behavior is documented in `src/cache/cache.ts` and `src/agent/cache.ts`. The short
+Prompt cache behavior is documented in core, in `src/agent/cache.ts` and `src/cache/cache-ttl.ts`. The short
 version: tools, system blocks, and the rolling conversation tail are arranged so
 a provider's prefix cache can pay off across turns in one process.
 
+## Standalone binary
+
+Build one `minimal-agent` executable with Bun's `--compile`:
+
+```sh
+bun run compile:dev          # core from ../minimal-agent-core (working tree, uncommitted edits included)
+bun run compile:release      # core from the commit pinned in package.json
+bun run compile:release:all  # release build for darwin-arm64, darwin-x64, linux-x64, linux-arm64
+```
+
+From the monorepo root, use `bun run cli:compile:dev` or
+`bun run cli:compile:release`. The output is `dist/minimal-agent` (a
+cross target gets a suffix, for example `dist/minimal-agent-linux-x64`).
+Both modes need the core checkout at `../minimal-agent-core`. A release
+build reads the pinned commit from it with `git archive`.
+
+Options go after the script name, for example
+`bun run compile:dev -- --outfile /path/to/minimal-agent`:
+
+- `--target <bun-target>`: cross-compile (for example `bun-linux-x64`).
+- `--all`: build every release target (release only).
+- `--outfile <path>`: output path (one target only).
+- `--bytecode`, `--no-bytecode`: off for dev, on for release by default.
+- `--no-smoke`: skip the smoke run and the end-to-end checks.
+
+Each native build is smoke-tested (`--help` and `plugins`), then checked by
+`scripts/compile-e2e.sh`. Only a build that passes replaces the file at the
+output path. A build with `--target` or `--all` skips these checks. The binary does
+not read `bunfig.toml` or `.env` from its cwd.
+
+Run the end-to-end checks by hand on any binary:
+
+```sh
+scripts/compile-e2e.sh [BINARY]   # default: dist/minimal-agent
+```
+
+It copies the binary to a temp dir outside the repo and runs it with a
+fresh HOME. It checks `--help` (the command map and the `package.json`
+version), `plugins` with a disk plugin that imports core, a hostile
+`bunfig.toml` and `.env` in the cwd, `-p` with no credentials, and the REPL
+in tmux (skipped without tmux). Exit 0 means all checks passed, 1 means a
+check failed, and 2 means bad usage or environment.
+
 ## Scripts and docs
 
+- `scripts/compile.ts`, `scripts/compile-e2e.sh`: the standalone binary
+  build and its end-to-end checks (see above).
 - `scripts/test-all-models.sh`, `scripts/test-one-model.sh`: send one prompt
   to each model through the CLI bin and check the reply. Set `INSPECTOR` to
   capture network traffic.

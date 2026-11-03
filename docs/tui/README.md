@@ -1,10 +1,11 @@
 ---
 title: TUI architecture (index)
 created_at: "2026-05-27T10:14:30.725679000-0400"
-updated_at: "2026-05-27T10:14:30.725679000-0400"
+updated_at: "2026-11-03T07:30:00-0500"
 tags: [tui, architecture, index, compositor, editor, repl]
 taillog:
  - "2026-05-27T10:14:30.725679000-0400 | Initial deep-review docs split into 9 chapters + this index"
+ - "2026-11-03T07:30:00-0500 | Code map: real paths and line counts, term-width moved to core, scrollback-guard removed"
 ---
 
 # TUI architecture (index)
@@ -28,23 +29,26 @@ There is **no full-screen TUI**. The agent is a scrolling REPL with a small bloc
 
 ## Code map (read-along)
 
+Line counts were measured on 2026-11-03. The chapters below were written earlier and can quote older counts and paths.
+
 | File | LOC | Role |
 |---|---:|---|
-| `src/ui/compositor.ts` | 787 | the only thing that writes the live area |
-| `src/editor-controller.ts` | 2096 | persistent multiline editor, drives setLiveArea |
-| `src/input/input.ts` | 1420 | RawInput keymap + escape parsing (legacy, partly superseded) |
-| `src/ui/editor/renderer.ts` | 438 | EditorBuffer → physical rows + cursor (with wrap) |
-| `src/input/editor-buffer.ts` | 312 | pure multiline text model |
-| `src/terminal/term-width.ts` | 241 | display-width / wrap math (single source of truth) |
+| `src/ui/compositor.ts` | 964 | the only thing that writes the live area |
+| `src/editor-controller.ts` | 1541 | persistent multiline editor, drives setLiveArea |
+| `src/input/input.ts` | 1015 | RawInput keymap + escape parsing (legacy, partly superseded) |
+| `src/ui/editor/renderer.ts` | 543 | EditorBuffer → physical rows + cursor (with wrap) |
+| `src/input/editor-buffer.ts` | 318 | pure multiline text model |
+| `@minimal-agent/core/plugin-api/utils/term-width` | 689 | display-width / wrap math (single source of truth). Lives in core at `plugin-api/src/utils/term-width.ts` |
 | `src/input/input-capture-stack.ts` | 224 | LIFO transient overlays in front of the hook chain |
-| `src/ui/picker.ts` | 173 | generic vertical picker primitive |
-| `src/ui/stdio-interceptor.ts` | 155 | re-routes all writes through the compositor |
-| `src/ui/term-caps.ts` | 138 | DECRPM probe for synchronized output (mode 2026) |
-| `src/ui/terminal/ansi-stream.ts` | 126 | escape-safe split-buffer for partial CSI/OSC bytes |
-| `src/ui/quit-modal.ts` | 38 | example of a `LiveOverlay` |
-| `src/ui/theme/types.ts` | 27 | dark/light SGR palette |
+| `src/ui/picker.ts` | 189 | generic vertical picker primitive |
+| `src/ui/stdio-interceptor.ts` | 162 | re-routes all writes through the compositor |
+| `src/ui/term-caps.ts` | 140 | DECRPM probe for synchronized output (mode 2026) |
+| `src/ui/terminal/ansi-stream.ts` | 147 | escape-safe split-buffer for partial CSI/OSC bytes |
+| `src/ui/quit-modal.ts` | 43 | example of a `LiveOverlay` |
+| `src/ui/theme/types.ts` | 403 | theme type primitives (dark / light / high-contrast variants) |
 | `src/ui/overlay.ts` | 19 | `LiveOverlay` interface |
-| `src/ui/scrollback-guard.ts` | 14 | unused-but-kept reserve-region helper |
+
+`src/ui/scrollback-guard.ts` no longer exists. Chapter 06 still describes it.
 
 ## Hard rules to remember
 
