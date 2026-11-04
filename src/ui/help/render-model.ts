@@ -7,7 +7,8 @@
  *     root help the version is dim.
  *   - Each other section: a blank line, the title at indent 2, the text at
  *     indent 4, the rows at indent 4. A group title sits at indent 4 with
- *     its rows at indent 6.
+ *     its rows at indent 6. Leading group rows with an empty term are
+ *     paragraphs at indent 6 (plugin help section text, M-10).
  *
  * All wrapping, alignment, the long-token rule, and the SGR close come from
  * the M-7 primitives in `render.ts`. The model is plain text (R-3). Color is
@@ -113,7 +114,22 @@ function sectionLines(section: HelpModelSection, ctx: Ctx): string[] {
   for (const group of section.groups ?? []) {
     const title = ctx.color ? styleTitle(group.title) : group.title
     out.push(...text(title, BODY_INDENT, BODY_INDENT + 2, ctx))
-    out.push(...rowLines(group.rows, GROUP_ROW_INDENT, ctx, section.id))
+    // Leading rows with an empty term are paragraphs (a plugin help section
+    // `text`, M-10): they render as text at the row indent, not in the
+    // summary column.
+    const lead = group.rows.findIndex((r) => r.term !== "")
+    const paragraphs = lead < 0 ? group.rows : group.rows.slice(0, lead)
+    for (const p of paragraphs) {
+      out.push(
+        ...text(
+          styleText(p.summary, section.id, ctx.color),
+          GROUP_ROW_INDENT,
+          GROUP_ROW_INDENT,
+          ctx,
+        ),
+      )
+    }
+    out.push(...rowLines(group.rows.slice(paragraphs.length), GROUP_ROW_INDENT, ctx, section.id))
   }
   return out
 }

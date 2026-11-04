@@ -13,12 +13,15 @@
  * @module startup/help
  */
 
+import type { CatalogCliEntry } from "@minimal-agent/core/plugin-api/types/cli-contract"
+
 import pkg from "../../package.json" with { type: "json" }
 import { builtinRegistry } from "../cli/registry/index.ts"
+import type { FoundHostMode } from "../cli/registry/plugins.ts"
 import type { HelpRequest } from "../cli/registry/resolve.ts"
 import { type CommandOutput, writeCommandRows } from "../ui/command-output.ts"
 import { helpModelJson } from "../ui/help/json.ts"
-import { buildHelpModel } from "../ui/help/model.ts"
+import { buildHelpModel, buildHostModeHelpModel } from "../ui/help/model.ts"
 import { resolveHelpPolicy } from "../ui/help/policy.ts"
 import { renderModel } from "../ui/help/render-model.ts"
 import { c } from "../ui/style/ansi.ts"
@@ -31,8 +34,16 @@ export interface RenderHelpOptions {
   readonly color?: boolean
 }
 
+/** Plugin data of root help (M-10). */
+export interface HelpPluginOptions {
+  /** Plugin catalog (`readHelpCatalog`). Absent: no plugin rows. */
+  readonly catalog?: readonly CatalogCliEntry[]
+  /** `--help --all`: also show disabled plugin entries (R-12). */
+  readonly all?: boolean
+}
+
 /** Inputs of {@link printHelp} that the policy reads (SPEC-HELP R-28, R-29). */
-export interface PrintHelpOptions {
+export interface PrintHelpOptions extends HelpPluginOptions {
   /** Explicit wrap width. Wins over every other width source. */
   readonly columns?: number
   /** `--no-color` was passed. */
@@ -72,8 +83,25 @@ export function readEmbeddedPackageVersion(): string {
  * Render root help (spec 8.4) without writing to stdout. Pure: the default
  * is color on and no wrapping. {@link printHelp} resolves the policy.
  */
-export function renderHelp(opts: RenderHelpOptions = {}): string[] {
-  return renderModel(buildHelpModel(builtinRegistry()), { ...opts, color: opts.color !== false })
+export function renderHelp(opts: RenderHelpOptions & HelpPluginOptions = {}): string[] {
+  const model = buildHelpModel(builtinRegistry(), pluginModelOptions(opts))
+  return renderModel(model, { width: opts.width, color: opts.color !== false })
+}
+
+/** The catalog and `--all` options of `buildHelpModel`, with no undefined keys. */
+function pluginModelOptions(opts: HelpPluginOptions): HelpPluginOptions {
+  return {
+    ...(opts.catalog === undefined ? {} : { catalog: opts.catalog }),
+    ...(opts.all === true ? { all: true } : {}),
+  }
+}
+
+/**
+ * Render host-mode help (R-19, plan M-10) without writing it. Pure: the
+ * default is color off and no wrapping.
+ */
+export function renderHostModeHelp(found: FoundHostMode, opts: RenderHelpOptions = {}): string[] {
+  return renderModel(buildHostModeHelpModel(builtinRegistry(), found), opts)
 }
 
 /**
@@ -91,22 +119,48 @@ export function renderCommandHelp(path: readonly string[], opts: RenderHelpOptio
  * no `--no-color`.
  */
 export function printHelp(output: HelpOutput = process.stdout, opts: PrintHelpOptions = {}): void {
-  const policy = resolveHelpPolicy({
+  const policy = helpPolicy(output, opts)
+  const path = opts.path ?? []
+  writeCommandRows(
+    path.length === 0 ? renderHelp({ ...policy, ...opts }) : renderCommandHelp(path, policy),
+    output,
+  )
+}
+
+/** Width and color for `output` (R-28, R-29). */
+function helpPolicy(
+  output: HelpOutput,
+  opts: Pick<PrintHelpOptions, "env" | "columns" | "noColor">,
+): { width?: number; color: boolean } {
+  return resolveHelpPolicy({
     env: opts.env ?? process.env,
     isTTY: output.isTTY,
     columns: { explicit: opts.columns, output: output.columns, stdout: process.stdout.columns },
     flags: { noColor: opts.noColor },
   })
-  const path = opts.path ?? []
-  writeCommandRows(path.length === 0 ? renderHelp(policy) : renderCommandHelp(path, policy), output)
+}
+
+/** Print host-mode help (R-19) to `output`, with the policy of {@link printHelp}. */
+export function printHostModeHelp(
+  output: HelpOutput,
+  found: FoundHostMode,
+  opts: Pick<PrintHelpOptions, "env" | "columns" | "noColor"> = {},
+): void {
+  writeCommandRows(renderHostModeHelp(found, helpPolicy(output, opts)), output)
 }
 
 /**
  * The help model for `path` as JSON (SPEC-HELP R-30, plan M-11): root help
- * when `path` is empty or absent. No color, no wrap.
+ * when `path` is empty or absent, with the plugin sections from
+ * `opts.catalog` (M-10). No color, no wrap.
  */
-export function renderHelpJson(path: readonly string[] = []): string {
-  return helpModelJson(buildHelpModel(builtinRegistry(), { path }))
+export function renderHelpJson(path: readonly string[] = [], opts: HelpPluginOptions = {}): string {
+  return helpModelJson(buildHelpModel(builtinRegistry(), { path, ...pluginModelOptions(opts) }))
+}
+
+/** The host-mode help model (R-19) as JSON. */
+export function renderHostModeHelpJson(found: FoundHostMode): string {
+  return helpModelJson(buildHostModeHelpModel(builtinRegistry(), found))
 }
 
 /**
@@ -116,8 +170,9 @@ export function renderHelpJson(path: readonly string[] = []): string {
 export function printHelpJson(
   output: CommandOutput = process.stdout,
   path: readonly string[] = [],
+  opts: HelpPluginOptions = {},
 ): void {
-  output.write(renderHelpJson(path))
+  output.write(renderHelpJson(path, opts))
 }
 
 /** `"a"`, `"a" or "b"`, `"a", "b", or "c"`. */
@@ -135,14 +190,16 @@ function quotedOrList(items: readonly string[]): string {
  */
 export function helpErrorLines(req: UnknownHelpRequest, program = "minimal-agent"): string[] {
   const at = [program, ...req.at].join(" ")
-  const helpCmd = [program, "help", ...req.at].join(" ")
-  const run = `"${helpCmd}" to see the commands.`
+  const hostMode = req.subject === "host-mode"
+  const helpCmd = hostMode ? `${program} --help` : [program, "help", ...req.at].join(" ")
+  const run = `"${helpCmd}" to see the ${hostMode ? "host modes" : "commands"}.`
   const suggestions = req.suggestions.slice(0, 3)
   const hint =
     suggestions.length > 0
       ? `hint: did you mean ${quotedOrList(suggestions)}? Run ${run}`
       : `hint: run ${run}`
-  return [`error: unknown command "${req.token}" for "${at}"`, hint]
+  const what = hostMode ? "host mode" : "command"
+  return [`error: unknown ${what} "${req.token}" for "${at}"`, hint]
 }
 
 /**

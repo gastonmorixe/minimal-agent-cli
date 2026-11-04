@@ -1,0 +1,15 @@
+{
+  "id": "gamma",
+  "name": "Gamma",
+  "version": "0.0.0",
+  "description": "Help fixture: an enabled plugin with a host mode but no hostMode:stdio permission.",
+  "headless": {
+    "hostModes": [
+      {
+        "id": "gamma-mode",
+        "description": "Gamma host mode with no permission.",
+        "entry": { "type": "module", "path": "./host-mode.ts", "export": "default" }
+      }
+    ]
+  }
+}

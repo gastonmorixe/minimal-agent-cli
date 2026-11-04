@@ -33,6 +33,10 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       spinners  Show available spinner presets
       help      Show help for a command
 
+  HOST MODES
+    acp       Agent Client Protocol v1 over stdio. (from plugin alpha)
+    beta-rpc  Beta JSON-RPC over stdio. (from plugin beta)
+
   FLAGS
     Model
       -m, --model <id>           Select the model (env: MINIMAL_AGENT_MODEL)
@@ -245,6 +249,11 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
                       session-info, sub-agents, tasks, usage, web-search
     Disabled          interleave-thinking, security, minimal-agent-cloud (opt in
                       to use, see Opt in above)
+    Alpha notes (from plugin alpha)
+      Alpha runs as an ACP agent for editors.
+      Zed  Set the agent command to minimal-agent --host-mode acp
+    Alpha limits (from plugin alpha)
+      Level 1  No file system or terminal capabilities
 
   LEARN MORE
     Use minimal-agent help <command> for command help.
@@ -293,6 +302,10 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       flags     Show beta feature flags
       spinners  Show available spinner presets
       help      Show help for a command
+
+  HOST MODES
+    acp       Agent Client Protocol v1 over stdio. (from plugin alpha)
+    beta-rpc  Beta JSON-RPC over stdio. (from plugin beta)
 
   FLAGS
     Model
@@ -430,6 +443,11 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
                       history, memory, model-info, quota-status, schedule,
                       session-info, sub-agents, tasks, usage, web-search
     Disabled          interleave-thinking, security, minimal-agent-cloud (opt in to use, see Opt in above)
+    Alpha notes (from plugin alpha)
+      Alpha runs as an ACP agent for editors.
+      Zed  Set the agent command to minimal-agent --host-mode acp
+    Alpha limits (from plugin alpha)
+      Level 1  No file system or terminal capabilities
 
   LEARN MORE
     Use minimal-agent help <command> for command help.

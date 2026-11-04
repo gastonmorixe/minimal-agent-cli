@@ -1,7 +1,8 @@
 /**
  * Help loads no runtime code (SPEC-HELP R-18, plan M-9c).
  *
- * Help resolves and renders from the built-in registry. This test walks the
+ * Help resolves and renders from the built-in registry and the plugin
+ * catalog (`src/cli/registry/plugins.ts`, M-10). This test walks the
  * transitive runtime imports of the resolve path (`src/cli/registry/**`,
  * `src/commands/*.command.ts`) and the render path (`src/startup/help.ts`,
  * `src/ui/help/**`) and asserts that none of them is:
@@ -44,10 +45,25 @@ const ROOT_PATTERNS = [
  *   `src/utils/build-info.ts`, which imports only `package.json` (a static
  *   JSON import) and defines one function and one constant. No env, no fs,
  *   no network, no other host code.
+ * - `@minimal-agent/core/host/plugin-catalog`: src/cli/registry/plugins.ts
+ *   reads the plugin catalog for HOST MODES and PLUGIN NOTES (SPEC-HELP
+ *   R-22, plan M-10). The catalog reads `manifest.json` files as JSON and
+ *   never imports a plugin module. The test below also checks that the
+ *   closure holds no plugin package file.
  */
 const ALLOWED_HOST_MODULES: ReadonlyMap<string, RegExp> = new Map([
   ["@minimal-agent/core/host/build-info", /\/src\/host-public\/build-info\.ts$/u],
+  ["@minimal-agent/core/host/plugin-catalog", /\/src\/host-public\/plugin-catalog\.ts$/u],
 ])
+
+/**
+ * A file of a plugin package (`ma-*-plugin/`) or the plugin loader. Help
+ * must not load one. The catalog uses three loader leaf files: `roots.ts`
+ * (root tiers), `helpers.ts` (`discoverPackageDirs`), and `PROMPTS.ts`
+ * (string helpers that `helpers.ts` imports). None of them imports a plugin.
+ */
+const PLUGIN_CODE =
+  /\/ma-[a-z0-9-]+-plugin\/|\/src\/plugins\/loader\/(?!helpers\.ts$|roots\.ts$|PROMPTS\.ts$)/u
 
 /** Root files: every file that matches {@link ROOT_PATTERNS}, no tests. */
 function rootFiles(): string[] {
@@ -62,6 +78,26 @@ function rootFiles(): string[] {
 
 /** A dynamic `import(` or `require(` whose argument is not a string literal. */
 const NON_LITERAL_LOAD = /\b(?:import|require)\(\s*[^"'`\s)]/u
+
+/**
+ * Non-literal loads that are in the closure but that help never calls, as
+ * `<path suffix>: <transpiled line>`. The list must only shrink.
+ *
+ * - core `src/plugins/loader/helpers.ts`: `resolveHandler` imports a plugin
+ *   handler by path. The catalog imports this file only for
+ *   `discoverPackageDirs` (a directory scan) and never calls
+ *   `resolveHandler`. Follow-up: move `discoverPackageDirs` to a leaf module
+ *   in core, then drop this entry.
+ */
+const ALLOWED_DYNAMIC: readonly string[] = [
+  "/src/plugins/loader/helpers.ts: mod = await import(abs);",
+]
+
+/** True when `load` (`<relative path>: <line>`) is in {@link ALLOWED_DYNAMIC}. */
+function allowedDynamic(load: string): boolean {
+  const norm = `/${load.split(sep).join("/")}`
+  return ALLOWED_DYNAMIC.some((suffix) => norm.endsWith(suffix))
+}
 
 /**
  * The non-literal `import(x)` / `require(x)` calls in `source`. The source
@@ -144,13 +180,18 @@ describe("help imports no runtime code", () => {
     expect(rel).toContain("src/commands/sessions.command.ts")
     expect(rel).toContain("src/startup/help.ts")
     expect(rel).toContain("src/ui/help/model.ts")
+    expect(rel).toContain("src/cli/registry/plugins.ts")
+    // The catalog reads manifests as JSON: no plugin package file and no
+    // loader module other than the root and dir helpers is in the closure.
+    const pluginCode = files.filter((f) => PLUGIN_CODE.test(f.split(sep).join("/")))
+    expect(pluginCode).toEqual([])
     const bad = edges
       .map((e) => ({ e, why: forbiddenReason(e.specifier, e.resolved) }))
       .filter((x) => x.why !== undefined)
       .map((x) => `${relative(REPO_ROOT, x.e.from)} imports ${x.e.specifier}: ${x.why}`)
     expect(bad).toEqual([])
     // scanImports cannot follow a non-literal load, so none is allowed.
-    expect(dynamic).toEqual([])
+    expect(dynamic.filter((d) => !allowedDynamic(d))).toEqual([])
   })
 
   test("the non-literal load check flags import(x) and require(x) only", () => {
@@ -160,6 +201,10 @@ describe("help imports no runtime code", () => {
     expect(nonLiteralLoads(t, 'const m = await import("./x.ts")')).toEqual([])
     expect(nonLiteralLoads(t, "const m = await import(`./x.ts`)")).toEqual([])
     expect(nonLiteralLoads(t, "// import(name)\nexport const a = 1")).toEqual([])
+    expect(
+      allowedDynamic("node_modules/x/src/plugins/loader/helpers.ts: mod = await import(abs);"),
+    ).toBe(true)
+    expect(allowedDynamic("src/ui/help/model.ts: mod = await import(abs);")).toBe(false)
   })
 
   test("the allow list passes only its own file", () => {
@@ -172,6 +217,15 @@ describe("help imports no runtime code", () => {
     expect(
       forbiddenReason("@minimal-agent/core/host/build-info", "/r/elsewhere/build-info.ts"),
     ).toContain("core host module")
+    expect(
+      forbiddenReason(
+        "@minimal-agent/core/host/plugin-catalog",
+        "/r/node_modules/@minimal-agent/core/src/host-public/plugin-catalog.ts",
+      ),
+    ).toBeUndefined()
+    expect(PLUGIN_CODE.test("/r/plugins/ma-acp-plugin/host-mode.ts")).toBe(true)
+    expect(PLUGIN_CODE.test("/r/core/src/plugins/loader/host-modes.ts")).toBe(true)
+    expect(PLUGIN_CODE.test("/r/core/src/plugins/loader/helpers.ts")).toBe(false)
     expect(
       forbiddenReason(
         "@minimal-agent/core/host/auth-store",

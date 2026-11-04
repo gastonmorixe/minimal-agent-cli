@@ -1,0 +1,27 @@
+{
+  "id": "delta",
+  "name": "Delta",
+  "version": "0.0.0",
+  "description": "Help fixture: a plugin shipped disabled, with a host mode and a help section.",
+  "enabled": false,
+  "permissions": ["hostMode:stdio"],
+  "cli": {
+    "contractVersion": 1,
+    "helpSections": [
+      {
+        "id": "opt-in",
+        "title": "Delta notes",
+        "rows": [{ "term": "Opt in", "summary": "minimal-agent --enable-plugin delta" }]
+      }
+    ]
+  },
+  "headless": {
+    "hostModes": [
+      {
+        "id": "delta-mode",
+        "description": "Delta host mode, off by default.",
+        "entry": { "type": "module", "path": "./host-mode.ts", "export": "default" }
+      }
+    ]
+  }
+}

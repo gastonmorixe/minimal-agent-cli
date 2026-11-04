@@ -1,0 +1,21 @@
+{
+  "id": "beta",
+  "name": "Beta",
+  "version": "0.0.0",
+  "description": "Help fixture: an enabled plugin whose host mode acp collides with alpha, plus one usable host mode.",
+  "permissions": ["hostMode:stdio"],
+  "headless": {
+    "hostModes": [
+      {
+        "id": "acp",
+        "description": "A second ACP host mode. The loader keeps the first one.",
+        "entry": { "type": "module", "path": "./host-mode.ts", "export": "default" }
+      },
+      {
+        "id": "beta-rpc",
+        "description": "Beta JSON-RPC over stdio.",
+        "entry": { "type": "module", "path": "./rpc.ts", "export": "default" }
+      }
+    ]
+  }
+}

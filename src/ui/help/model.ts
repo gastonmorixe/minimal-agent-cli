@@ -34,13 +34,19 @@ import {
 } from "@minimal-agent/core/plugin-api/types/cli-contract"
 
 import { type BuiltinEnvSpec, type BuiltinRegistry, childrenOf } from "../../cli/registry/index.ts"
+import { type FoundHostMode, hostModeRows, pluginNoteGroups } from "../../cli/registry/plugins.ts"
 
 /** Inputs of {@link buildHelpModel}. */
 export interface BuildHelpModelOptions {
   /** Program name and version. Default: the root spec name and the core version. */
   readonly program?: HelpModelProgram
-  /** Plugin catalog. Unused until plugin rows land (M-10, M-18). */
+  /**
+   * Plugin catalog (`readHelpCatalog`). Root help fills HOST MODES and
+   * PLUGIN NOTES from it (M-10). Absent: no plugin rows.
+   */
   readonly catalog?: readonly CatalogCliEntry[]
+  /** `--help --all`: also show disabled plugin entries with their reason (R-12). */
+  readonly all?: boolean
   /** Command path. Empty or absent: root help. Else command help (M-9b). */
   readonly path?: readonly string[]
 }
@@ -252,8 +258,9 @@ const ROOT_TITLES: Record<Exclude<RootSectionId, "header">, string> = {
 export const PROJECT_URL = "github.com/gastonmorixe/minimal-agent"
 
 /**
- * Static PLUGIN NOTES (item 9 of plan M-8d). Plugin `helpSections` from the
- * catalog replace them in M-10 (R-11).
+ * Static PLUGIN NOTES (item 9 of plan M-8d): the first block of the
+ * section. Plugin `helpSections` from the catalog follow as groups (M-10,
+ * R-11).
  */
 const PLUGIN_NOTES: {
   readonly text: string
@@ -321,8 +328,45 @@ function rootFlagsSection(reg: BuiltinRegistry): HelpModelSection {
   return { id: "flags", title: ROOT_TITLES.flags, rows, groups }
 }
 
+/** Plugin inputs of the root model. */
+interface RootPluginInput {
+  readonly catalog: readonly CatalogCliEntry[]
+  readonly all: boolean
+}
+
+/**
+ * HOST MODES (8.4 row 6): from the catalog `hostModes` of enabled plugins
+ * that pass the gates. With `--all`, disabled ones too, with the reason.
+ */
+function hostModesSection(plugins: RootPluginInput): HelpModelSection {
+  return {
+    id: "host-modes",
+    title: ROOT_TITLES["host-modes"],
+    rows: hostModeRows(plugins.catalog, { all: plugins.all }),
+  }
+}
+
+/**
+ * PLUGIN NOTES (8.4 row 9, R-11): the static block first, then one group
+ * per plugin help section, by plugin id, then declared order.
+ */
+function pluginNotesSection(plugins: RootPluginInput): HelpModelSection {
+  const groups = pluginNoteGroups(plugins.catalog, { all: plugins.all })
+  return {
+    id: "plugin-notes",
+    title: ROOT_TITLES["plugin-notes"],
+    text: [PLUGIN_NOTES.text],
+    rows: PLUGIN_NOTES.rows.map(([term, summary]) => row(term, summary)),
+    ...(groups.length > 0 ? { groups } : {}),
+  }
+}
+
 /** The root model in the spec 8.4 layout. Empty sections are left out. */
-function buildRootModel(reg: BuiltinRegistry, program: HelpModelProgram): HelpModel {
+function buildRootModel(
+  reg: BuiltinRegistry,
+  program: HelpModelProgram,
+  plugins: RootPluginInput,
+): HelpModel {
   const sections: (HelpModelSection | undefined)[] = [
     { id: "header", title: `${program.name} v${program.version}`, text: [reg.root.summary] },
     {
@@ -332,18 +376,14 @@ function buildRootModel(reg: BuiltinRegistry, program: HelpModelProgram): HelpMo
     },
     { id: "examples", title: ROOT_TITLES.examples, rows: rootExampleRows(reg, program) },
     rootCommandsSection(reg),
+    hostModesSection(plugins),
     rootFlagsSection(reg),
     {
       id: "environment",
       title: ROOT_TITLES.environment,
       rows: reg.env.filter((e) => e.hidden !== true).map((e) => envRow(e)),
     },
-    {
-      id: "plugin-notes",
-      title: ROOT_TITLES["plugin-notes"],
-      text: [PLUGIN_NOTES.text],
-      rows: PLUGIN_NOTES.rows.map(([term, summary]) => row(term, summary)),
-    },
+    pluginNotesSection(plugins),
     {
       id: "learn-more",
       title: ROOT_TITLES["learn-more"],
@@ -366,16 +406,77 @@ function buildRootModel(reg: BuiltinRegistry, program: HelpModelProgram): HelpMo
 
 /**
  * Build a help model from the registry. An empty or absent `opts.path`
- * gives the root model (spec 8.4). A non-empty path gives the command model
- * ({@link buildCommandHelpModel}). `opts.catalog` is accepted and unused
- * until plugin rows land (M-10, M-18).
+ * gives the root model (spec 8.4), with HOST MODES and PLUGIN NOTES from
+ * `opts.catalog` (M-10). A non-empty path gives the command model
+ * ({@link buildCommandHelpModel}).
  */
 export function buildHelpModel(reg: BuiltinRegistry, opts: BuildHelpModelOptions = {}): HelpModel {
   const program = opts.program ?? { name: reg.root.name, version: AGENT_VERSION }
   if (opts.path !== undefined && opts.path.length > 0) {
     return buildCommandHelpModel(reg, opts.path, program)
   }
-  return buildRootModel(reg, program)
+  return buildRootModel(reg, program, { catalog: opts.catalog ?? [], all: opts.all === true })
+}
+
+// ---------------------------------------------------------------------------
+// Host-mode help (SPEC-HELP R-19, plan M-10)
+// ---------------------------------------------------------------------------
+
+/** The flag that selects a host mode. Its help path is `["--host-mode", <id>]`. */
+export const HOST_MODE_FLAG = "--host-mode"
+
+/**
+ * Command help for one host mode (R-19): `--host-mode <id> --help`. Kind
+ * `"command"`, path `["--host-mode", <id>]`. Sections in the spec 8.5
+ * order: the header (description, plugin id, and the disabled reason when
+ * the host mode cannot run), USAGE, ARGUMENTS (declared args), GLOBAL
+ * FLAGS, and EXAMPLES (declared examples).
+ */
+export function buildHostModeHelpModel(
+  reg: BuiltinRegistry,
+  found: FoundHostMode,
+  program: HelpModelProgram = { name: reg.root.name, version: AGENT_VERSION },
+): HelpModel {
+  const { entry, hostMode, reason } = found
+  const args = hostMode.args ?? []
+  const head = `${program.name} ${HOST_MODE_FLAG} ${hostMode.id}`
+  const fromPlugin = (r: HelpModelRow): HelpModelRow => ({
+    ...r,
+    source: `plugin:${entry.pluginId}`,
+  })
+  const sections: (HelpModelSection | undefined)[] = [
+    {
+      id: "header",
+      title: head,
+      text: [
+        hostMode.description === "" ? "(no description)" : hostMode.description,
+        `From plugin ${entry.pluginId}.`,
+        "stdin and stdout carry the protocol. Logs go to stderr.",
+        ...(reason === undefined ? [] : [`Disabled: ${reason}. This host mode does not run.`]),
+      ],
+    },
+    { id: "usage", title: COMMAND_TITLES.usage, text: [[head, ...args.map(argUsage)].join(" ")] },
+    {
+      id: "arguments",
+      title: COMMAND_TITLES.arguments,
+      rows: args.map((a) => fromPlugin(argumentRow(a))),
+    },
+    globalFlagsSection(reg, program.name),
+    {
+      id: "examples",
+      title: COMMAND_TITLES.examples,
+      rows: (hostMode.examples ?? []).map((ex) =>
+        fromPlugin(row(ex.argv === "" ? program.name : `${program.name} ${ex.argv}`, ex.summary)),
+      ),
+    },
+  ]
+  return {
+    contractVersion: CLI_CONTRACT_VERSION,
+    kind: "command",
+    program,
+    path: [HOST_MODE_FLAG, hostMode.id],
+    sections: sections.filter(nonEmpty),
+  }
 }
 
 // ---------------------------------------------------------------------------
