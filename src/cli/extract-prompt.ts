@@ -106,6 +106,8 @@ export const FLAGS_NO_VALUE: ReadonlySet<string> = new Set([
   "--header",
   "--no-header",
   "--no-tools",
+  // Plain help output (SPEC-HELP R-29). Read in src/startup/entry-args.ts.
+  "--no-color",
   // Convenience alias for `--disable-plugin agents-md` (AGENTS.md injection).
   "--no-agents-md",
   "--no-agents",
