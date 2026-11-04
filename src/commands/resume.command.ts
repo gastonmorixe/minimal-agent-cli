@@ -23,6 +23,8 @@ export const RESUME_COMMAND: CommandSpec = {
   summary: "Resume a saved session",
   usage: ["resume <sid|last>"],
   args: [SID_ARG],
+  // Routes to the agent run, which accepts every run flag (plan M-13 2.4).
+  strict: false,
   description: [
     "Also: sessions resume <sid>. Aliases: -r, --resume.",
     "It reuses the credential pin only when the provider matches the session.",
@@ -36,6 +38,8 @@ export const RESUME_SAME_COMMAND: CommandSpec = {
   summary: "Resume in place, keeping the same session id",
   usage: ["resume-same <sid|last>"],
   args: [SID_ARG],
+  // Routes to the agent run, which accepts every run flag (plan M-13 2.4).
+  strict: false,
   description: ["Also: sessions resume-same <sid>. Alias: --resume-same-sid."],
 }
 
@@ -45,6 +49,8 @@ export const SESSIONS_RESUME_COMMAND: CommandSpec = {
   summary: "Resume a saved session",
   usage: ["sessions resume <sid|last>"],
   args: [SID_ARG],
+  // Routes to the agent run, which accepts every run flag (plan M-13 2.4).
+  strict: false,
 }
 
 /** `sessions resume-same <sid|last>`, the same run as {@link RESUME_SAME_COMMAND}. */
@@ -53,4 +59,6 @@ export const SESSIONS_RESUME_SAME_COMMAND: CommandSpec = {
   summary: "Resume in place, keeping the same session id",
   usage: ["sessions resume-same <sid|last>"],
   args: [SID_ARG],
+  // Routes to the agent run, which accepts every run flag (plan M-13 2.4).
+  strict: false,
 }
