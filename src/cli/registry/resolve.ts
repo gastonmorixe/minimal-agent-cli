@@ -1,15 +1,18 @@
 /**
  * Help path resolution (SPEC-HELP R-14 to R-17, 8.7, plan M-9a, 4.1).
  *
- * Pure: no env, no fs, no console. Nothing calls it yet: M-9c wires it into
- * startup. It reads raw argv (before `normalizeArgs`), because
- * `normalizeArgs` rewrites `sessions dump` to `--dump` and the path is lost.
+ * Pure: no env, no fs, no console. Called by `prepareEntrypointArgs`
+ * (src/startup/entry-args.ts) before `normalizeArgs`. It reads raw argv,
+ * because `normalizeArgs` rewrites `sessions dump` to `--dump` and the path
+ * is lost.
  *
  * Rules:
  * - Help mode only. Without `--help`, `-h`, or a leading `help`, the result
  *   is `undefined` (normal run).
  * - Forms: `--help` or `-h` anywhere (walk all positionals), `help [path...]`
- *   as raw[0] (walk the positionals after it).
+ *   as raw[0] (walk the positionals after it). `help --help` and `help -h`
+ *   with no positional after `help` read `help` as the path: they give the
+ *   help command's own help, the same as `help help` (R-14).
  * - Positionals are tokens that do not start with `-` (a lone `-` is a
  *   positional), minus the values of value flags. Arity comes from the
  *   registry: `"required"` takes the next token, `"optional"` takes it only
@@ -122,8 +125,11 @@ export function resolveHelpRequest(
   raw: readonly string[],
   reg: BuiltinRegistry,
 ): HelpRequest | undefined {
-  const helpForm = raw[0] === "help"
   const flagForm = raw.includes("--help") || raw.includes("-h")
+  // `help --help` and `help -h` (no path after `help`) ask for the help
+  // command's own help: read `help` as a path there, not as the form (R-14).
+  const helpForm =
+    raw[0] === "help" && !(flagForm && helpPositionals(raw.slice(1), reg).length === 0)
   if (!helpForm && !flagForm) return undefined
 
   const positionals = helpPositionals(helpForm ? raw.slice(1) : raw, reg)
