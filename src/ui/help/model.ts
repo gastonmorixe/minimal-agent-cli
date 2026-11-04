@@ -53,13 +53,18 @@ function row(term: string, summary: string): HelpModelRow {
   return { term, summary, source: BUILTIN }
 }
 
+/** The separator between note clauses. A note can hold ", " itself (`one of: a, b`). */
+const NOTE_SEPARATOR = "; "
+
 /**
- * The summary plus its notes in one trailing bracket, joined with ", ". Empty
- * notes are left out. The renderer dims the bracket.
+ * The summary plus its notes in one trailing bracket. Each note is one clause
+ * (`one of: a, b`, `default: x`, `env: NAME`), so the clauses are joined with
+ * "; ": a comma would make the env read like one more choice. Empty notes are
+ * left out. The renderer dims the bracket.
  */
 function withNotes(summary: string, notes: readonly (string | undefined)[]): string {
   const kept = notes.filter((n): n is string => n !== undefined && n !== "")
-  return kept.length === 0 ? summary : `${summary} (${kept.join(", ")})`
+  return kept.length === 0 ? summary : `${summary} (${kept.join(NOTE_SEPARATOR)})`
 }
 
 /** A value as help text: quoted when it is empty or holds white space. */
@@ -106,9 +111,9 @@ function hiddenForms(reg: BuiltinRegistry, spec: FlagSpec): FlagSpec[] {
 }
 
 /**
- * A root FLAGS row: the summary, then notes made from the registry: the
- * default (`FlagSpec.default`), the hidden forms, and the env pointer
- * (`FlagSpec.env`). No description (R-13).
+ * A root FLAGS row: the summary, then notes made from the registry, in this
+ * order: the choices, the default (`FlagSpec.default`), the hidden forms, and
+ * the env pointer (`FlagSpec.env`). No description (R-13).
  */
 function globalFlagRow(reg: BuiltinRegistry, spec: FlagSpec): HelpModelRow {
   const forms = hiddenForms(reg, spec).map(flagTerm)
