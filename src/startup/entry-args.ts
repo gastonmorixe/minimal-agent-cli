@@ -22,9 +22,10 @@ import { builtinRegistry } from "../cli/registry/index.ts"
 import { type HelpRequest, resolveHelpRequest } from "../cli/registry/resolve.ts"
 import { resolveSystemPromptOverridesForStartup } from "../cli/system-prompt-override-resolution.ts"
 import { parseFormatterCommand } from "../ui/formatter/formatter.ts"
+import { wantsJsonHelp } from "../ui/help/json.ts"
 import { setStartupTreeVisible } from "../ui/startup/tree.ts"
 
-import { type HelpOutput, printHelp, printHelpError } from "./help.ts"
+import { type HelpOutput, printHelp, printHelpError, printHelpJson } from "./help.ts"
 
 /** Process environment shape used by startup argument preparation. */
 export type EntrypointEnv = Record<string, string | undefined>
@@ -221,7 +222,12 @@ function writeHelp(
     return code
   }
   const noColor = input.rawArgv.includes("--no-color")
-  if (req.kind === "help") {
+  // JSON help (R-30, Q-4): `--output-format json` or its `--json` alias.
+  // An unknown help path keeps the text error on stderr and exit 2, also
+  // with `--json`: v1 has no JSON error format.
+  if (req.kind === "help" && wantsJsonHelp(input.rawArgv)) {
+    printHelpJson(input.stdout ?? process.stdout, req.path)
+  } else if (req.kind === "help") {
     printHelp(input.stdout ?? process.stdout, { path: req.path, noColor, env: input.env })
   } else {
     const errOut: HelpOutput = {

@@ -4,7 +4,8 @@
  *
  * Root help and command help come from the built-in registry:
  * `buildHelpModel` makes the help model (SPEC-HELP 8.3), and `renderModel`
- * draws it (root: spec 8.4, plan M-8d. Command: spec 8.5, plan M-9c). An
+ * draws it (root: spec 8.4, plan M-8d. Command: spec 8.5, plan M-9c).
+ * `renderHelpJson` prints the same model as JSON (R-30, plan M-11). An
  * unknown help path
  * prints an error on stderr (R-17, R-32). Pure presentation, no startup
  * state.
@@ -16,6 +17,7 @@ import pkg from "../../package.json" with { type: "json" }
 import { builtinRegistry } from "../cli/registry/index.ts"
 import type { HelpRequest } from "../cli/registry/resolve.ts"
 import { type CommandOutput, writeCommandRows } from "../ui/command-output.ts"
+import { helpModelJson } from "../ui/help/json.ts"
 import { buildHelpModel } from "../ui/help/model.ts"
 import { resolveHelpPolicy } from "../ui/help/policy.ts"
 import { renderModel } from "../ui/help/render-model.ts"
@@ -97,6 +99,25 @@ export function printHelp(output: HelpOutput = process.stdout, opts: PrintHelpOp
   })
   const path = opts.path ?? []
   writeCommandRows(path.length === 0 ? renderHelp(policy) : renderCommandHelp(path, policy), output)
+}
+
+/**
+ * The help model for `path` as JSON (SPEC-HELP R-30, plan M-11): root help
+ * when `path` is empty or absent. No color, no wrap.
+ */
+export function renderHelpJson(path: readonly string[] = []): string {
+  return helpModelJson(buildHelpModel(builtinRegistry(), { path }))
+}
+
+/**
+ * Print the help model for `path` as JSON to `output` (stdout). The policy
+ * is not read: JSON has no color and no wrap at any width.
+ */
+export function printHelpJson(
+  output: CommandOutput = process.stdout,
+  path: readonly string[] = [],
+): void {
+  output.write(renderHelpJson(path))
 }
 
 /** `"a"`, `"a" or "b"`, `"a", "b", or "c"`. */
