@@ -21,6 +21,12 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-04: `--help --json` and `--help --output-format json` print the
+  help model as JSON (with `contractVersion`) for root help and for every
+  command help form (`<cmd> --help --json`, `help <cmd> --json`). No color,
+  no wrap. `--format` still selects the endpoint surface, so `--help
+  --format json` prints text help. An unknown help path still prints the
+  text error on stderr and exits 2. LEARN MORE names the new form.
 - 2026-11-02: `auth-status plan [<credential>] [--all] [--table] [--parallel <n>]`.
   It shows the plan, seat, role, usage windows with reset times, and
   overage for each stored credential whose provider plugin has a

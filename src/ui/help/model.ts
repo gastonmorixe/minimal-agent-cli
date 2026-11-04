@@ -347,7 +347,11 @@ function buildRootModel(reg: BuiltinRegistry, program: HelpModelProgram): HelpMo
     {
       id: "learn-more",
       title: ROOT_TITLES["learn-more"],
-      text: [`Use ${program.name} help <command> for command help.`, PROJECT_URL],
+      text: [
+        `Use ${program.name} help <command> for command help.`,
+        `${program.name} --help --json prints this help as JSON`,
+        PROJECT_URL,
+      ],
       rows: DOCS.map(([term, summary]) => row(term, summary)),
     },
   ]

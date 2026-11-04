@@ -229,9 +229,10 @@ describe("root help model (M-8d, spec 8.4)", () => {
     expect(env).toHaveLength(reg.env.filter((e) => e.hidden !== true).length)
   })
 
-  test("learn more: the command help hint and the project URL", () => {
+  test("learn more: the command help hint, the JSON hint, and the project URL", () => {
     expect(section("learn-more")?.text).toEqual([
       "Use minimal-agent help <command> for command help.",
+      "minimal-agent --help --json prints this help as JSON",
       "github.com/gastonmorixe/minimal-agent",
     ])
   })

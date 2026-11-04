@@ -5,17 +5,23 @@
  * `help <path>` go through `prepareEntrypointArgs` with an in-memory stdout
  * and must write byte-equal text. The root forms `--help`, `-h`, and `help`
  * give today's root help. A command argv with no help token (for example
- * `auth-status plan --all`) keeps its normal plan.
+ * `auth-status plan --all`) keeps its normal plan. With `--json` or
+ * `--output-format json`, every form prints the same help model as JSON
+ * (R-30, plan M-11).
  *
  * @module startup/help-forms.test
  */
 
 import { describe, expect, test } from "bun:test"
+import {
+  CLI_CONTRACT_VERSION,
+  type HelpModel,
+} from "@minimal-agent/core/plugin-api/types/cli-contract"
 
 import { builtinRegistry } from "../cli/registry/index.ts"
 import { visibleCommandPaths } from "../ui/help/model.ts"
 import { prepareEntrypointArgs } from "./entry-args.ts"
-import { printHelp, renderCommandHelp } from "./help.ts"
+import { printHelp, renderCommandHelp, renderHelpJson } from "./help.ts"
 
 class ExitSignal extends Error {
   constructor(readonly code: number) {
@@ -133,6 +139,99 @@ describe("the help command (R-14)", () => {
       expect(r.stdout).toBe(expected)
     }
   })
+})
+
+/** Every string value (and key) in a parsed JSON value, depth first. */
+function jsonStrings(value: unknown): string[] {
+  if (typeof value === "string") return [value]
+  if (Array.isArray(value)) return value.flatMap(jsonStrings)
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value).flatMap(([k, v]) => [k, ...jsonStrings(v)])
+  }
+  return []
+}
+
+/** ESC or any other C0 control char. */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the test looks for control chars
+const CONTROL = /[\u0000-\u001f\u007f]/u
+
+/** The JSON help forms for `path` (R-30, plan M-11). Root: the first three. */
+function jsonForms(path: readonly string[]): string[][] {
+  if (path.length === 0) {
+    return [
+      ["--help", "--json"],
+      ["-h", "--json"],
+      ["help", "--json"],
+    ]
+  }
+  return [
+    [...path, "--help", "--json"],
+    [...path, "-h", "--json"],
+    ["help", ...path, "--json"],
+    [...path, "--help", "--output-format", "json"],
+    ["help", ...path, "--output-format=json"],
+  ]
+}
+
+describe("JSON help (R-30, Q-4, plan M-11)", () => {
+  test("root: every form prints the root model, kind root, contract version", () => {
+    const expected = renderHelpJson()
+    for (const argv of [...jsonForms([]), ["--help", "--output-format", "json"]]) {
+      const r = run(argv)
+      expect(r.code).toBe(0)
+      expect(r.stderr).toBe("")
+      expect(r.stdout).toBe(expected)
+    }
+    const parsed = JSON.parse(expected) as HelpModel
+    expect(parsed.kind).toBe("root")
+    expect(parsed.path).toEqual([])
+    expect(parsed.contractVersion).toBe(CLI_CONTRACT_VERSION)
+    for (const s of jsonStrings(parsed)) expect(s).not.toMatch(CONTROL)
+  })
+
+  test("--json and --output-format json give equal bytes", () => {
+    expect(run(["--help", "--json"]).stdout).toBe(run(["--help", "--output-format", "json"]).stdout)
+    expect(run(["sessions", "--help", "--json"]).stdout).toBe(
+      run(["sessions", "--help", "--output-format", "json"]).stdout,
+    )
+  })
+
+  test("--format json and --output-format text give text help, not JSON", () => {
+    const text = run(["--help"]).stdout
+    expect(run(["--help", "--format", "json"]).stdout).toBe(text)
+    expect(run(["--help", "--output-format", "text"]).stdout).toBe(text)
+    expect(() => JSON.parse(run(["--help", "--format", "json"]).stdout)).toThrow()
+    expect(run(["sessions", "--help", "--format", "json"]).stdout).toBe(
+      run(["sessions", "--help"]).stdout,
+    )
+  })
+
+  test("an unknown help path with --json: text error on stderr, exit 2", () => {
+    const text = run(["help", "bogus"])
+    const json = run(["help", "bogus", "--json"])
+    expect(json.code).toBe(2)
+    expect(json.stdout).toBe("")
+    expect(json.stderr).toBe(text.stderr)
+    expect(json.stderr.startsWith("error:")).toBe(true)
+  })
+
+  for (const path of PATHS) {
+    const name = path.join(" ")
+    test(`${name}: every JSON form prints the command model`, () => {
+      const expected = renderHelpJson(path)
+      for (const argv of jsonForms(path)) {
+        const r = run(argv)
+        expect(r.code).toBe(0)
+        expect(r.stderr).toBe("")
+        expect(r.stdout).toBe(expected)
+      }
+      const parsed = JSON.parse(expected) as HelpModel
+      expect(parsed.kind).toBe("command")
+      expect(parsed.path).toEqual(path)
+      expect(parsed.contractVersion).toBe(CLI_CONTRACT_VERSION)
+      for (const s of jsonStrings(parsed)) expect(s).not.toMatch(CONTROL)
+    })
+  }
 })
 
 describe("not a help request", () => {

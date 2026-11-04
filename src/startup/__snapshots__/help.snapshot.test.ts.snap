@@ -248,6 +248,7 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
 
   LEARN MORE
     Use minimal-agent help <command> for command help.
+    minimal-agent --help --json prints this help as JSON
     github.com/gastonmorixe/minimal-agent
     CHANGELOG.md                    CLI release notes, newest first
                                     (minimal-agent-cli repo)
@@ -432,6 +433,7 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
 
   LEARN MORE
     Use minimal-agent help <command> for command help.
+    minimal-agent --help --json prints this help as JSON
     github.com/gastonmorixe/minimal-agent
     CHANGELOG.md                    CLI release notes, newest first (minimal-agent-cli repo)
     docs/tui/                       Terminal renderer architecture (compositor, live area, editor)
