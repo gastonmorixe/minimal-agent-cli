@@ -17,4 +17,6 @@ export const HELP_COMMAND: CommandSpec = {
   summary: "Show help for a command",
   usage: ["help [<command>...]"],
   args: [{ name: "command", summary: "Command path, for example sessions dump", variadic: true }],
+  // Help accepts the flags of the command it shows (plan M-13 2.4).
+  strict: false,
 }
