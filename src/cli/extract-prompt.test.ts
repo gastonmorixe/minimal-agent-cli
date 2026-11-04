@@ -342,6 +342,16 @@ describe("extractPromptFromArgs", () => {
     expect(extractPromptFromArgs(["--platform", "macos"])).toEqual({ kind: "none" })
   })
 
+  // ---- regression (M-12): --parallel must consume its value -------------
+
+  test("--parallel <n> does not leak <n> as the prompt", () => {
+    expect(extractPromptFromArgs(["--parallel", "8"])).toEqual({ kind: "none" })
+    expect(extractPromptFromArgs(["--parallel", "8", "hello"])).toEqual({
+      kind: "literal",
+      text: "hello",
+    })
+  })
+
   // ---- regression: --host-mode must consume its id, and own the rest ----
 
   test("--host-mode <id> alone → none (the id is not a prompt)", () => {

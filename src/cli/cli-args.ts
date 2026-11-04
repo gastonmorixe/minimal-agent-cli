@@ -36,35 +36,20 @@
  * @module cli-args
  */
 
-const SHORT_TO_LONG: Record<string, string> = {
-  "-m": "--model",
-  "-p": "--prompt",
-  "-f": "--formatter",
-  "-e": "--effort",
-  "-s": "--spinner",
-  "-r": "--resume",
-  "-F": "--fast",
-  "-d": "--debug",
-  "-v": "--verbose",
-  "-h": "--help",
-}
+import { builtinArity } from "./registry/arity.ts"
 
-const LONG_ALIAS: Record<string, string> = {
-  "--models": "--list-models",
-  "--models-live": "--list-models-live",
-  "--providers": "--list-providers",
-  "--list-model": "--list-models",
-  "--list-model-live": "--list-models-live",
-  "--flags": "--list-flags",
-  "--list-flag": "--list-flags",
-  "--plugins": "--list-plugins",
-  "--list-plugin": "--list-plugins",
-  "--spinners": "--list-spinners",
-  "--list-spinner": "--list-spinners",
-  "--session": "--sessions",
-  "--list-sessions": "--sessions",
-  "--usage-stats": "--usage",
-}
+/**
+ * Short flag to long flag (`-m` to `--model`). Derived from the CLI
+ * registry (SPEC-HELP M-12): every FlagSpec with a `short`.
+ */
+const SHORT_TO_LONG: Readonly<Record<string, string>> = builtinArity().shortToLong
+
+/**
+ * Long alias to the canonical long flag (`--models` to `--list-models`).
+ * Derived from the CLI registry (SPEC-HELP M-12): the aliases of the
+ * hidden command-form flags. See `src/cli/registry/arity.ts`.
+ */
+const LONG_ALIAS: Readonly<Record<string, string>> = builtinArity().longAlias
 
 interface SubcommandSpec {
   flag: string
