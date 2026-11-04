@@ -1,11 +1,22 @@
 import { describe, expect, test } from "bun:test"
-import type { HelpModelRow } from "@minimal-agent/core/plugin-api/types/cli-contract"
+import type {
+  HelpModel,
+  HelpModelRow,
+  HelpModelSection,
+} from "@minimal-agent/core/plugin-api/types/cli-contract"
 import { CLI_CONTRACT_VERSION } from "@minimal-agent/core/plugin-api/types/cli-contract"
 import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { builtinRegistry } from "../../cli/registry/index.ts"
 import { LEGACY_TERM_OVERRIDES, renderLegacyRoot } from "./legacy-root.ts"
-import { buildHelpModel, flagTerm } from "./model.ts"
+import {
+  buildCommandHelpModel,
+  buildHelpModel,
+  COMMAND_SECTION_ORDER,
+  flagTerm,
+  visibleCommandPaths,
+} from "./model.ts"
+import { renderModel } from "./render-model.ts"
 import { styleSummary, styleTerm, styleTitle } from "./style.ts"
 
 const reg = builtinRegistry()
@@ -112,6 +123,298 @@ describe("root help model (M-8c)", () => {
       catalog: [],
     })
     expect(withCatalog).toEqual(model)
+  })
+})
+
+describe("command help model (M-9b, spec 8.5)", () => {
+  const program = { name: "minimal-agent", version: "9.9.9" }
+  const cmd = (path: string[]): HelpModel => buildHelpModel(reg, { program, path })
+  const section = (m: HelpModel, id: string): HelpModelSection | undefined =>
+    m.sections.find((s) => s.id === id)
+
+  test("a non-empty path gives a command model with the canonical path", () => {
+    const m = cmd(["sessions"])
+    expect(m.kind).toBe("command")
+    expect(m.path).toEqual(["sessions"])
+    expect(m.contractVersion).toBe(CLI_CONTRACT_VERSION)
+    expect(buildCommandHelpModel(reg, ["sessions"], program)).toEqual(m)
+  })
+
+  test("section ids of every visible path follow the 8.5 order", () => {
+    const paths = visibleCommandPaths(reg)
+    expect(paths.length).toBeGreaterThan(20)
+    for (const path of paths) {
+      const ids = cmd(path).sections.map((s) => s.id)
+      const ranks = ids.map((id) => COMMAND_SECTION_ORDER.indexOf(id as never))
+      expect(ranks.every((r) => r >= 0)).toBe(true)
+      expect(ranks).toEqual(ranks.toSorted((a, b) => a - b))
+      expect(new Set(ids).size).toBe(ids.length)
+      expect(ids[0]).toBe("header")
+      expect(ids).toContain("usage")
+      expect(ids).toContain("global-flags")
+    }
+  })
+
+  test("the order constant is the spec 8.5 list", () => {
+    expect([...COMMAND_SECTION_ORDER]).toEqual([
+      "header",
+      "usage",
+      "arguments",
+      "commands",
+      "flags",
+      "global-flags",
+      "environment",
+      "examples",
+      "see-also",
+    ])
+  })
+
+  test("a path with every section keeps the full 8.5 order", () => {
+    // `models` (hidden) has args, children, flags, env, and seeAlso. Only
+    // examples are missing, so check that one apart on `sessions`.
+    expect(cmd(["models"]).sections.map((s) => s.id)).toEqual([
+      "header",
+      "usage",
+      "arguments",
+      "commands",
+      "flags",
+      "global-flags",
+      "environment",
+      "see-also",
+    ])
+    expect(cmd(["sessions"]).sections.map((s) => s.id)).toEqual([
+      "header",
+      "usage",
+      "arguments",
+      "commands",
+      "global-flags",
+      "examples",
+    ])
+  })
+
+  test("empty sections are left out", () => {
+    const ids = cmd(["flags", "list"]).sections.map((s) => s.id)
+    expect(ids).toEqual(["header", "usage", "global-flags"])
+  })
+
+  test("header: program and path, then summary and description", () => {
+    const h = section(cmd(["resume"]), "header")
+    expect(h?.title).toBe("minimal-agent resume")
+    expect(h?.text?.[0]).toBe("Resume a saved session")
+    expect(h?.text?.length).toBe(3)
+  })
+
+  test("usage: the spec override with the program prefix, plus a command line for children", () => {
+    expect(section(cmd(["sessions"]), "usage")?.text).toEqual([
+      "minimal-agent sessions [list|query]",
+      "minimal-agent sessions <command> [args] [flags]",
+    ])
+    expect(section(cmd(["provider"]), "usage")?.text).toEqual([
+      "minimal-agent provider <id> <command>",
+    ])
+  })
+
+  test("usage: generated from args and flags when no override", () => {
+    const spec = { name: "x", summary: "X" }
+    const r = {
+      ...reg,
+      root: {
+        ...reg.root,
+        commands: [
+          {
+            name: "demo",
+            summary: "Demo",
+            args: [
+              { name: "a", summary: "A", required: true },
+              { name: "b", summary: "B", variadic: true },
+            ],
+            flags: [{ name: "f", type: "boolean" as const, summary: "F" }],
+            commands: [spec],
+          },
+        ],
+      },
+    }
+    expect(section(buildCommandHelpModel(r, ["demo"], program), "usage")?.text).toEqual([
+      "minimal-agent demo <a> [<b>...] [flags]",
+      "minimal-agent demo <a> <command> [args] [flags]",
+    ])
+    expect(section(buildCommandHelpModel(r, ["demo", "x"], program), "usage")?.text).toEqual([
+      "minimal-agent demo <a> x",
+    ])
+  })
+
+  test("arguments list choices after the summary", () => {
+    const rows = section(cmd(["usage"]), "arguments")?.rows ?? []
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.term).toBe("period")
+    expect(rows[0]?.summary).toMatch(/^Time window of the stats \(one of: /u)
+  })
+
+  test("commands: visible children with required args, hidden children left out", () => {
+    const terms = (section(cmd(["sessions"]), "commands")?.rows ?? []).map((r) => r.term)
+    expect(terms).toEqual(["list", "dump <sid>", "resume <sid>", "resume-same <sid>"])
+    const r = {
+      ...reg,
+      root: {
+        ...reg.root,
+        commands: [
+          {
+            name: "p",
+            summary: "P",
+            commands: [
+              { name: "shown", summary: "S" },
+              { name: "secret", summary: "H", hidden: true },
+            ],
+          },
+        ],
+      },
+    }
+    const rows = section(buildCommandHelpModel(r, ["p"], program), "commands")?.rows ?? []
+    expect(rows.map((x) => x.term)).toEqual(["shown"])
+    expect(buildCommandHelpModel(r, ["p", "secret"], program).path).toEqual(["p", "secret"])
+  })
+
+  test("a hidden top-level command renders by path but is not a visible path", () => {
+    expect(cmd(["models"]).path).toEqual(["models"])
+    const visible = visibleCommandPaths(reg).map((p) => p.join(" "))
+    expect(visible).not.toContain("models")
+    expect(visible).not.toContain("models-live")
+    expect(visible).toContain("providers models")
+  })
+
+  test("flags: one plain list when the flags have one group or none", () => {
+    const f = section(cmd(["auth-status", "plan"]), "flags")
+    expect(f?.groups).toBeUndefined()
+    expect((f?.rows ?? []).map((r) => r.term)).toEqual([
+      "--all",
+      "--table",
+      "--parallel <n>",
+      "--name <n>",
+    ])
+  })
+
+  test("flags: two or more groups render as titled groups in flagGroups order", () => {
+    const r = {
+      ...reg,
+      root: {
+        ...reg.root,
+        commands: [
+          {
+            name: "g",
+            summary: "G",
+            flags: [
+              { name: "plain", type: "boolean" as const, summary: "P" },
+              { name: "dbg", type: "boolean" as const, summary: "D", group: "debug" },
+              { name: "mdl", type: "string" as const, summary: "M", group: "model" },
+              { name: "gone", type: "boolean" as const, summary: "H", hidden: true },
+            ],
+          },
+        ],
+      },
+    }
+    const f = section(buildCommandHelpModel(r, ["g"], program), "flags")
+    expect((f?.rows ?? []).map((x) => x.term)).toEqual(["--plain"])
+    expect((f?.groups ?? []).map((g) => [g.title, g.rows.map((x) => x.term)])).toEqual([
+      ["Model", ["--mdl <value>"]],
+      ["Debug", ["--dbg"]],
+    ])
+  })
+
+  test("global flags: the pointer line plus -h and -d", () => {
+    const g = section(cmd(["sessions", "dump"]), "global-flags")
+    expect(g?.text).toEqual(["See minimal-agent --help for all global flags."])
+    expect((g?.rows ?? []).map((r) => r.term)).toEqual(["-h, --help", "-d, --debug"])
+  })
+
+  test("environment: env that backs a command flag", () => {
+    const rows = section(cmd(["providers", "models"]), "environment")?.rows ?? []
+    expect(rows.map((r) => r.term)).toEqual(["MINIMAL_AGENT_PRINT_FORMAT"])
+    const plugins = section(cmd(["plugins"]), "environment")?.rows ?? []
+    expect(plugins.map((r) => r.term)).toEqual([
+      "MINIMAL_AGENT_DISABLE_PLUGINS",
+      "MINIMAL_AGENT_ENABLE_PLUGINS",
+    ])
+  })
+
+  test("examples and see also carry the program name", () => {
+    const ex = section(cmd(["sessions"]), "examples")?.rows ?? []
+    expect(ex.map((r) => r.term)).toEqual([
+      "minimal-agent sessions auth",
+      "minimal-agent sessions dump last",
+    ])
+    expect(section(cmd(["models"]), "see-also")?.text).toEqual(["minimal-agent providers models"])
+  })
+
+  test("every row has source builtin and the model is plain text", () => {
+    for (const path of visibleCommandPaths(reg)) {
+      for (const s of cmd(path).sections) {
+        const rows = [...(s.rows ?? []), ...(s.groups ?? []).flatMap((g) => g.rows)]
+        for (const r of rows) expect(r.source).toBe("builtin")
+        const strings = [s.title, ...(s.text ?? []), ...rows.flatMap((r) => [r.term, r.summary])]
+        for (const str of strings) expect(str).not.toMatch(/[\u0000-\u001f]/u)
+      }
+    }
+  })
+
+  test("an unknown path throws", () => {
+    expect(() => cmd(["bogus"])).toThrow(/no command at "bogus"/u)
+  })
+
+  test("an empty path still gives the root model", () => {
+    expect(buildHelpModel(reg, { program, path: [] })).toEqual(model)
+  })
+})
+
+describe("renderModel", () => {
+  const program = { name: "minimal-agent", version: "9.9.9" }
+
+  test("color and plain output have the same visible text", () => {
+    const m = buildHelpModel(reg, { program, path: ["sessions"] })
+    const colored = renderModel(m, { width: 80, color: true })
+    const plain = renderModel(m, { width: 80, color: false })
+    expect(colored.map(stripAnsi)).toEqual(plain)
+    expect(colored.join("\n")).toMatch(/\u001b\[/u)
+    expect(plain.join("\n")).not.toMatch(/\u001b/u)
+  })
+
+  test("layout: title at 2, text and rows at 4, a blank line between sections", () => {
+    const plain = renderModel(buildHelpModel(reg, { program, path: ["sessions"] }), { width: 80 })
+    expect(plain[0]).toBe("  minimal-agent sessions")
+    expect(plain[1]).toBe("    List saved sessions")
+    const usage = plain.indexOf("  USAGE")
+    expect(plain[usage - 1]).toBe("")
+    expect(plain[usage + 1]).toBe("    minimal-agent sessions [list|query]")
+  })
+
+  test("group titles at 4 and their rows at 6", () => {
+    const m: HelpModel = {
+      contractVersion: CLI_CONTRACT_VERSION,
+      kind: "command",
+      program,
+      path: ["g"],
+      sections: [
+        { id: "header", title: "minimal-agent g", text: ["G"] },
+        {
+          id: "flags",
+          title: "FLAGS",
+          groups: [{ title: "Model", rows: [{ term: "--m", summary: "M", source: "builtin" }] }],
+        },
+      ],
+    }
+    expect(renderModel(m, { width: 80 })).toEqual([
+      "  minimal-agent g",
+      "    G",
+      "",
+      "  FLAGS",
+      "    Model",
+      "      --m  M",
+    ])
+  })
+
+  test("renders a root model too", () => {
+    const lines = renderModel(model, { width: 80 })
+    expect(lines[0]).toBe("  minimal-agent v9.9.9")
+    expect(lines.join("\n")).not.toMatch(/\u001b/u)
   })
 })
 
