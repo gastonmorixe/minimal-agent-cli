@@ -64,6 +64,11 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Changed
 
+- 2026-11-04: `<cmd> --help`, `<cmd> -h` and `help <cmd>` now print command
+  help instead of root help. `help --help` and `help -h` print the help
+  command's own help. `help <unknown>` and `<cmd> <unknown> --help` print an
+  error and one hint line with suggestions on stderr and exit 2 (before:
+  root help, exit 0).
 - 2026-11-03: `--help` text fixes. The `Start here` and `Command map`
   columns line up. The `Docs` section names the real paths (this repo has
   `CHANGELOG.md` and `docs/tui/`, the other docs are in core). New env

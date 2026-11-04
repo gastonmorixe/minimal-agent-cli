@@ -85,6 +85,11 @@ const TABLE: readonly (readonly [string[], HelpRequest | undefined])[] = [
   // `help` only counts as raw[0].
   [["sessions", "help"], undefined],
   [["help", "help"], help("help")],
+  // `help --help` / `help -h` with no path: the help command's own help (R-14).
+  [["help", "--help"], help("help")],
+  [["help", "-h"], help("help")],
+  [["help", "sessions", "--help"], help("sessions")],
+  [["help", "--no-color"], help()],
 ]
 
 describe("resolveHelpRequest", () => {
@@ -95,7 +100,14 @@ describe("resolveHelpRequest", () => {
   }
 
   test("-h, --help, and help <path> give the same request (R-14)", () => {
-    const paths = [[], ["sessions"], ["sessions", "dump"], ["auth-status", "plan"], ["provider"]]
+    const paths = [
+      [],
+      ["help"],
+      ["sessions"],
+      ["sessions", "dump"],
+      ["auth-status", "plan"],
+      ["provider"],
+    ]
     for (const path of paths) {
       const viaHelp = resolveHelpRequest(["help", ...path], reg)
       expect(resolveHelpRequest([...path, "--help"], reg)).toEqual(viaHelp)

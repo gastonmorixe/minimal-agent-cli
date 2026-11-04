@@ -56,6 +56,109 @@ describe("prepareEntrypointArgs", () => {
     expect(h.helpCalls()).toBe(1)
   })
 
+  it("passes the resolved help request to the help hook (command path)", () => {
+    const reqs: unknown[] = []
+    let code: number | undefined
+    try {
+      prepareEntrypointArgs({
+        rawArgv: ["sessions", "dump", "--help"],
+        env: {},
+        cwd: "/tmp",
+        ...makeHarness().deps,
+        printHelp: (req) => {
+          reqs.push(req)
+        },
+      })
+    } catch (e) {
+      if (e instanceof ExitSignal) code = e.code
+      else throw e
+    }
+    expect(code).toBe(0)
+    expect(reqs).toEqual([{ kind: "help", path: ["sessions", "dump"] }])
+  })
+
+  it("an unknown help path exits 2 and the hook gets the unknown request", () => {
+    const reqs: unknown[] = []
+    let code: number | undefined
+    try {
+      prepareEntrypointArgs({
+        rawArgv: ["auth-status", "prun", "-h"],
+        env: {},
+        cwd: "/tmp",
+        ...makeHarness().deps,
+        printHelp: (req) => {
+          reqs.push(req)
+        },
+      })
+    } catch (e) {
+      if (e instanceof ExitSignal) code = e.code
+      else throw e
+    }
+    expect(code).toBe(2)
+    expect(reqs).toEqual([
+      { kind: "unknown", at: ["auth-status"], token: "prun", suggestions: ["prune", "plan"] },
+    ])
+  })
+
+  it("help resolves before env writes (--debug --help leaves env untouched)", () => {
+    const env: Record<string, string | undefined> = {}
+    let code: number | undefined
+    try {
+      prepareEntrypointArgs({
+        rawArgv: ["--debug", "--verbose", "sessions", "--help"],
+        env,
+        cwd: "/tmp",
+        ...makeHarness().deps,
+      })
+    } catch (e) {
+      if (e instanceof ExitSignal) code = e.code
+      else throw e
+    }
+    expect(code).toBe(0)
+    expect(env.DEBUG).toBeUndefined()
+    expect(env.VERBOSE).toBeUndefined()
+  })
+
+  it("writes help to the stdout sink and a help error to stderr", () => {
+    const out: string[] = []
+    const h = makeHarness()
+    const { printHelp: _unused, ...deps } = h.deps
+    const run = (rawArgv: string[]): number | undefined => {
+      try {
+        prepareEntrypointArgs({
+          rawArgv,
+          env: { NO_COLOR: "1", COLUMNS: "80" },
+          cwd: "/tmp",
+          ...deps,
+          stdout: { write: (s: string) => out.push(s) },
+        })
+      } catch (e) {
+        if (e instanceof ExitSignal) return e.code
+        throw e
+      }
+      return undefined
+    }
+    expect(run(["help", "sessions"])).toBe(0)
+    expect(out.join("")).toStartWith("  minimal-agent sessions\n")
+    expect(h.writes).toEqual([])
+    out.length = 0
+    expect(run(["help", "bogus"])).toBe(2)
+    expect(out).toEqual([])
+    expect(h.writes.join("")).toStartWith("error: ")
+  })
+
+  it("auth-status plan --all is not a help request (normal plan)", () => {
+    const h = makeHarness()
+    const prepared = prepareEntrypointArgs({
+      rawArgv: ["auth-status", "plan", "--all"],
+      env: {},
+      cwd: "/tmp",
+      ...h.deps,
+    })
+    expect(h.helpCalls()).toBe(0)
+    expect(prepared.commandPlan.command).toBe("auth-status")
+  })
+
   it("propagates --debug/--verbose/--show-hidden-chars into env", () => {
     const h = makeHarness()
     const env: Record<string, string | undefined> = {}
