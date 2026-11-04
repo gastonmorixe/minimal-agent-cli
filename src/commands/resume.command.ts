@@ -24,8 +24,8 @@ export const RESUME_COMMAND: CommandSpec = {
   usage: ["resume <sid|last>"],
   args: [SID_ARG],
   description: [
-    "also: sessions resume <sid>; aliases: -r, --resume",
-    "reuses credential pin only when provider matches the session",
+    "Also: sessions resume <sid>. Aliases: -r, --resume.",
+    "It reuses the credential pin only when the provider matches the session.",
   ],
 }
 
@@ -36,7 +36,7 @@ export const RESUME_SAME_COMMAND: CommandSpec = {
   summary: "Resume in place, keeping the same session id",
   usage: ["resume-same <sid|last>"],
   args: [SID_ARG],
-  description: ["also: sessions resume-same <sid>; alias: --resume-same-sid"],
+  description: ["Also: sessions resume-same <sid>. Alias: --resume-same-sid."],
 }
 
 /** `sessions resume <sid|last>`, the same run as {@link RESUME_COMMAND}. */

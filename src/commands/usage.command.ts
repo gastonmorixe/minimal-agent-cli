@@ -11,7 +11,7 @@ import { USAGE_PERIODS } from "@minimal-agent/core/plugin-api/utils/usage-report
 export const USAGE_COMMAND: CommandSpec = {
   name: "usage",
   group: "history",
-  summary: "Token-usage stats",
+  summary: "Show token usage stats for a period",
   usage: ["usage [<period>]"],
   args: [
     {
@@ -20,5 +20,5 @@ export const USAGE_COMMAND: CommandSpec = {
       choices: USAGE_PERIODS.map((p) => p.id),
     },
   ],
-  description: ["today|last-day|last-month|ytd|year|all; alias: --usage-stats"],
+  description: ["Alias: --usage-stats."],
 }

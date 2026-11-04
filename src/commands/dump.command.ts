@@ -32,5 +32,5 @@ export const DUMP_COMMAND: CommandSpec = {
   usage: ["sessions dump <sid|last>"],
   args: [{ name: "sid", summary: "Session id, or last for the newest session", required: true }],
   flags: [DUMP_FORMAT_FLAG, DUMP_PATHS_FLAG],
-  description: ["alias: --dump <sid|last>; --dump-format md|xml; --dump-paths"],
+  description: ["Alias: --dump <sid|last>."],
 }

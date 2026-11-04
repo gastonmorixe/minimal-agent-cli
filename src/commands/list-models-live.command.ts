@@ -14,8 +14,8 @@ export const PROVIDERS_MODELS_LIVE_COMMAND: CommandSpec = {
   usage: ["providers models-live [<id>]"],
   args: [{ name: "id", summary: "Only this provider" }],
   description: [
-    "also: models-live [list], provider <id> models-live",
-    "aliases: --list-models-live, --models-live",
+    "Also: models-live [list], provider <id> models-live.",
+    "Aliases: --list-models-live, --models-live.",
   ],
 }
 

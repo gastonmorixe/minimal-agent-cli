@@ -2,78 +2,92 @@ import { describe, expect, test } from "bun:test"
 
 import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
-import { renderHelp } from "./help.ts"
+import { renderCommandHelp, renderHelp } from "./help.ts"
+
+const rootText = (): string => stripAnsi(renderHelp().join("\n"))
+const commandText = (path: string[]): string => stripAnsi(renderCommandHelp(path).join("\n"))
 
 describe("renderHelp", () => {
   test("documents plugin enable/disable CLI, env, and list subcommand", () => {
-    const text = stripAnsi(renderHelp().join("\n"))
+    const text = rootText()
     expect(text).toContain("--disable-plugin")
     expect(text).toContain("--enable-plugin")
     expect(text).toContain("plugins list")
-    expect(text).toContain("--list-plugins")
     expect(text).toContain("CLI → env → config → manifest")
     expect(text).toContain("MINIMAL_AGENT_DISABLE_PLUGINS")
     expect(text).toContain("MINIMAL_AGENT_ENABLE_PLUGINS")
     expect(text).toContain("minimal-agent --disable-plugin web-search,memory")
+    expect(commandText(["plugins"])).toContain("--list-plugins")
   })
 
   test("documents --tools allow-list and --no-tools", () => {
-    const text = stripAnsi(renderHelp().join("\n"))
+    const text = rootText()
     expect(text).toContain("--tools <names>")
     expect(text).toContain("--no-tools")
     expect(text).toContain("Advertise only these tools")
-    expect(text).toContain("Advertise no tools (pure Q&A)")
-    expect(text).toContain('e.g. --tools "WebSearch,Task"')
+    expect(text).toContain("Advertise no tools, for pure Q&A")
   })
 
   test("documents --no-agents-md and MINIMAL_AGENT_NO_AGENTS_MD", () => {
-    const text = stripAnsi(renderHelp().join("\n"))
+    const text = rootText()
     expect(text).toContain("--no-agents-md")
     expect(text).toContain("Skip AGENTS.md injection")
-    expect(text).toContain("MINIMAL_AGENT_NO_AGENTS_MD=1")
+    expect(text).toContain("MINIMAL_AGENT_NO_AGENTS_MD")
     expect(text).toContain("--disable-plugin agents-md")
   })
 
-  test("leads with runnable examples and the command map", () => {
-    const text = stripAnsi(renderHelp().join("\n"))
-    expect(text).toContain("Start here")
+  test("leads with usage, runnable examples, and the command list (spec 8.4)", () => {
+    const lines = rootText().split("\n")
+    const titles = lines.filter((l) => /^ {2}[A-Z][A-Z ]+$/u.test(l)).map((l) => l.trim())
+    expect(titles).toEqual([
+      "USAGE",
+      "EXAMPLES",
+      "COMMANDS",
+      "FLAGS",
+      "ENVIRONMENT",
+      "PLUGIN NOTES",
+      "LEARN MORE",
+    ])
+    const text = lines.join("\n")
+    expect(text).toContain("    minimal-agent [flags] [prompt]")
     expect(text).toContain('minimal-agent "explain this codebase"')
-    expect(text).toContain('echo "summarize stdin" | minimal-agent -')
-    expect(text).toContain("Command map")
-    expect(text).toContain("providers models-live")
-    expect(text).toContain("Every command also accepts --help")
+    expect(text).toMatch(/^ {4}minimal-agent - +Read the prompt from stdin$/mu)
+    expect(text).toContain("providers  List registered providers")
+    expect(text).toContain("Use minimal-agent help <command> for command help.")
+    expect(text).toContain("github.com/gastonmorixe/minimal-agent")
+  })
+
+  test("long notes stay out of root help (R-13) and show in command help", () => {
+    const text = rootText()
+    expect(text).not.toContain("Accepted but not enforced")
+    expect(text).not.toContain("Every arg after the id goes to the host mode")
+    expect(commandText(["resume"])).toContain("Aliases: -r, --resume.")
   })
 
   test("documents current output, auth, and command aliases", () => {
-    const text = stripAnsi(renderHelp().join("\n"))
+    const text = rootText()
     expect(text).toContain("--output-format <text|json|stream-json>")
-    expect(text).toContain("--json is an alias for --output-format json")
+    expect(text).toContain("--json is short")
     expect(text).toContain("--format, --surface <id>")
-    expect(text).toContain("--auth-method <oauth|api-key>")
-    expect(text).toContain("--email, --email-hint <address>")
-    expect(text).toContain("--list-providers")
-    expect(text).toContain("--usage-stats")
-    expect(text).toContain("resume-same <sid|last>")
+    expect(text).toContain("resume-same <sid>")
+    expect(commandText(["login"])).toContain("--auth-method <oauth|api-key>")
+    expect(commandText(["login"])).toContain("--email, --email-hint <address>")
+    expect(commandText(["login"])).toContain("--name <label>")
+    expect(commandText(["providers"])).toContain("--list-providers")
+    expect(commandText(["usage"])).toContain("--usage-stats")
+    expect(commandText(["providers", "models"])).toContain("--print-format <text|json|md|xml>")
   })
 
-  test("documents --host-mode and its limits", () => {
-    const text = stripAnsi(renderHelp().join("\n"))
-    expect(text).toContain("--host-mode <id>")
-    expect(text).toContain("Hand the process to a plugin host mode (e.g. acp)")
-    expect(text).toContain("declares that hostModes[] id")
-    expect(text).toContain("every arg after the id goes to the host mode")
-    expect(text).toContain("cannot be combined with --prompt, -p, or a stdin prompt")
+  test("documents --host-mode", () => {
+    expect(rootText()).toContain("--host-mode <id>")
+    expect(rootText()).toContain("Hand the process to a plugin host mode")
   })
 
-  test("documents --diagnostics and the --debug stderr mirror", () => {
-    const text = stripAnsi(renderHelp().join("\n"))
+  test("documents --diagnostics and --debug", () => {
+    const text = rootText()
     expect(text).toContain("--diagnostics")
     expect(text).toContain("With --output-format json, also write diagnostics")
-    expect(text).toContain('each line is a session log entry with ch "event" or "diag"')
-    expect(text).toContain("--debug")
-    expect(text).toContain("outside the REPL, also mirror diagnostics to stderr")
-    expect(text).toContain(
-      "json, stream-json: stdout carries only JSON lines; a stray write fails the run",
-    )
+    expect(text).toContain("-d, --debug")
+    expect(text).toContain("Enable debug logging (env: DEBUG)")
   })
 })

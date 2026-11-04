@@ -17,7 +17,7 @@ export const PRINT_FORMAT_FLAG: FlagSpec = {
   default: "text",
   env: "MINIMAL_AGENT_PRINT_FORMAT",
   summary: "Output shape for providers models",
-  description: ["default: text; aliases: tui/console/stdout; or MINIMAL_AGENT_PRINT_FORMAT"],
+  description: ["The values tui, console, and stdout mean text."],
 }
 
 /** `providers models [<id>]`. Flag forms: `--list-models`, `--models`, `--list-model`. */
@@ -27,7 +27,7 @@ export const PROVIDERS_MODELS_COMMAND: CommandSpec = {
   usage: ["providers models [<id>]"],
   args: [{ name: "id", summary: "Only this provider" }],
   flags: [PRINT_FORMAT_FLAG],
-  description: ["also: models [list], provider <id> models, aliases: --list-models, --models"],
+  description: ["Also: models [list], provider <id> models.", "Aliases: --list-models, --models."],
 }
 
 /** `models [<id>]`, hidden. Same run as {@link PROVIDERS_MODELS_COMMAND}. */

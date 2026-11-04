@@ -10,8 +10,9 @@
  * hold the same names, so they cannot drift.
  *
  * Each part has a visible value flag, plus a `-file` form and a `no-` form,
- * both hidden (so the drift test and M-12 still see them). Order is the
- * root help order, not the core key-spec order.
+ * both hidden (so the drift test and M-12 still see them). Root help names
+ * the hidden forms in the row of the value flag. Order is the root help
+ * order, not the core key-spec order.
  *
  * @module cli/registry/system-prompt-flags
  */
@@ -28,10 +29,8 @@ interface SystemPromptPartData {
   readonly env: string
   /** Env name for the file path. */
   readonly fileEnv: string
-  /** Root help summary of the value flag. */
+  /** One-line summary of the value flag. */
   readonly summary: string
-  /** Root help notes of the value flag. */
-  readonly description: string[]
 }
 
 /** The override parts, in root help order. */
@@ -41,51 +40,42 @@ const PARTS: readonly SystemPromptPartData[] = [
     env: "MINIMAL_AGENT_SYSTEM_PROMPT",
     fileEnv: "MINIMAL_AGENT_SYSTEM_PROMPT_FILE",
     summary: "Replace the whole core-controllable system prompt",
-    description: ["every override accepts <flag>-file <path> or --no-<flag-name> to omit"],
   },
   {
     flag: "system-identity",
     env: "MINIMAL_AGENT_SYSTEM_IDENTITY",
     fileEnv: "MINIMAL_AGENT_SYSTEM_IDENTITY_FILE",
     summary: "Replace the neutral identity block",
-    description: ["or --system-identity-file <path>, or --no-system-identity"],
   },
   {
     flag: "system-instructions",
     env: "MINIMAL_AGENT_SYSTEM_INSTRUCTIONS",
     fileEnv: "MINIMAL_AGENT_SYSTEM_INSTRUCTIONS_FILE",
     summary: "Replace the base instructions block",
-    description: ["or --system-instructions-file <path>, or --no-system-instructions"],
   },
   {
     flag: "system-loop-safety",
     env: "MINIMAL_AGENT_SYSTEM_LOOP_SAFETY",
     fileEnv: "MINIMAL_AGENT_SYSTEM_LOOP_SAFETY_FILE",
     summary: "Replace the loop-safety paragraph",
-    description: ["or --system-loop-safety-file <path>, or --no-system-loop-safety"],
   },
   {
     flag: "system-tool-output-conventions",
     env: "MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS",
     fileEnv: "MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS_FILE",
     summary: "Replace the tool-output-conventions paragraph",
-    description: [
-      "or --system-tool-output-conventions-file <path>, or --no-system-tool-output-conventions",
-    ],
   },
   {
     flag: "system-session-context",
     env: "MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT",
     fileEnv: "MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT_FILE",
-    summary: "Replace the session-context block (plugin prompts)",
-    description: ["or --system-session-context-file <path>, or --no-system-session-context"],
+    summary: "Replace the session-context block of plugin prompts",
   },
   {
     flag: "provider-system-preamble",
     env: "MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE",
     fileEnv: "MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE_FILE",
-    summary: "Replace the provider-owned preamble (requires --unsafe-system-prompt-overrides)",
-    description: ["or --provider-system-preamble-file <path>, or --no-provider-system-preamble"],
+    summary: "Replace the provider preamble, needs --unsafe-system-prompt-overrides",
   },
 ]
 
@@ -102,7 +92,9 @@ function partFlags(part: SystemPromptPartData): FlagSpec[] {
       valueName: "text",
       env: part.env,
       summary: part.summary,
-      description: part.description,
+      description: [
+        `Read the text from a file with --${part.flag}-file <path>. Omit the part with --no-${part.flag}.`,
+      ],
       group: GROUP,
       global: true,
     },
@@ -136,16 +128,17 @@ export const SYSTEM_PROMPT_FLAGS: readonly FlagSpec[] = [
     name: "unsafe-system-prompt-overrides",
     type: "boolean",
     value: "none",
-    summary: "Allow provider preamble replacement/omission",
-    description: ["without this flag, provider preamble overrides are rejected"],
+    summary: "Allow a provider preamble override or omission",
+    description: ["Without this flag, provider preamble overrides are rejected."],
     group: GROUP,
     global: true,
   },
 ]
 
 /**
- * The system-prompt env names, hidden. Root help shows them through one
- * wildcard row, `MINIMAL_AGENT_SYSTEM_*` (legacy override 4, plan 2.4).
+ * The system-prompt env names, hidden. Root help shows each one in the
+ * row of its flag, and the wildcard row `MINIMAL_AGENT_SYSTEM_*` in env.ts
+ * points at them.
  */
 export const SYSTEM_PROMPT_ENV: readonly BuiltinEnvSpec[] = PARTS.flatMap((part) => [
   {

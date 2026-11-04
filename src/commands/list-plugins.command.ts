@@ -15,14 +15,14 @@ import { DISABLE_PLUGIN_FLAG, ENABLE_PLUGIN_FLAG } from "../cli/registry/global-
 export const PLUGINS_COMMAND: CommandSpec = {
   name: "plugins",
   group: "local",
-  summary: "List installed plugins and effective on/off state",
+  summary: "List installed plugins and their on or off state",
   usage: ["plugins [list]"],
   flags: [DISABLE_PLUGIN_FLAG, ENABLE_PLUGIN_FLAG],
-  description: ["aliases: --list-plugins, --plugins"],
+  description: ["Aliases: --list-plugins, --plugins."],
   commands: [
     {
       name: "list",
-      summary: "List installed plugins and effective on/off state",
+      summary: "List installed plugins and their on or off state",
       usage: ["plugins list"],
     },
   ],

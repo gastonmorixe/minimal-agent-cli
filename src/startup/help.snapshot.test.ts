@@ -149,7 +149,7 @@ describe("root help width (SPEC-HELP R-28, V-2)", () => {
       expect(words(helpBytes({ COLUMNS: String(columns) }))).toEqual(wide)
     }
     const narrow = helpBytes({ COLUMNS: "20" }).split("\n")
-    expect(narrow).toContain("  github.com/gastonmorixe/minimal-agent")
+    expect(narrow).toContain("    github.com/gastonmorixe/minimal-agent")
   })
 
   test("the explicit columns option wins over COLUMNS", () => {

@@ -1,12 +1,15 @@
 /**
- * Help model builder (SPEC-HELP 8.3, plan M-8c, 2.4).
+ * Help model builder (SPEC-HELP 8.3, 8.4, 8.5, plan M-8d, M-9b).
  *
  * {@link buildHelpModel} turns the built-in registry into the contract
- * {@link HelpModel}: plain text sections, no color (R-3). The renderer adds
- * style. In M-8c the root model keeps today's root help layout through the
- * temporary data in `legacy-root.ts`, so root help stays byte-identical.
- * M-8d moves the root model to the spec 8.4 layout. M-9b adds command help
- * ({@link buildCommandHelpModel}, spec 8.5 order).
+ * {@link HelpModel}: plain text sections, no color (R-3). The renderer
+ * (`render-model.ts`) adds style. The root model follows the spec 8.4
+ * section order ({@link ROOT_SECTION_ORDER}). Command help follows the spec
+ * 8.5 order ({@link buildCommandHelpModel}).
+ *
+ * Root help is concise (R-13): a row shows the one-line `summary`, plus a
+ * generated `Default:` and `Env:` sentence for a flag. `description`
+ * paragraphs only show in command help.
  *
  * Pure: no I/O, no handler import.
  *
@@ -27,33 +30,16 @@ import {
   type HelpModelProgram,
   type HelpModelRow,
   type HelpModelSection,
+  type RootSectionId,
 } from "@minimal-agent/core/plugin-api/types/cli-contract"
 
-import {
-  type BuiltinEnvSpec,
-  type BuiltinRegistry,
-  childrenOf,
-  findCommand,
-} from "../../cli/registry/index.ts"
-import {
-  LEGACY_AUTH_ITEMS,
-  LEGACY_DOCS,
-  LEGACY_HINT,
-  LEGACY_INFO_ITEMS,
-  LEGACY_OPTIONS_ORDER,
-  LEGACY_PLUGIN_NOTES,
-  LEGACY_SYSTEM_PROMPT_GROUP,
-  LEGACY_TERM_OVERRIDES,
-  LEGACY_TITLES,
-  LEGACY_URL,
-  type LegacyItem,
-} from "./legacy-root.ts"
+import { type BuiltinEnvSpec, type BuiltinRegistry, childrenOf } from "../../cli/registry/index.ts"
 
 /** Inputs of {@link buildHelpModel}. */
 export interface BuildHelpModelOptions {
   /** Program name and version. Default: the root spec name and the core version. */
   readonly program?: HelpModelProgram
-  /** Plugin catalog. Unused in M-8c: plugin rows land in M-10 and M-18. */
+  /** Plugin catalog. Unused until plugin rows land (M-10, M-18). */
   readonly catalog?: readonly CatalogCliEntry[]
   /** Command path. Empty or absent: root help. Else command help (M-9b). */
   readonly path?: readonly string[]
@@ -67,10 +53,34 @@ function row(term: string, summary: string): HelpModelRow {
   return { term, summary, source: BUILTIN }
 }
 
-/** Summary plus the notes in brackets, joined with ", " (the legacy `row()` rule). */
-function withNotes(summary: string, description: readonly string[] | undefined): string {
-  if (description === undefined || description.length === 0) return summary
-  return `${summary} (${description.join(", ")})`
+/**
+ * The summary plus its notes in one trailing bracket, joined with ", ". Empty
+ * notes are left out. The renderer dims the bracket.
+ */
+function withNotes(summary: string, notes: readonly (string | undefined)[]): string {
+  const kept = notes.filter((n): n is string => n !== undefined && n !== "")
+  return kept.length === 0 ? summary : `${summary} (${kept.join(", ")})`
+}
+
+/** A value as help text: quoted when it is empty or holds white space. */
+function shownValue(value: string | number | boolean): string {
+  const text = String(value)
+  return text === "" || /\s/u.test(text) ? JSON.stringify(text) : text
+}
+
+/** `default: <value>`, or nothing when there is no default. */
+function defaultNote(value: string | number | boolean | undefined): string | undefined {
+  return value === undefined ? undefined : `default: ${shownValue(value)}`
+}
+
+/**
+ * `one of: a, b, c` for a flag with `choices`, unless the value placeholder
+ * already lists them (for example `<5m|1h>`).
+ */
+function choicesNote(spec: FlagSpec): string | undefined {
+  if (spec.choices === undefined || spec.choices.length === 0) return undefined
+  if (spec.valueName === spec.choices.join("|")) return undefined
+  return `one of: ${spec.choices.join(", ")}`
 }
 
 /** The help term of a flag: `-s, --name, --alias <value>`, or `--x / --no-x` when negatable. */
@@ -85,156 +95,278 @@ export function flagTerm(spec: FlagSpec): string {
   return names
 }
 
-/** One flag row. */
-function flagRow(spec: FlagSpec): HelpModelRow {
-  return row(flagTerm(spec), withNotes(spec.summary, spec.description))
-}
-
-/** One command row: term from `usage[0]`, else the path. */
-function commandRow(spec: CommandSpec, path: readonly string[]): HelpModelRow {
-  return row(spec.usage?.[0] ?? path.join(" "), withNotes(spec.summary, spec.description))
-}
-
-/** One env row. A value hint shows as `NAME=<set>` (legacy override 3). */
-function envRow(spec: BuiltinEnvSpec): HelpModelRow {
-  const { envValueSuffix, envWildcard } = LEGACY_TERM_OVERRIDES
-  const term =
-    spec.name === envWildcard.name
-      ? envWildcard.name
-      : spec.set === undefined
-        ? spec.name
-        : `${spec.name}${envValueSuffix.separator}${spec.set}`
-  return row(term, withNotes(spec.summary, spec.description))
-}
-
-function mustFind(reg: BuiltinRegistry, path: readonly string[]): CommandSpec {
-  const spec = findCommand(reg, path)
-  if (spec === undefined) throw new Error(`help model: no command at "${path.join(" ")}"`)
-  return spec
+/**
+ * The hidden global forms of a visible global flag `x`: the `x-file` and
+ * `no-x` specs (the system-prompt overrides have both). They have no row of
+ * their own, so the row of `x` names them.
+ */
+function hiddenForms(reg: BuiltinRegistry, spec: FlagSpec): FlagSpec[] {
+  const names = new Set([`${spec.name}-file`, `no-${spec.name}`])
+  return reg.globalFlags.filter((f) => f.hidden === true && names.has(f.name))
 }
 
 /**
- * The display of a root group member: each non-leaf segment adds its
- * required args, so `["provider", "login"]` shows as `provider <id> login`.
+ * A root FLAGS row: the summary, then notes made from the registry: the
+ * default (`FlagSpec.default`), the hidden forms, and the env pointer
+ * (`FlagSpec.env`). No description (R-13).
  */
-function memberDisplay(reg: BuiltinRegistry, path: readonly string[]): string {
-  return path
-    .map((name, i) => {
-      if (i === path.length - 1) return name
-      const node = mustFind(reg, path.slice(0, i + 1))
-      const required = (node.args ?? []).filter((a) => a.required === true)
-      return [name, ...required.map((a) => `<${a.name}>`)].join(" ")
-    })
-    .join(" ")
-}
-
-function helpFlag(reg: BuiltinRegistry): FlagSpec {
-  const spec = reg.globalFlags.find((f) => f.name === LEGACY_TERM_OVERRIDES.helpRow.flag)
-  if (spec === undefined) throw new Error("help model: no global help flag")
-  return spec
-}
-
-/** One row of the legacy Auth and Info sections. */
-function legacyItemRow(reg: BuiltinRegistry, item: LegacyItem): HelpModelRow {
-  if ("helpRow" in item) return row(LEGACY_TERM_OVERRIDES.helpRow.term, helpFlag(reg).summary)
-  if ("command" in item) return commandRow(mustFind(reg, item.command), item.command)
-  const spec = mustFind(reg, item.path).flags?.find((f) => f.name === item.flag)
-  if (spec === undefined) {
-    throw new Error(`help model: no flag --${item.flag} at "${item.path.join(" ")}"`)
-  }
-  return flagRow(spec)
-}
-
-/** Visible global flags in the legacy Options order, then any other visible ones. */
-function optionsRows(reg: BuiltinRegistry): HelpModelRow[] {
-  const helpName = LEGACY_TERM_OVERRIDES.helpRow.flag
-  const visible = reg.globalFlags.filter(
-    (f) => f.hidden !== true && f.group !== LEGACY_SYSTEM_PROMPT_GROUP && f.name !== helpName,
+function globalFlagRow(reg: BuiltinRegistry, spec: FlagSpec): HelpModelRow {
+  const forms = hiddenForms(reg, spec).map(flagTerm)
+  return row(
+    flagTerm(spec),
+    withNotes(spec.summary, [
+      choicesNote(spec),
+      defaultNote(spec.default),
+      forms.length === 0 ? undefined : `also ${forms.join(", ")}`,
+      spec.env === undefined ? undefined : `env: ${spec.env}`,
+    ]),
   )
-  const rank = (f: FlagSpec): number => {
-    const i = LEGACY_OPTIONS_ORDER.indexOf(f.name)
-    return i < 0 ? LEGACY_OPTIONS_ORDER.length : i
-  }
-  return visible.toSorted((a, b) => rank(a) - rank(b)).map(flagRow)
 }
 
-function systemPromptGroup(reg: BuiltinRegistry): HelpModelGroup {
-  const group = reg.flagGroups.find((g) => g.id === LEGACY_SYSTEM_PROMPT_GROUP)
-  const base = group?.title ?? "System prompt"
-  const title = group?.note === undefined ? base : `${base} (${group.note})`
-  const rows = reg.globalFlags
-    .filter((f) => f.hidden !== true && f.group === LEGACY_SYSTEM_PROMPT_GROUP)
-    .map(flagRow)
-  return { title, rows }
+/**
+ * The summary with its notes, then the description paragraphs (full
+ * sentences) after it, so a long row reads `Summary (notes). Text.`.
+ */
+function withDescription(
+  summary: string,
+  notes: readonly (string | undefined)[],
+  description: readonly string[] | undefined,
+): string {
+  const head = withNotes(summary, notes)
+  if (description === undefined || description.length === 0) return head
+  return [`${head}.`, ...description].join(" ")
 }
 
-function exampleRows(reg: BuiltinRegistry, program: HelpModelProgram): HelpModelRow[] {
-  const { stdinExample } = LEGACY_TERM_OVERRIDES
-  return (reg.root.examples ?? []).map((ex) => {
-    if (ex.argv === stdinExample.argv) return row(stdinExample.term, ex.summary)
-    const argv = ex.argv === "" ? "" : ` ${ex.argv}`
-    return row(`$ ${program.name}${argv}`, ex.summary)
-  })
+/**
+ * A command FLAGS row: the summary, the choices and the default as notes,
+ * then the description. The env shows in the ENVIRONMENT section of command
+ * help.
+ */
+function commandFlagRow(spec: FlagSpec): HelpModelRow {
+  return row(
+    flagTerm(spec),
+    withDescription(spec.summary, [choicesNote(spec), defaultNote(spec.default)], spec.description),
+  )
 }
 
-/** The root model in the legacy layout (plan 2.4). M-8d replaces it. */
-function buildLegacyRootModel(reg: BuiltinRegistry, program: HelpModelProgram): HelpModel {
-  const sections: HelpModelSection[] = [
+/**
+ * One env row: the bare name (item 7 of plan M-8d), then the summary, and
+ * as notes the value hint (`set`), the default, and the flag pointer
+ * (`EnvSpec.flag`). Command help (`full`) also shows the description.
+ */
+function envRow(spec: BuiltinEnvSpec, full = false): HelpModelRow {
+  const notes = [
+    spec.set === undefined ? undefined : `set to ${spec.set}`,
+    defaultNote(spec.default),
+    spec.flag === undefined ? undefined : `flag: --${spec.flag}`,
+  ]
+  return row(spec.name, withDescription(spec.summary, notes, full ? spec.description : undefined))
+}
+
+/** The visible children of `node`. Hidden children render by path only. */
+function visibleChildren(node: CommandSpec): CommandSpec[] {
+  return childrenOf(node).filter((child) => child.hidden !== true)
+}
+
+/** One arg in usage form: `<x>` required, `[<x>]` optional, `...` when variadic. */
+function argUsage(arg: ArgSpec): string {
+  const more = arg.variadic === true ? "..." : ""
+  return arg.required === true ? `<${arg.name}>${more}` : `[<${arg.name}>${more}]`
+}
+
+/** A child row: the name plus its required args, for example `dump <sid>`. */
+function childRow(child: CommandSpec): HelpModelRow {
+  const required = (child.args ?? []).filter((a) => a.required === true).map(argUsage)
+  return row([child.name, ...required].join(" "), child.summary)
+}
+
+/** Drop sections with nothing to show. */
+function nonEmpty(section: HelpModelSection | undefined): section is HelpModelSection {
+  if (section === undefined) return false
+  return (
+    (section.text?.length ?? 0) > 0 ||
+    (section.rows?.length ?? 0) > 0 ||
+    (section.groups?.length ?? 0) > 0
+  )
+}
+
+/**
+ * Rows grouped by a group id, in `order`. Items with no group (or a group
+ * not in `order`) come first as plain rows, so no item is lost.
+ */
+function grouped<T>(
+  items: readonly T[],
+  groupOf: (item: T) => string | undefined,
+  order: readonly { readonly id: string; readonly title: string }[],
+  toRow: (item: T) => HelpModelRow,
+): { rows: HelpModelRow[]; groups: HelpModelGroup[] } {
+  const known = new Set(order.map((g) => g.id))
+  const rows = items.filter((i) => !known.has(groupOf(i) ?? "")).map(toRow)
+  const groups = order
+    .map((g) => ({ title: g.title, rows: items.filter((i) => groupOf(i) === g.id).map(toRow) }))
+    .filter((g) => g.rows.length > 0)
+  return { rows, groups }
+}
+
+// ---------------------------------------------------------------------------
+// Root help (SPEC-HELP 8.4, plan M-8d)
+// ---------------------------------------------------------------------------
+
+/**
+ * Root help section ids in the spec 8.4 order (R-8). `plugin-commands` and
+ * `host-modes` stay empty until plugin rows land (M-10, M-18), so the
+ * builder leaves them out.
+ */
+export const ROOT_SECTION_ORDER = [
+  "header",
+  "usage",
+  "examples",
+  "commands",
+  "plugin-commands",
+  "host-modes",
+  "flags",
+  "environment",
+  "plugin-notes",
+  "learn-more",
+] as const satisfies readonly RootSectionId[]
+
+/** Section titles of root help (upper case, as in the spec 8.6 mock). */
+const ROOT_TITLES: Record<Exclude<RootSectionId, "header">, string> = {
+  usage: "USAGE",
+  examples: "EXAMPLES",
+  commands: "COMMANDS",
+  "plugin-commands": "PLUGIN COMMANDS",
+  "host-modes": "HOST MODES",
+  flags: "FLAGS",
+  environment: "ENVIRONMENT",
+  "plugin-notes": "PLUGIN NOTES",
+  "learn-more": "LEARN MORE",
+}
+
+/** The project URL. It shows in LEARN MORE. */
+export const PROJECT_URL = "github.com/gastonmorixe/minimal-agent"
+
+/**
+ * Static PLUGIN NOTES (item 9 of plan M-8d). Plugin `helpSections` from the
+ * catalog replace them in M-10 (R-11).
+ */
+const PLUGIN_NOTES: {
+  readonly text: string
+  readonly rows: readonly (readonly [string, string])[]
+} = {
+  text: "Enable and disable precedence: CLI → env → config → manifest.",
+  rows: [
+    ["List", "minimal-agent plugins list"],
+    ["One-shot disable", 'minimal-agent --disable-plugin web-search -p "…"'],
+    ["Disable many", "minimal-agent --disable-plugin web-search,memory"],
+    ["One-shot enable", "minimal-agent --enable-plugin interleave-thinking"],
+    ["Persistent", '{ "plugins": { "<id>": { "enabled": false } } }'],
+    ["Opt in", '{ "plugins": { "<id>": { "enabled": true } } } (for plugins shipped disabled)'],
+    ["Built-in", "ask-mode, config, diff-view, env-info, file-lock,"],
+    ["", "history, memory, model-info, quota-status, schedule,"],
+    ["", "session-info, sub-agents, tasks, usage, web-search"],
+    [
+      "Disabled",
+      "interleave-thinking, security, minimal-agent-cloud (opt in to use, see Opt in above)",
+    ],
+  ],
+}
+
+/** Static LEARN MORE rows: docs paths. */
+const DOCS: readonly (readonly [string, string])[] = [
+  ["CHANGELOG.md", "CLI release notes, newest first (minimal-agent-cli repo)"],
+  ["docs/tui/", "Terminal renderer architecture (compositor, live area, editor)"],
+  ["core docs/CHANGELOG.md", "Core release notes (minimal-agent-core repo)"],
+  ["core docs/network/", "HTTP transport, retry, and wire-capture notes"],
+  ["core docs/sub-agents-prompt.md", "How the sub-agents system prompt composes"],
+  ["core docs/changes/", "Per-change write-ups, dated"],
+]
+
+/** Root EXAMPLES: `minimal-agent <argv>`, with no `$` prompt (spec 8.6 mock). */
+function rootExampleRows(reg: BuiltinRegistry, program: HelpModelProgram): HelpModelRow[] {
+  return (reg.root.examples ?? []).map((ex) =>
+    row(ex.argv === "" ? program.name : `${program.name} ${ex.argv}`, ex.summary),
+  )
+}
+
+/** COMMANDS: one row per visible top-level command, grouped by root group. */
+function rootCommandsSection(reg: BuiltinRegistry): HelpModelSection {
+  const { rows, groups } = grouped(
+    visibleChildren(reg.root),
+    (spec) => spec.group,
+    reg.rootGroups,
+    childRow,
+  )
+  return { id: "commands", title: ROOT_TITLES.commands, rows, groups }
+}
+
+/** FLAGS: every visible global flag, grouped by `FlagSpec.group` in `flagGroups` order. */
+function rootFlagsSection(reg: BuiltinRegistry): HelpModelSection {
+  const order = reg.flagGroups.map((g) => ({
+    id: g.id,
+    title: g.note === undefined ? g.title : `${g.title} (${g.note})`,
+  }))
+  const visible = reg.globalFlags.filter((f) => f.hidden !== true)
+  const { rows, groups } = grouped(
+    visible,
+    (f) => f.group,
+    order,
+    (f) => globalFlagRow(reg, f),
+  )
+  return { id: "flags", title: ROOT_TITLES.flags, rows, groups }
+}
+
+/** The root model in the spec 8.4 layout. Empty sections are left out. */
+function buildRootModel(reg: BuiltinRegistry, program: HelpModelProgram): HelpModel {
+  const sections: (HelpModelSection | undefined)[] = [
+    { id: "header", title: `${program.name} v${program.version}`, text: [reg.root.summary] },
     {
-      id: "header",
-      title: `${program.name} v${program.version}`,
-      text: [reg.root.summary, LEGACY_URL],
+      id: "usage",
+      title: ROOT_TITLES.usage,
+      text: (reg.root.usage ?? []).map((u) => `${program.name} ${u}`),
     },
-    { id: "examples", title: LEGACY_TITLES.examples, rows: exampleRows(reg, program) },
-    {
-      id: "commands",
-      title: LEGACY_TITLES.commands,
-      rows: reg.rootGroups.map((g) =>
-        row(g.members.map((m) => memberDisplay(reg, m)).join(" · "), g.summary),
-      ),
-    },
-    {
-      id: "flags",
-      title: "",
-      text: [LEGACY_HINT],
-      groups: [
-        { title: LEGACY_TITLES.options, rows: optionsRows(reg) },
-        systemPromptGroup(reg),
-        { title: LEGACY_TITLES.auth, rows: LEGACY_AUTH_ITEMS.map((i) => legacyItemRow(reg, i)) },
-        { title: LEGACY_TITLES.info, rows: LEGACY_INFO_ITEMS.map((i) => legacyItemRow(reg, i)) },
-      ],
-    },
+    { id: "examples", title: ROOT_TITLES.examples, rows: rootExampleRows(reg, program) },
+    rootCommandsSection(reg),
+    rootFlagsSection(reg),
     {
       id: "environment",
-      title: LEGACY_TITLES.environment,
-      rows: reg.env.filter((e) => e.hidden !== true).map(envRow),
+      title: ROOT_TITLES.environment,
+      rows: reg.env.filter((e) => e.hidden !== true).map((e) => envRow(e)),
     },
     {
       id: "plugin-notes",
-      title: LEGACY_TITLES.pluginNotes,
-      rows: LEGACY_PLUGIN_NOTES.map(([term, summary]) => row(term, summary)),
+      title: ROOT_TITLES["plugin-notes"],
+      text: [PLUGIN_NOTES.text],
+      rows: PLUGIN_NOTES.rows.map(([term, summary]) => row(term, summary)),
     },
     {
       id: "learn-more",
-      title: LEGACY_TITLES.learnMore,
-      rows: LEGACY_DOCS.map(([term, summary]) => row(term, summary)),
+      title: ROOT_TITLES["learn-more"],
+      text: [`Use ${program.name} help <command> for command help.`, PROJECT_URL],
+      rows: DOCS.map(([term, summary]) => row(term, summary)),
     },
   ]
-  return { contractVersion: CLI_CONTRACT_VERSION, kind: "root", program, path: [], sections }
+  return {
+    contractVersion: CLI_CONTRACT_VERSION,
+    kind: "root",
+    program,
+    path: [],
+    sections: sections.filter(nonEmpty),
+  }
 }
 
 /**
  * Build a help model from the registry. An empty or absent `opts.path`
- * gives the root model (legacy layout until M-8d). A non-empty path gives
- * the command model ({@link buildCommandHelpModel}). `opts.catalog` is
- * accepted and unused until plugin rows land (M-10, M-18).
+ * gives the root model (spec 8.4). A non-empty path gives the command model
+ * ({@link buildCommandHelpModel}). `opts.catalog` is accepted and unused
+ * until plugin rows land (M-10, M-18).
  */
 export function buildHelpModel(reg: BuiltinRegistry, opts: BuildHelpModelOptions = {}): HelpModel {
   const program = opts.program ?? { name: reg.root.name, version: AGENT_VERSION }
   if (opts.path !== undefined && opts.path.length > 0) {
     return buildCommandHelpModel(reg, opts.path, program)
   }
-  return buildLegacyRootModel(reg, program)
+  return buildRootModel(reg, program)
 }
 
 // ---------------------------------------------------------------------------
@@ -284,17 +416,6 @@ function commandChain(reg: BuiltinRegistry, path: readonly string[]): CommandSpe
   return chain
 }
 
-/** One arg in usage form: `<x>` required, `[<x>]` optional, `...` when variadic. */
-function argUsage(arg: ArgSpec): string {
-  const more = arg.variadic === true ? "..." : ""
-  return arg.required === true ? `<${arg.name}>${more}` : `[<${arg.name}>${more}]`
-}
-
-/** The visible children of `node`. Hidden children render by path only. */
-function visibleChildren(node: CommandSpec): CommandSpec[] {
-  return childrenOf(node).filter((child) => child.hidden !== true)
-}
-
 /** The display of a command path: each segment before the last adds its required args. */
 function pathDisplay(chain: readonly CommandSpec[]): string {
   return chain
@@ -325,14 +446,8 @@ function usageLines(program: string, chain: readonly CommandSpec[]): string[] {
 }
 
 function argumentRow(arg: ArgSpec): HelpModelRow {
-  const choices = arg.choices === undefined ? [] : [`one of: ${arg.choices.join(", ")}`]
-  return row(arg.name, withNotes(arg.summary, choices))
-}
-
-/** A child row: the name plus its required args, for example `dump <sid>`. */
-function childRow(child: CommandSpec): HelpModelRow {
-  const required = (child.args ?? []).filter((a) => a.required === true).map(argUsage)
-  return row([child.name, ...required].join(" "), child.summary)
+  const choices = arg.choices === undefined ? undefined : `one of: ${arg.choices.join(", ")}`
+  return row(arg.name, withNotes(arg.summary, [choices]))
 }
 
 /**
@@ -348,7 +463,7 @@ function flagsSection(
   if (visible.length === 0) return undefined
   const title = COMMAND_TITLES.flags
   const ids = [...new Set(visible.flatMap((f) => (f.group === undefined ? [] : [f.group])))]
-  if (ids.length < 2) return { id: "flags", title, rows: visible.map(flagRow) }
+  if (ids.length < 2) return { id: "flags", title, rows: visible.map(commandFlagRow) }
   const rank = (id: string): number => {
     const i = reg.flagGroups.findIndex((g) => g.id === id)
     return i < 0 ? reg.flagGroups.length : i
@@ -357,9 +472,9 @@ function flagsSection(
     .toSorted((a, b) => rank(a) - rank(b))
     .map((id) => ({
       title: reg.flagGroups.find((g) => g.id === id)?.title ?? id,
-      rows: visible.filter((f) => f.group === id).map(flagRow),
+      rows: visible.filter((f) => f.group === id).map(commandFlagRow),
     }))
-  const plain = visible.filter((f) => f.group === undefined).map(flagRow)
+  const plain = visible.filter((f) => f.group === undefined).map(commandFlagRow)
   return { id: "flags", title, ...(plain.length > 0 ? { rows: plain } : {}), groups }
 }
 
@@ -384,32 +499,22 @@ function environmentRows(
 ): HelpModelRow[] {
   const seen = new Set<string>()
   const out: HelpModelRow[] = []
-  const add = (name: string, summary: string): void => {
-    if (seen.has(name)) return
-    seen.add(name)
-    out.push(row(name, summary))
+  const add = (r: HelpModelRow): void => {
+    if (seen.has(r.term)) return
+    seen.add(r.term)
+    out.push(r)
   }
   for (const flag of flags.filter((f) => f.hidden !== true)) {
     const backing = reg.env.filter(
       (e) => e.hidden !== true && (e.flag === flag.name || e.name === flag.env),
     )
-    for (const env of backing) add(env.name, withNotes(env.summary, env.description))
+    for (const env of backing) add(envRow(env, true))
     if (flag.env !== undefined && !backing.some((e) => e.name === flag.env)) {
-      add(flag.env, `Same as --${flag.name}`)
+      add(row(flag.env, `Same as --${flag.name}`))
     }
   }
-  for (const env of own.filter((e) => e.hidden !== true)) add(env.name, env.summary)
+  for (const env of own.filter((e) => e.hidden !== true)) add(row(env.name, env.summary))
   return out
-}
-
-/** Drop sections with nothing to show. */
-function nonEmpty(section: HelpModelSection | undefined): section is HelpModelSection {
-  if (section === undefined) return false
-  return (
-    (section.text?.length ?? 0) > 0 ||
-    (section.rows?.length ?? 0) > 0 ||
-    (section.groups?.length ?? 0) > 0
-  )
 }
 
 /**

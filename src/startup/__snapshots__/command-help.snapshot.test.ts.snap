@@ -3,7 +3,7 @@
 exports[`command help: providers COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent providers
     List registered providers
-    aliases: --list-providers, --providers
+    Aliases: --list-providers, --providers.
 
   USAGE
     minimal-agent providers [list]
@@ -18,7 +18,7 @@ exports[`command help: providers COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -26,7 +26,7 @@ exports[`command help: providers COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: providers COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent providers
     List registered providers
-    aliases: --list-providers, --providers
+    Aliases: --list-providers, --providers.
 
   USAGE
     minimal-agent providers [list]
@@ -41,7 +41,7 @@ exports[`command help: providers COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -55,7 +55,7 @@ exports[`command help: providers list COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -69,7 +69,7 @@ exports[`command help: providers list COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -77,7 +77,8 @@ exports[`command help: providers list COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: providers models COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent providers models
     List registered models (offline, no network)
-    also: models [list], provider <id> models, aliases: --list-models, --models
+    Also: models [list], provider <id> models.
+    Aliases: --list-models, --models.
 
   USAGE
     minimal-agent providers models [<id>]
@@ -87,13 +88,12 @@ exports[`command help: providers models COLUMNS=80, NO_COLOR=1 1`] = `
 
   FLAGS
     --print-format <text|json|md|xml>  Output shape for providers models
-                                       (default: text; aliases:
-                                       tui/console/stdout; or
-                                       MINIMAL_AGENT_PRINT_FORMAT)
+                                       (default: text). The values tui, console,
+                                       and stdout mean text.
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   ENVIRONMENT
@@ -104,7 +104,8 @@ exports[`command help: providers models COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: providers models COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent providers models
     List registered models (offline, no network)
-    also: models [list], provider <id> models, aliases: --list-models, --models
+    Also: models [list], provider <id> models.
+    Aliases: --list-models, --models.
 
   USAGE
     minimal-agent providers models [<id>]
@@ -113,12 +114,12 @@ exports[`command help: providers models COLUMNS=120, NO_COLOR=1 1`] = `
     id  Only this provider
 
   FLAGS
-    --print-format <text|json|md|xml>  Output shape for providers models (default: text; aliases: tui/console/stdout; or
-                                       MINIMAL_AGENT_PRINT_FORMAT)
+    --print-format <text|json|md|xml>  Output shape for providers models (default: text). The values tui, console, and
+                                       stdout mean text.
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   ENVIRONMENT
@@ -129,8 +130,8 @@ exports[`command help: providers models COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: providers models-live COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent providers models-live
     List live provider catalogs (network)
-    also: models-live [list], provider <id> models-live
-    aliases: --list-models-live, --models-live
+    Also: models-live [list], provider <id> models-live.
+    Aliases: --list-models-live, --models-live.
 
   USAGE
     minimal-agent providers models-live [<id>]
@@ -140,7 +141,7 @@ exports[`command help: providers models-live COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -148,8 +149,8 @@ exports[`command help: providers models-live COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: providers models-live COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent providers models-live
     List live provider catalogs (network)
-    also: models-live [list], provider <id> models-live
-    aliases: --list-models-live, --models-live
+    Also: models-live [list], provider <id> models-live.
+    Aliases: --list-models-live, --models-live.
 
   USAGE
     minimal-agent providers models-live [<id>]
@@ -159,7 +160,7 @@ exports[`command help: providers models-live COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -178,12 +179,12 @@ exports[`command help: providers login COLUMNS=80, NO_COLOR=1 1`] = `
   FLAGS
     --auth-method <oauth|api-key>    Choose a login method
     --email, --email-hint <address>  Pre-fill login email
-    --name <label>                   Label a credential during login (e.g.
-                                     --name work-account)
+    --name <label>                   Label the credential, for example --name
+                                     work-account
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -202,11 +203,11 @@ exports[`command help: providers login COLUMNS=120, NO_COLOR=1 1`] = `
   FLAGS
     --auth-method <oauth|api-key>    Choose a login method
     --email, --email-hint <address>  Pre-fill login email
-    --name <label>                   Label a credential during login (e.g. --name work-account)
+    --name <label>                   Label the credential, for example --name work-account
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -223,7 +224,7 @@ exports[`command help: providers logout COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -240,7 +241,7 @@ exports[`command help: providers logout COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -248,8 +249,7 @@ exports[`command help: providers logout COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: sessions COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent sessions
     List saved sessions
-    fuzzy filter on date/sid/cwd; aliases: --sessions, --session,
-    --list-sessions
+    Aliases: --sessions, --session, --list-sessions.
 
   USAGE
     minimal-agent sessions [list|query]
@@ -266,7 +266,7 @@ exports[`command help: sessions COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   EXAMPLES
@@ -278,7 +278,7 @@ exports[`command help: sessions COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: sessions COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent sessions
     List saved sessions
-    fuzzy filter on date/sid/cwd; aliases: --sessions, --session, --list-sessions
+    Aliases: --sessions, --session, --list-sessions.
 
   USAGE
     minimal-agent sessions [list|query]
@@ -295,7 +295,7 @@ exports[`command help: sessions COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   EXAMPLES
@@ -313,7 +313,7 @@ exports[`command help: sessions list COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -327,7 +327,7 @@ exports[`command help: sessions list COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -335,7 +335,7 @@ exports[`command help: sessions list COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: sessions dump COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent sessions dump
     Dump a full session history to stdout
-    alias: --dump <sid|last>; --dump-format md|xml; --dump-paths
+    Alias: --dump <sid|last>.
 
   USAGE
     minimal-agent sessions dump <sid|last>
@@ -344,12 +344,12 @@ exports[`command help: sessions dump COLUMNS=80, NO_COLOR=1 1`] = `
     sid  Session id, or last for the newest session
 
   FLAGS
-    --dump-format <md|xml>  Output format of the dump
+    --dump-format <md|xml>  Output format of the dump (default: md)
     --dump-paths            Also print the paths of the session files
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -357,7 +357,7 @@ exports[`command help: sessions dump COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: sessions dump COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent sessions dump
     Dump a full session history to stdout
-    alias: --dump <sid|last>; --dump-format md|xml; --dump-paths
+    Alias: --dump <sid|last>.
 
   USAGE
     minimal-agent sessions dump <sid|last>
@@ -366,12 +366,12 @@ exports[`command help: sessions dump COLUMNS=120, NO_COLOR=1 1`] = `
     sid  Session id, or last for the newest session
 
   FLAGS
-    --dump-format <md|xml>  Output format of the dump
+    --dump-format <md|xml>  Output format of the dump (default: md)
     --dump-paths            Also print the paths of the session files
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -388,7 +388,7 @@ exports[`command help: sessions resume COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -405,7 +405,7 @@ exports[`command help: sessions resume COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -422,7 +422,7 @@ exports[`command help: sessions resume-same COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -439,15 +439,15 @@ exports[`command help: sessions resume-same COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
 
 exports[`command help: usage COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent usage
-    Token-usage stats
-    today|last-day|last-month|ytd|year|all; alias: --usage-stats
+    Show token usage stats for a period
+    Alias: --usage-stats.
 
   USAGE
     minimal-agent usage [<period>]
@@ -458,15 +458,15 @@ exports[`command help: usage COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
 
 exports[`command help: usage COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent usage
-    Token-usage stats
-    today|last-day|last-month|ytd|year|all; alias: --usage-stats
+    Show token usage stats for a period
+    Alias: --usage-stats.
 
   USAGE
     minimal-agent usage [<period>]
@@ -476,7 +476,7 @@ exports[`command help: usage COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -484,8 +484,8 @@ exports[`command help: usage COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: resume COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent resume
     Resume a saved session
-    also: sessions resume <sid>; aliases: -r, --resume
-    reuses credential pin only when provider matches the session
+    Also: sessions resume <sid>. Aliases: -r, --resume.
+    It reuses the credential pin only when the provider matches the session.
 
   USAGE
     minimal-agent resume <sid|last>
@@ -495,7 +495,7 @@ exports[`command help: resume COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -503,8 +503,8 @@ exports[`command help: resume COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: resume COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent resume
     Resume a saved session
-    also: sessions resume <sid>; aliases: -r, --resume
-    reuses credential pin only when provider matches the session
+    Also: sessions resume <sid>. Aliases: -r, --resume.
+    It reuses the credential pin only when the provider matches the session.
 
   USAGE
     minimal-agent resume <sid|last>
@@ -514,7 +514,7 @@ exports[`command help: resume COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -522,7 +522,7 @@ exports[`command help: resume COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: resume-same COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent resume-same
     Resume in place, keeping the same session id
-    also: sessions resume-same <sid>; alias: --resume-same-sid
+    Also: sessions resume-same <sid>. Alias: --resume-same-sid.
 
   USAGE
     minimal-agent resume-same <sid|last>
@@ -532,7 +532,7 @@ exports[`command help: resume-same COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -540,7 +540,7 @@ exports[`command help: resume-same COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: resume-same COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent resume-same
     Resume in place, keeping the same session id
-    also: sessions resume-same <sid>; alias: --resume-same-sid
+    Also: sessions resume-same <sid>. Alias: --resume-same-sid.
 
   USAGE
     minimal-agent resume-same <sid|last>
@@ -550,7 +550,7 @@ exports[`command help: resume-same COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -573,7 +573,7 @@ exports[`command help: provider COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -596,7 +596,7 @@ exports[`command help: provider COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -604,7 +604,7 @@ exports[`command help: provider COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: provider login COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent provider login
     Sign in to a provider
-    also: login [provider] [method], providers login <id> [method]
+    Also: login [provider] [method], providers login <id> [method].
 
   USAGE
     minimal-agent provider <id> login [method]
@@ -613,13 +613,13 @@ exports[`command help: provider login COLUMNS=80, NO_COLOR=1 1`] = `
     method  Login method, for example oauth or api-key
 
   FLAGS
-    --name <label>                 Label a credential during login (e.g. --name
-                                   work-account)
+    --name <label>                 Label the credential, for example --name
+                                   work-account
     --auth-method <oauth|api-key>  Choose a login method
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -627,7 +627,7 @@ exports[`command help: provider login COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: provider login COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent provider login
     Sign in to a provider
-    also: login [provider] [method], providers login <id> [method]
+    Also: login [provider] [method], providers login <id> [method].
 
   USAGE
     minimal-agent provider <id> login [method]
@@ -636,12 +636,12 @@ exports[`command help: provider login COLUMNS=120, NO_COLOR=1 1`] = `
     method  Login method, for example oauth or api-key
 
   FLAGS
-    --name <label>                 Label a credential during login (e.g. --name work-account)
+    --name <label>                 Label the credential, for example --name work-account
     --auth-method <oauth|api-key>  Choose a login method
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -649,14 +649,14 @@ exports[`command help: provider login COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: provider logout COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent provider logout
     Clear one provider's credentials
-    also: logout [provider], providers logout <id>
+    Also: logout [provider], providers logout <id>.
 
   USAGE
     minimal-agent provider <id> logout
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -664,14 +664,14 @@ exports[`command help: provider logout COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: provider logout COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent provider logout
     Clear one provider's credentials
-    also: logout [provider], providers logout <id>
+    Also: logout [provider], providers logout <id>.
 
   USAGE
     minimal-agent provider <id> logout
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -685,13 +685,12 @@ exports[`command help: provider models COLUMNS=80, NO_COLOR=1 1`] = `
 
   FLAGS
     --print-format <text|json|md|xml>  Output shape for providers models
-                                       (default: text; aliases:
-                                       tui/console/stdout; or
-                                       MINIMAL_AGENT_PRINT_FORMAT)
+                                       (default: text). The values tui, console,
+                                       and stdout mean text.
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   ENVIRONMENT
@@ -707,12 +706,12 @@ exports[`command help: provider models COLUMNS=120, NO_COLOR=1 1`] = `
     minimal-agent provider <id> models
 
   FLAGS
-    --print-format <text|json|md|xml>  Output shape for providers models (default: text; aliases: tui/console/stdout; or
-                                       MINIMAL_AGENT_PRINT_FORMAT)
+    --print-format <text|json|md|xml>  Output shape for providers models (default: text). The values tui, console, and
+                                       stdout mean text.
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   ENVIRONMENT
@@ -729,7 +728,7 @@ exports[`command help: provider models-live COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -743,7 +742,7 @@ exports[`command help: provider models-live COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -762,12 +761,12 @@ exports[`command help: login COLUMNS=80, NO_COLOR=1 1`] = `
   FLAGS
     --auth-method <oauth|api-key>    Choose a login method
     --email, --email-hint <address>  Pre-fill login email
-    --name <label>                   Label a credential during login (e.g.
-                                     --name work-account)
+    --name <label>                   Label the credential, for example --name
+                                     work-account
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -786,11 +785,11 @@ exports[`command help: login COLUMNS=120, NO_COLOR=1 1`] = `
   FLAGS
     --auth-method <oauth|api-key>    Choose a login method
     --email, --email-hint <address>  Pre-fill login email
-    --name <label>                   Label a credential during login (e.g. --name work-account)
+    --name <label>                   Label the credential, for example --name work-account
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -807,7 +806,7 @@ exports[`command help: logout COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -824,7 +823,7 @@ exports[`command help: logout COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -849,7 +848,7 @@ exports[`command help: auth-status COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -873,7 +872,7 @@ exports[`command help: auth-status COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -891,16 +890,16 @@ exports[`command help: auth-status refresh COLUMNS=80, NO_COLOR=1 1`] = `
 
   FLAGS
     --name <n>       Credential name, in place of the positional credential
-    --provider <id>  Select provider for --model (else MINIMAL_AGENT_PROVIDER,
-                     config provider)
+    --provider <id>  Select the provider for --model. Else the env value, then
+                     the config key provider.
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   ENVIRONMENT
-    MINIMAL_AGENT_PROVIDER  Default provider id (same as --provider)
+    MINIMAL_AGENT_PROVIDER  Default provider id (flag: --provider)
 "
 `;
 
@@ -916,15 +915,15 @@ exports[`command help: auth-status refresh COLUMNS=120, NO_COLOR=1 1`] = `
 
   FLAGS
     --name <n>       Credential name, in place of the positional credential
-    --provider <id>  Select provider for --model (else MINIMAL_AGENT_PROVIDER, config provider)
+    --provider <id>  Select the provider for --model. Else the env value, then the config key provider.
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   ENVIRONMENT
-    MINIMAL_AGENT_PROVIDER  Default provider id (same as --provider)
+    MINIMAL_AGENT_PROVIDER  Default provider id (flag: --provider)
 "
 `;
 
@@ -936,11 +935,11 @@ exports[`command help: auth-status refresh-all COLUMNS=80, NO_COLOR=1 1`] = `
     minimal-agent auth-status refresh-all [--parallel <n>]
 
   FLAGS
-    --parallel <n>  Max parallel workers (max 8)
+    --parallel <n>  Max parallel workers (max 8) (default: 4)
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -953,11 +952,11 @@ exports[`command help: auth-status refresh-all COLUMNS=120, NO_COLOR=1 1`] = `
     minimal-agent auth-status refresh-all [--parallel <n>]
 
   FLAGS
-    --parallel <n>  Max parallel workers (max 8)
+    --parallel <n>  Max parallel workers (max 8) (default: 4)
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -976,12 +975,12 @@ exports[`command help: auth-status plan COLUMNS=80, NO_COLOR=1 1`] = `
   FLAGS
     --all           Keep rows for credentials with no plan lookup
     --table         Print a Markdown pipe table instead of the human rows
-    --parallel <n>  Max parallel workers (max 8)
+    --parallel <n>  Max parallel workers (max 8) (default: 4)
     --name <n>      Credential name, in place of the positional credential
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -999,12 +998,12 @@ exports[`command help: auth-status plan COLUMNS=120, NO_COLOR=1 1`] = `
   FLAGS
     --all           Keep rows for credentials with no plan lookup
     --table         Print a Markdown pipe table instead of the human rows
-    --parallel <n>  Max parallel workers (max 8)
+    --parallel <n>  Max parallel workers (max 8) (default: 4)
     --name <n>      Credential name, in place of the positional credential
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1021,11 +1020,11 @@ exports[`command help: auth-status prune COLUMNS=80, NO_COLOR=1 1`] = `
     --dry-run       List the credentials to delete, delete nothing
     --force         Delete the credentials the server rejects
     --table         Print a Markdown pipe table instead of the human rows
-    --parallel <n>  Max parallel workers (max 8)
+    --parallel <n>  Max parallel workers (max 8) (default: 4)
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1041,97 +1040,100 @@ exports[`command help: auth-status prune COLUMNS=120, NO_COLOR=1 1`] = `
     --dry-run       List the credentials to delete, delete nothing
     --force         Delete the credentials the server rejects
     --table         Print a Markdown pipe table instead of the human rows
-    --parallel <n>  Max parallel workers (max 8)
+    --parallel <n>  Max parallel workers (max 8) (default: 4)
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
 
 exports[`command help: plugins COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent plugins
-    List installed plugins and effective on/off state
-    aliases: --list-plugins, --plugins
+    List installed plugins and their on or off state
+    Aliases: --list-plugins, --plugins.
 
   USAGE
     minimal-agent plugins [list]
     minimal-agent plugins <command> [args] [flags]
 
   COMMANDS
-    list  List installed plugins and effective on/off state
+    list  List installed plugins and their on or off state
 
   FLAGS
-    --disable-plugin <id>  Skip a plugin for this run (repeatable,
-                           comma-separated ok, see plugins list)
-    --enable-plugin <id>   Force-enable a plugin for this run (overrides config
-                           + manifest opt-out)
+    --disable-plugin <id>  Skip a plugin for this run, repeatable. A
+                           comma-separated list is also accepted. See plugins
+                           list.
+    --enable-plugin <id>   Force-enable a plugin for this run, repeatable.
+                           Overrides the config and the manifest opt-out.
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   ENVIRONMENT
     MINIMAL_AGENT_DISABLE_PLUGINS  Comma-separated plugin ids to skip this run
-                                   (same as --disable-plugin)
+                                   (flag: --disable-plugin)
     MINIMAL_AGENT_ENABLE_PLUGINS   Comma-separated plugin ids to force on this
-                                   run (same as --enable-plugin)
+                                   run (flag: --enable-plugin)
 "
 `;
 
 exports[`command help: plugins COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent plugins
-    List installed plugins and effective on/off state
-    aliases: --list-plugins, --plugins
+    List installed plugins and their on or off state
+    Aliases: --list-plugins, --plugins.
 
   USAGE
     minimal-agent plugins [list]
     minimal-agent plugins <command> [args] [flags]
 
   COMMANDS
-    list  List installed plugins and effective on/off state
+    list  List installed plugins and their on or off state
 
   FLAGS
-    --disable-plugin <id>  Skip a plugin for this run (repeatable, comma-separated ok, see plugins list)
-    --enable-plugin <id>   Force-enable a plugin for this run (overrides config + manifest opt-out)
+    --disable-plugin <id>  Skip a plugin for this run, repeatable. A comma-separated list is also accepted. See plugins
+                           list.
+    --enable-plugin <id>   Force-enable a plugin for this run, repeatable. Overrides the config and the manifest
+                           opt-out.
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 
   ENVIRONMENT
-    MINIMAL_AGENT_DISABLE_PLUGINS  Comma-separated plugin ids to skip this run (same as --disable-plugin)
-    MINIMAL_AGENT_ENABLE_PLUGINS   Comma-separated plugin ids to force on this run (same as --enable-plugin)
+    MINIMAL_AGENT_DISABLE_PLUGINS  Comma-separated plugin ids to skip this run (flag: --disable-plugin)
+    MINIMAL_AGENT_ENABLE_PLUGINS   Comma-separated plugin ids to force on this run (flag: --enable-plugin)
 "
 `;
 
 exports[`command help: plugins list COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent plugins list
-    List installed plugins and effective on/off state
+    List installed plugins and their on or off state
 
   USAGE
     minimal-agent plugins list
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
 
 exports[`command help: plugins list COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent plugins list
-    List installed plugins and effective on/off state
+    List installed plugins and their on or off state
 
   USAGE
     minimal-agent plugins list
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1139,7 +1141,7 @@ exports[`command help: plugins list COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: flags COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent flags
     Show beta feature flags
-    aliases: --list-flags, --flags
+    Aliases: --list-flags, --flags.
 
   USAGE
     minimal-agent flags [list]
@@ -1150,7 +1152,7 @@ exports[`command help: flags COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1158,7 +1160,7 @@ exports[`command help: flags COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: flags COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent flags
     Show beta feature flags
-    aliases: --list-flags, --flags
+    Aliases: --list-flags, --flags.
 
   USAGE
     minimal-agent flags [list]
@@ -1169,7 +1171,7 @@ exports[`command help: flags COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1183,7 +1185,7 @@ exports[`command help: flags list COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1197,7 +1199,7 @@ exports[`command help: flags list COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1205,7 +1207,7 @@ exports[`command help: flags list COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: spinners COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent spinners
     Show available spinner presets
-    aliases: --list-spinners, --spinners
+    Aliases: --list-spinners, --spinners.
 
   USAGE
     minimal-agent spinners [list]
@@ -1216,7 +1218,7 @@ exports[`command help: spinners COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1224,7 +1226,7 @@ exports[`command help: spinners COLUMNS=80, NO_COLOR=1 1`] = `
 exports[`command help: spinners COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent spinners
     Show available spinner presets
-    aliases: --list-spinners, --spinners
+    Aliases: --list-spinners, --spinners.
 
   USAGE
     minimal-agent spinners [list]
@@ -1235,7 +1237,7 @@ exports[`command help: spinners COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1249,7 +1251,7 @@ exports[`command help: spinners list COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1263,7 +1265,7 @@ exports[`command help: spinners list COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1280,7 +1282,7 @@ exports[`command help: help COLUMNS=80, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;
@@ -1297,7 +1299,7 @@ exports[`command help: help COLUMNS=120, NO_COLOR=1 1`] = `
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
-    -h, --help   Show this help
+    -h, --help   Show help
     -d, --debug  Enable debug logging
 "
 `;

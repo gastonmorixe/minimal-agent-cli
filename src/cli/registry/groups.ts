@@ -1,10 +1,9 @@
 /**
  * Root command groups and FLAGS headings (plan M-8a, 2.2 and 2.3).
  *
- * `ROOT_GROUPS` keeps the order, members, and summaries of the root help
- * "Command map" (`src/startup/help.ts`). A member path shows each non-leaf
- * segment with its required args, so `["provider", "login"]` shows as
- * `provider <id> login`.
+ * `ROOT_GROUPS` gives the order and headings of root help COMMANDS (spec
+ * 8.4). Each visible top-level command shows under the group that its
+ * `CommandSpec.group` names. `members` lists the main paths of a group.
  *
  * @module cli/registry/groups
  */

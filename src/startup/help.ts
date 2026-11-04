@@ -2,10 +2,10 @@
  * `--help` text + embedded-package-version helper for the CLI entry
  * point.
  *
- * Root help comes from the built-in registry: `buildHelpModel` makes the
- * help model (SPEC-HELP 8.3), and `renderLegacyRoot` draws it in today's
- * layout (plan M-8c). Command help (a non-empty path) uses the same model
- * builder and `renderModel` (spec 8.5, plan M-9c). An unknown help path
+ * Root help and command help come from the built-in registry:
+ * `buildHelpModel` makes the help model (SPEC-HELP 8.3), and `renderModel`
+ * draws it (root: spec 8.4, plan M-8d. Command: spec 8.5, plan M-9c). An
+ * unknown help path
  * prints an error on stderr (R-17, R-32). Pure presentation, no startup
  * state.
  *
@@ -16,7 +16,6 @@ import pkg from "../../package.json" with { type: "json" }
 import { builtinRegistry } from "../cli/registry/index.ts"
 import type { HelpRequest } from "../cli/registry/resolve.ts"
 import { type CommandOutput, writeCommandRows } from "../ui/command-output.ts"
-import { renderLegacyRoot } from "../ui/help/legacy-root.ts"
 import { buildHelpModel } from "../ui/help/model.ts"
 import { resolveHelpPolicy } from "../ui/help/policy.ts"
 import { renderModel } from "../ui/help/render-model.ts"
@@ -68,11 +67,11 @@ export function readEmbeddedPackageVersion(): string {
 }
 
 /**
- * Render the full `--help` usage text without writing to stdout. Pure: the
- * default is color on and no wrapping. {@link printHelp} resolves the policy.
+ * Render root help (spec 8.4) without writing to stdout. Pure: the default
+ * is color on and no wrapping. {@link printHelp} resolves the policy.
  */
 export function renderHelp(opts: RenderHelpOptions = {}): string[] {
-  return renderLegacyRoot(buildHelpModel(builtinRegistry()), opts)
+  return renderModel(buildHelpModel(builtinRegistry()), { ...opts, color: opts.color !== false })
 }
 
 /**

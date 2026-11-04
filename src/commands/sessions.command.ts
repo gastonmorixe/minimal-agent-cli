@@ -16,7 +16,7 @@ export const SESSIONS_COMMAND: CommandSpec = {
   summary: "List saved sessions",
   usage: ["sessions [list|query]"],
   args: [{ name: "query", summary: "Fuzzy filter on date, session id, or cwd" }],
-  description: ["fuzzy filter on date/sid/cwd; aliases: --sessions, --session, --list-sessions"],
+  description: ["Aliases: --sessions, --session, --list-sessions."],
   commands: [
     { name: "list", summary: "List saved sessions", usage: ["sessions list"] },
     DUMP_COMMAND,

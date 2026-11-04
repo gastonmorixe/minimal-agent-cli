@@ -12,6 +12,6 @@ export const SPINNERS_COMMAND: CommandSpec = {
   group: "local",
   summary: "Show available spinner presets",
   usage: ["spinners [list]"],
-  description: ["aliases: --list-spinners, --spinners"],
+  description: ["Aliases: --list-spinners, --spinners."],
   commands: [{ name: "list", summary: "Show available spinner presets", usage: ["spinners list"] }],
 }

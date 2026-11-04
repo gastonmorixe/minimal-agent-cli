@@ -36,8 +36,7 @@ export const LOGIN_NAME_FLAG: FlagSpec = {
   type: "string",
   value: "required",
   valueName: "label",
-  summary: "Label a credential during login",
-  description: ["e.g. --name work-account"],
+  summary: "Label the credential, for example --name work-account",
 }
 
 /** `login [provider] [method]`. Flag form: `--login`. */

@@ -64,6 +64,15 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Changed
 
+- 2026-11-04: root `--help` uses the new layout: USAGE, EXAMPLES,
+  COMMANDS, FLAGS, ENVIRONMENT, PLUGIN NOTES, LEARN MORE. COMMANDS lists
+  each top-level command with its summary, under its group. FLAGS lists
+  the global flags under their group headings. Each row shows a short
+  summary plus the default and the env name. Long notes moved to command
+  help. The Auth and Info sections are gone: `--auth-method`, `--email`,
+  and `--name` are in `login --help`, `--print-format` is in
+  `providers models --help`. ENVIRONMENT shows bare names (`DEBUG`, not
+  `DEBUG=1`) with the value in the summary. The URL moved to LEARN MORE.
 - 2026-11-04: `<cmd> --help`, `<cmd> -h` and `help <cmd>` now print command
   help instead of root help. `help --help` and `help -h` print the help
   command's own help. `help <unknown>` and `<cmd> <unknown> --help` print an

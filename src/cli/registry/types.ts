@@ -38,14 +38,13 @@ export interface FlagGroup {
 }
 
 /**
- * A built-in env entry. The contract {@link EnvSpec} has no notes and no
- * value hint, but root help shows both today, so the CLI keeps them here.
- * M-8d may fold them into `summary` (lead decision 2).
+ * A built-in env entry. The contract {@link EnvSpec} has no description
+ * and no value hint, so the CLI keeps them here.
  */
 export interface BuiltinEnvSpec extends EnvSpec {
-  /** Notes, plain text. Legacy root help joins them with ", " in brackets. */
+  /** Paragraphs, plain text. Command help shows them, root help does not (R-13). */
   description?: string[]
-  /** Value hint. Legacy root help shows the term as `NAME=<set>`, for example `DEBUG=1`. */
+  /** The value that turns a switch on or off, for example `"1"`. Help shows `set to 1`. */
   set?: string
 }
 

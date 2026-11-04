@@ -41,7 +41,7 @@ export const PROVIDERS_COMMAND: CommandSpec = {
   group: "discover",
   summary: "List registered providers",
   usage: ["providers [list]"],
-  description: ["aliases: --list-providers, --providers"],
+  description: ["Aliases: --list-providers, --providers."],
   commands: [
     { name: "list", summary: "List registered providers", usage: ["providers list"] },
     PROVIDERS_MODELS_COMMAND,

@@ -8,12 +8,12 @@ import { CLI_CONTRACT_VERSION } from "@minimal-agent/core/plugin-api/types/cli-c
 import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { builtinRegistry } from "../../cli/registry/index.ts"
-import { LEGACY_TERM_OVERRIDES, renderLegacyRoot } from "./legacy-root.ts"
 import {
   buildCommandHelpModel,
   buildHelpModel,
   COMMAND_SECTION_ORDER,
   flagTerm,
+  ROOT_SECTION_ORDER,
   visibleCommandPaths,
 } from "./model.ts"
 import { renderModel } from "./render-model.ts"
@@ -29,7 +29,10 @@ function allRows(): HelpModelRow[] {
   ])
 }
 
-describe("root help model (M-8c)", () => {
+describe("root help model (M-8d, spec 8.4)", () => {
+  const section = (id: string): HelpModelSection | undefined =>
+    model.sections.find((s) => s.id === id)
+
   test("is a root model of the current contract version", () => {
     expect(model.contractVersion).toBe(CLI_CONTRACT_VERSION)
     expect(model.kind).toBe("root")
@@ -37,9 +40,11 @@ describe("root help model (M-8c)", () => {
     expect(model.program).toEqual({ name: "minimal-agent", version: "9.9.9" })
   })
 
-  test("section ids are in the legacy order", () => {
-    expect(model.sections.map((s) => s.id)).toEqual([
+  test("section ids follow the 8.4 order, empty plugin sections left out", () => {
+    const ids = model.sections.map((s) => s.id)
+    expect(ids).toEqual([
       "header",
+      "usage",
       "examples",
       "commands",
       "flags",
@@ -47,23 +52,86 @@ describe("root help model (M-8c)", () => {
       "plugin-notes",
       "learn-more",
     ])
+    const ranks = ids.map((id) => ROOT_SECTION_ORDER.indexOf(id as never))
+    expect(ranks).toEqual(ranks.toSorted((a, b) => a - b))
+  })
+
+  test("the order constant is the spec 8.4 list", () => {
+    expect([...ROOT_SECTION_ORDER]).toEqual([
+      "header",
+      "usage",
+      "examples",
+      "commands",
+      "plugin-commands",
+      "host-modes",
+      "flags",
+      "environment",
+      "plugin-notes",
+      "learn-more",
+    ])
+  })
+
+  test("titles are upper case, as in the 8.6 mock", () => {
+    for (const s of model.sections.filter((x) => x.id !== "header")) {
+      expect(s.title).toBe(s.title.toUpperCase())
+    }
+  })
+
+  test("header: name and version, then the tagline only", () => {
+    expect(section("header")?.title).toBe("minimal-agent v9.9.9")
+    expect(section("header")?.text).toEqual([reg.root.summary])
+  })
+
+  test("usage: two lines with the program prefix", () => {
+    expect(section("usage")?.text).toEqual([
+      "minimal-agent [flags] [prompt]",
+      "minimal-agent <command> [args] [flags]",
+    ])
+  })
+
+  test("examples: the program name plus argv, no $ prompt", () => {
+    const terms = (section("examples")?.rows ?? []).map((r) => r.term)
+    expect(terms).toEqual([
+      "minimal-agent",
+      'minimal-agent "explain this codebase"',
+      "minimal-agent -",
+    ])
   })
 
   test("every row has source builtin", () => {
     const rows = allRows()
-    expect(rows.length).toBeGreaterThan(100)
+    expect(rows.length).toBeGreaterThan(80)
     for (const r of rows) expect(r.source).toBe("builtin")
   })
 
-  test("every non-hidden global flag has exactly one row", () => {
-    const terms = allRows().map((r) => r.term)
-    for (const spec of reg.globalFlags.filter((f) => f.hidden !== true)) {
-      const term =
-        spec.name === LEGACY_TERM_OVERRIDES.helpRow.flag
-          ? LEGACY_TERM_OVERRIDES.helpRow.term
-          : flagTerm(spec)
-      expect(terms.filter((t) => t === term)).toHaveLength(1)
+  test("commands: one row per visible top-level command, grouped by root group", () => {
+    const cmds = section("commands")
+    const listed = [...(cmds?.rows ?? []), ...(cmds?.groups ?? []).flatMap((g) => g.rows)].map(
+      (r) => r.term.split(" ")[0],
+    )
+    const visible = reg.commands.filter((c) => c.hidden !== true).map((c) => c.name)
+    expect(listed.toSorted()).toEqual(visible.toSorted())
+    expect((cmds?.groups ?? []).map((g) => g.title)).toEqual(reg.rootGroups.map((g) => g.title))
+    for (const r of cmds?.groups?.flatMap((g) => g.rows) ?? []) {
+      expect(r.term).not.toContain("·")
     }
+  })
+
+  test("flags: every visible global flag has exactly one row, grouped by FlagSpec.group", () => {
+    const flags = section("flags")
+    const rows = [...(flags?.rows ?? []), ...(flags?.groups ?? []).flatMap((g) => g.rows)]
+    const terms = rows.map((r) => r.term)
+    const visible = reg.globalFlags.filter((f) => f.hidden !== true)
+    for (const spec of visible) {
+      expect(terms.filter((t) => t === flagTerm(spec))).toHaveLength(1)
+    }
+    expect(rows).toHaveLength(visible.length)
+    expect(flags?.rows ?? []).toEqual([])
+    const used = new Set(visible.map((f) => f.group))
+    const titles = reg.flagGroups
+      .filter((g) => used.has(g.id))
+      .map((g) => (g.note === undefined ? g.title : `${g.title} (${g.note})`))
+    expect((flags?.groups ?? []).map((g) => g.title)).toEqual(titles)
   })
 
   test("no hidden global flag has a row", () => {
@@ -73,14 +141,41 @@ describe("root help model (M-8c)", () => {
     }
   })
 
-  test("the legacy term override list has exactly 4 kinds (it only shrinks)", () => {
-    expect(Object.keys(LEGACY_TERM_OVERRIDES)).toEqual([
-      "stdinExample",
-      "helpRow",
-      "envValueSuffix",
-      "envWildcard",
+  test("a flag row shows the summary and notes from default and env, not the description", () => {
+    const rows = section("flags")?.groups?.flatMap((g) => g.rows) ?? []
+    const by = (term: string): string | undefined => rows.find((r) => r.term === term)?.summary
+    expect(by("-m, --model <id>")).toBe("Select the model (env: MINIMAL_AGENT_MODEL)")
+    expect(by("--cache-ttl <5m|1h>")).toBe(
+      "Prompt-cache breakpoint TTL (default: 5m, env: MINIMAL_AGENT_CACHE_TTL)",
+    )
+    expect(by("--system-identity <text>")).toBe(
+      "Replace the neutral identity block (also --system-identity-file <path>, " +
+        "--no-system-identity, env: MINIMAL_AGENT_SYSTEM_IDENTITY)",
+    )
+    for (const spec of reg.globalFlags.filter((f) => f.hidden !== true)) {
+      for (const p of spec.description ?? []) {
+        expect(by(flagTerm(spec)) ?? "").not.toContain(p)
+      }
+    }
+  })
+
+  test("env rows: bare names, the value hint in the summary", () => {
+    const env = section("environment")?.rows ?? []
+    const terms = env.map((r) => r.term)
+    expect(terms.filter((t) => t.includes("="))).toEqual([])
+    expect(env.find((r) => r.term === "DEBUG")?.summary).toContain("set to 1")
+    expect(env.find((r) => r.term === "MINIMAL_AGENT_AUTO_ASK")?.summary).toContain("set to 0")
+    expect(terms.filter((t) => t.startsWith("MINIMAL_AGENT_SYSTEM_"))).toEqual([
+      "MINIMAL_AGENT_SYSTEM_*",
     ])
-    expect(Object.keys(LEGACY_TERM_OVERRIDES)).toHaveLength(4)
+    expect(env).toHaveLength(reg.env.filter((e) => e.hidden !== true).length)
+  })
+
+  test("learn more: the command help hint and the project URL", () => {
+    expect(section("learn-more")?.text).toEqual([
+      "Use minimal-agent help <command> for command help.",
+      "github.com/gastonmorixe/minimal-agent",
+    ])
   })
 
   test("the model is plain text: no ESC or C0 in any string", () => {
@@ -95,29 +190,7 @@ describe("root help model (M-8c)", () => {
     for (const s of strings) expect(s).not.toMatch(/[\u0000-\u001f]/u)
   })
 
-  test("env rows: value suffix and one wildcard row for the hidden system-prompt names", () => {
-    const env = model.sections.find((s) => s.id === "environment")?.rows ?? []
-    const terms = env.map((r) => r.term)
-    expect(terms).toContain("DEBUG=1")
-    expect(terms).toContain("MINIMAL_AGENT_AUTO_ASK=0")
-    expect(terms).toContain(LEGACY_TERM_OVERRIDES.envWildcard.name)
-    expect(terms.filter((t) => t.startsWith("MINIMAL_AGENT_SYSTEM_"))).toEqual([
-      LEGACY_TERM_OVERRIDES.envWildcard.name,
-    ])
-    expect(env).toHaveLength(reg.env.filter((e) => e.hidden !== true).length)
-  })
-
-  test("the command map joins the root group members", () => {
-    const rows = model.sections.find((s) => s.id === "commands")?.rows ?? []
-    expect(rows.map((r) => r.term)).toEqual([
-      "providers · providers models · providers models-live",
-      "sessions · sessions dump · resume · usage",
-      "provider <id> login · logout · auth-status",
-      "plugins · flags · spinners · help",
-    ])
-  })
-
-  test("the catalog option is accepted and changes nothing in M-8c", () => {
+  test("the catalog option is accepted and changes nothing yet", () => {
     const withCatalog = buildHelpModel(reg, {
       program: { name: "minimal-agent", version: "9.9.9" },
       catalog: [],
@@ -411,10 +484,25 @@ describe("renderModel", () => {
     ])
   })
 
-  test("renders a root model too", () => {
+  test("root model: header at 2 and 4, then USAGE, as in the 8.6 mock", () => {
     const lines = renderModel(model, { width: 80 })
-    expect(lines[0]).toBe("  minimal-agent v9.9.9")
+    expect(lines.slice(0, 7)).toEqual([
+      "  minimal-agent v9.9.9",
+      "    A small, inspectable terminal agent harness.",
+      "",
+      "  USAGE",
+      "    minimal-agent [flags] [prompt]",
+      "    minimal-agent <command> [args] [flags]",
+      "",
+    ])
     expect(lines.join("\n")).not.toMatch(/\u001b/u)
+  })
+
+  test("root model: color and plain output have the same visible text", () => {
+    const colored = renderModel(model, { width: 80, color: true })
+    const plain = renderModel(model, { width: 80, color: false })
+    expect(colored.map(stripAnsi)).toEqual(plain)
+    expect(colored[0]).toContain("\u001b[2mv9.9.9")
   })
 })
 
@@ -433,20 +521,6 @@ describe("flagTerm", () => {
       "--header / --no-header",
     )
     expect(flagTerm({ name: "fast", short: "F", type: "boolean", summary: "" })).toBe("-F, --fast")
-  })
-})
-
-describe("renderLegacyRoot", () => {
-  test("color and plain output have the same visible text", () => {
-    const colored = renderLegacyRoot(model, { width: 80 })
-    const plain = renderLegacyRoot(model, { width: 80, color: false })
-    expect(colored.map(stripAnsi)).toEqual(plain)
-    expect(plain.join("\n")).not.toMatch(/\u001b/u)
-  })
-
-  test("the header uses the program version", () => {
-    const plain = renderLegacyRoot(model, { color: false })
-    expect(plain[1]).toBe("  minimal-agent v9.9.9")
   })
 })
 
