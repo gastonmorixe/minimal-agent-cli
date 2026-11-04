@@ -8,23 +8,25 @@
  * not repeat the env name in the text: help adds it from `env`.
  *
  * `value` is the TRUE arity, read from the parser (`src/cli/parse-argv.ts`,
- * `src/main.ts`, `src/startup/run-subcommand.ts`), not from the hand-kept
- * arity sets in `src/cli/extract-prompt.ts` (lead decision 6). Long flags
- * whose true arity differs from `FLAGS_WITH_VALUES` / `FLAGS_NO_VALUE`
- * (M-12, V-18 owns the fix):
+ * `src/main.ts`, `src/startup/run-subcommand.ts`). Since M-12 the parser
+ * arity sets (`FLAGS_WITH_VALUES` / `FLAGS_NO_VALUE` in
+ * `src/cli/extract-prompt.ts`) and the alias maps (`SHORT_TO_LONG` /
+ * `LONG_ALIAS` in `src/cli/cli-args.ts`) are derived from this registry by
+ * `./arity.ts`. So `value`, `short`, and the command-form `aliases` here
+ * drive the parse:
  *
- *   - `--parallel` (auth-status command flag): required value, in neither set.
- *     Possible live bug: `auth-status plan --parallel 8` may leak "8" as a
- *     prompt (IMPL-PROGRESS lead decision 6).
- *   - `--fast`, `--json`, `--diagnostics`: no value, in neither set.
- *   - `--dump-paths`, `--table`, `--dry-run`, `--force`, `--all` (command
- *     flags): no value, in neither set.
- *   - `--usage` (alias `--usage-stats`): optional value
- *     (`valueAfter`, parse-argv.ts:319), in neither set.
- *   - `--list-models`, `--list-models-live`, `--sessions`: optional value
- *     (`valueAfter`, parse-argv.ts:241, 316), listed in `FLAGS_NO_VALUE`.
+ *   - `required`: in `FLAGS_WITH_VALUES`. The prompt scan skips the value.
+ *   - `none`: in `FLAGS_NO_VALUE`.
+ *   - `optional` (`--list-models`, `--list-models-live`, `--sessions`,
+ *     `--usage`): in `FLAGS_NO_VALUE` (spec M-12). `parse-argv.ts` reads the
+ *     value with `valueAfter`.
  *
- * `registry-definition.test.ts` pins this list.
+ * The gaps that M-12 fixed (`arity.test.ts`, V-18): `--parallel` was in
+ * neither set, so `--parallel 8 hello` gave the prompt "8". The booleans
+ * `--fast`, `--json`, `--diagnostics`, `--dump-paths`, `--table`,
+ * `--dry-run`, `--force`, `--all` and the optional `--usage` were in
+ * neither set (no scan change: the scan never takes a `--` token as a
+ * prompt).
  *
  * @module cli/registry/global-flags
  */

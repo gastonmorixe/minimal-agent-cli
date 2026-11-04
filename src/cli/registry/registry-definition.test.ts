@@ -364,25 +364,13 @@ const ARITY_SET_ALLOW: Readonly<Record<string, string>> = {}
 
 /**
  * Long flags whose true arity (the registry `value`) differs from the
- * hand-kept arity sets in src/cli/extract-prompt.ts (lead decision 6).
- * "in neither set" means the prompt scan does not know the flag. M-12
- * (V-18) owns the fix. Same list as the comment in global-flags.ts.
+ * arity sets in src/cli/extract-prompt.ts. Empty since M-12: the sets are
+ * derived from the registry (src/cli/registry/arity.ts). The gaps M-12
+ * fixed (`--parallel`, 8 booleans, `--usage`) are pinned in arity.test.ts
+ * (V-18). An `optional` flag in `FLAGS_NO_VALUE` is the intended handling
+ * (spec M-12), not a difference.
  */
-const ARITY_DIFFERENCES: Readonly<Record<string, string>> = {
-  "--all": "none: in neither set",
-  "--diagnostics": "none: in neither set",
-  "--dry-run": "none: in neither set",
-  "--dump-paths": "none: in neither set",
-  "--fast": "none: in neither set",
-  "--force": "none: in neither set",
-  "--json": "none: in neither set",
-  "--list-models": "optional: in FLAGS_NO_VALUE",
-  "--list-models-live": "optional: in FLAGS_NO_VALUE",
-  "--parallel": "required: in neither set",
-  "--sessions": "optional: in FLAGS_NO_VALUE",
-  "--table": "none: in neither set",
-  "--usage": "optional: in neither set",
-}
+const ARITY_DIFFERENCES: Readonly<Record<string, string>> = {}
 
 describe("arity sets of extract-prompt.ts", () => {
   /** Long form to the registry `value` of every spec that has it. */
@@ -435,14 +423,13 @@ describe("arity sets of extract-prompt.ts", () => {
         : FLAGS_NO_VALUE.has(long)
           ? "FLAGS_NO_VALUE"
           : "neither set"
-      const expected = set === "FLAGS_WITH_VALUES" ? "required" : "none"
-      if (set === "neither set" || value !== expected) {
+      const expected = set === "FLAGS_WITH_VALUES" ? ["required"] : ["none", "optional"]
+      if (set === "neither set" || !expected.includes(value)) {
         diffs[long] = `${value}: in ${set}`
       }
     }
-    // A `none` flag in neither set is harmless to the prompt scan today (it
-    // starts with `--`, so the scan skips it). A value flag in neither set,
-    // or an optional one in FLAGS_NO_VALUE, can leak its value as a prompt.
+    // A value flag in neither set leaks its value as a prompt. An optional
+    // flag stays in FLAGS_NO_VALUE on purpose (spec M-12).
     expect(diffs).toEqual(ARITY_DIFFERENCES)
   })
 })

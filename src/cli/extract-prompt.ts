@@ -16,110 +16,40 @@
  * Critical invariant: `FLAGS_WITH_VALUES` MUST list every long flag that
  * consumes the following positional, otherwise the bare-positional walk
  * will mistake the flag's value for the user's prompt and the agent will
- * silently enter non-interactive mode. Tests in
- * `src/extract-prompt.test.ts` pin this for the regression-prone flags
- * (`--resume`, `--model`, `--provider`, etc).
+ * silently enter non-interactive mode. The set is derived from the CLI
+ * registry (SPEC-HELP M-12), so a FlagSpec with `value: "required"` is in
+ * it. Tests in `src/cli/extract-prompt.test.ts` pin the regression-prone
+ * flags (`--resume`, `--model`, `--provider`, etc), and
+ * `src/cli/registry/arity.test.ts` (V-18) pins the derived sets.
  *
  * @module extract-prompt
  */
 
-import {
-  SYSTEM_PROMPT_OVERRIDE_NO_VALUE_FLAGS,
-  SYSTEM_PROMPT_OVERRIDE_VALUE_FLAGS,
-} from "./system-prompt-override-flags.ts"
+import { builtinArity } from "./registry/arity.ts"
 
 /**
  * Long flags that consume the following positional as their value.
  * Used to skip both the flag and its value when scanning for a bare
  * positional prompt.
  *
- * Keep in sync with the flags defined in `src/cli-args.ts`. Adding a
- * new value-taking flag without updating this set is the exact bug
- * that motivated extracting this module — see git history of `--resume`.
+ * Derived from the CLI registry (SPEC-HELP M-12): every long form of a
+ * FlagSpec with `value: "required"`, global and per command. To add a
+ * value-taking flag, add its FlagSpec in `src/cli/registry` or a
+ * `*.command.ts` file. See `src/cli/registry/arity.ts`.
  */
-export const FLAGS_WITH_VALUES: ReadonlySet<string> = new Set([
-  "--model",
-  "--provider",
-  "--endpoint",
-  "--format",
-  "--surface",
-  "--auth-type",
-  "--api-key",
-  "--auth-header",
-  "--provider-model",
-  "--effort-levels",
-  "--session-id",
-  "--prompt",
-  "--resume",
-  "--resume-same-sid",
-  "--formatter",
-  "--formatter-args",
-  "--effort",
-  "--spinner",
-  "--thinking-display",
-  "--cache-ttl",
-  "--mode",
-  "--disable-plugin",
-  "--enable-plugin",
-  "--dump",
-  "--dump-format",
-  // Optional companion to `--login`: `--email <addr>` (or `--email-hint`)
-  // pre-fills the login form. Both forms accept the same value semantics.
-  "--email",
-  "--email-hint",
-  "--auth-method",
-  "--credential-name",
-  "--name",
-  "--output-schema",
-  "--output-format",
-  "--print-format",
-  "--service-tier",
-  "--platform",
-  "--tools",
-  "--host-mode",
-  ...SYSTEM_PROMPT_OVERRIDE_VALUE_FLAGS,
-])
+export const FLAGS_WITH_VALUES: ReadonlySet<string> = builtinArity().flagsWithValues
 
 /**
- * Long flags that take no value. They consume their own slot but not
- * the following positional, so a positional after one is a real prompt.
+ * Flags that take no value. They consume their own slot but not the
+ * following positional, so a positional after one is a real prompt.
  *
- * `-` is included here because the stdin sentinel is handled separately
- * (see step 2 above) but its index must still be skipped during the
- * positional walk.
+ * Derived from the CLI registry (SPEC-HELP M-12): every long form of a
+ * FlagSpec with `value: "none"` or `value: "optional"`, the `--no-<name>`
+ * form of a negatable flag, plus `-` and `-h`. Optional-value flags
+ * (`--sessions`, `--list-models`, `--list-models-live`, `--usage`) stay
+ * here: each one selects a command that does not read the prompt.
  */
-export const FLAGS_NO_VALUE: ReadonlySet<string> = new Set([
-  "--debug",
-  "--verbose",
-  "--list-models",
-  "--list-models-live",
-  "--list-flags",
-  "--list-plugins",
-  "--list-spinners",
-  "--list-providers",
-  "--sessions",
-  "--help",
-  "-h",
-  "-",
-  "--skip-quota",
-  "--show-hidden-chars",
-  "--header",
-  "--no-header",
-  "--no-tools",
-  // Plain help output (SPEC-HELP R-29). Read in src/startup/entry-args.ts.
-  "--no-color",
-  // Convenience alias for `--disable-plugin agents-md` (AGENTS.md injection).
-  "--no-agents-md",
-  "--no-agents",
-  // Auth subcommands — see src/cli/command-plan.ts. None of these consume
-  // the following positional, so they belong here rather than in
-  // FLAGS_WITH_VALUES. (`--login --email foo@bar` is a future option but
-  // even then `--email` would be the value-taker, not `--login`.)
-  "--login",
-  "--logout",
-  "--auth-status",
-  ...SYSTEM_PROMPT_OVERRIDE_NO_VALUE_FLAGS,
-])
+export const FLAGS_NO_VALUE: ReadonlySet<string> = builtinArity().flagsNoValue
 
 export type PromptSource = { kind: "literal"; text: string } | { kind: "stdin" } | { kind: "none" }
 
