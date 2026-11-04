@@ -549,7 +549,7 @@ const DEBUG_FLAGS: readonly FlagSpec[] = [
 // help
 // ---------------------------------------------------------------------------
 
-/** `-h, --help`. `--all` waits for M-10 (R-12). */
+/** `-h, --help`. With `--help`, `--all` also lists disabled and hidden entries (R-12). */
 export const HELP_FLAG: FlagSpec = {
   name: "help",
   short: "h",
