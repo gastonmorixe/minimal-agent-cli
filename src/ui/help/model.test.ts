@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type {
+  FlagSpec,
   HelpModel,
   HelpModelRow,
   HelpModelSection,
@@ -146,17 +147,74 @@ describe("root help model (M-8d, spec 8.4)", () => {
     const by = (term: string): string | undefined => rows.find((r) => r.term === term)?.summary
     expect(by("-m, --model <id>")).toBe("Select the model (env: MINIMAL_AGENT_MODEL)")
     expect(by("--cache-ttl <5m|1h>")).toBe(
-      "Prompt-cache breakpoint TTL (default: 5m, env: MINIMAL_AGENT_CACHE_TTL)",
+      "Prompt-cache breakpoint TTL (default: 5m; env: MINIMAL_AGENT_CACHE_TTL)",
     )
     expect(by("--system-identity <text>")).toBe(
       "Replace the neutral identity block (also --system-identity-file <path>, " +
-        "--no-system-identity, env: MINIMAL_AGENT_SYSTEM_IDENTITY)",
+        "--no-system-identity; env: MINIMAL_AGENT_SYSTEM_IDENTITY)",
     )
     for (const spec of reg.globalFlags.filter((f) => f.hidden !== true)) {
       for (const p of spec.description ?? []) {
         expect(by(flagTerm(spec)) ?? "").not.toContain(p)
       }
     }
+  })
+
+  describe("flag notes: one clause per kind, joined with '; ' (choices, default, env)", () => {
+    const base: FlagSpec = {
+      name: "x-note",
+      type: "string",
+      value: "required",
+      valueName: "v",
+      summary: "Probe",
+      group: "model",
+      global: true,
+    }
+    const noteOf = (extra: Partial<FlagSpec>): string | undefined => {
+      const spec: FlagSpec = { ...base, ...extra }
+      const m = buildHelpModel(
+        { ...reg, globalFlags: [...reg.globalFlags, spec] },
+        { program: { name: "minimal-agent", version: "9.9.9" } },
+      )
+      const rows = m.sections.flatMap((s) => s.groups ?? []).flatMap((g) => g.rows)
+      return rows.find((r) => r.term === flagTerm(spec))?.summary
+    }
+
+    test("choices and env", () => {
+      expect(noteOf({ choices: ["a", "b"], env: "X_ENV" })).toBe("Probe (one of: a, b; env: X_ENV)")
+    })
+
+    test("default and env", () => {
+      expect(noteOf({ default: "5m", env: "X_ENV" })).toBe("Probe (default: 5m; env: X_ENV)")
+    })
+
+    test("choices, default, and env, in that order", () => {
+      expect(noteOf({ choices: ["a", "b", "c"], default: "b", env: "X_ENV" })).toBe(
+        "Probe (one of: a, b, c; default: b; env: X_ENV)",
+      )
+    })
+
+    test("env only keeps the plain form", () => {
+      expect(noteOf({ env: "X_ENV" })).toBe("Probe (env: X_ENV)")
+    })
+
+    test("choices only keeps the plain form", () => {
+      expect(noteOf({ choices: ["a", "b"] })).toBe("Probe (one of: a, b)")
+    })
+
+    test("real rows: the env never reads like one more choice", () => {
+      const rows = section("flags")?.groups?.flatMap((g) => g.rows) ?? []
+      const by = (term: string): string | undefined => rows.find((r) => r.term === term)?.summary
+      expect(by("--thinking-display <mode>")).toBe(
+        "Force the thinking display mode (one of: summarized, omitted; " +
+          "env: MINIMAL_AGENT_THINKING_DISPLAY)",
+      )
+      expect(by("--auth-type <type>")).toBe(
+        "Generic endpoint auth type (one of: api-key, bearer, none, custom-header; " +
+          "env: MINIMAL_AGENT_AUTH_TYPE)",
+      )
+      for (const r of allRows()) expect(r.summary).not.toMatch(/, (env|default): /u)
+    })
   })
 
   test("env rows: bare names, the value hint in the summary", () => {

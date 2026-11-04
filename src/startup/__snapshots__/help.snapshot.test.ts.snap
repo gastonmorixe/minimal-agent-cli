@@ -43,9 +43,9 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       -F, --fast                 Fast-mode dispatch on fast-capable models (env:
                                  MINIMAL_AGENT_FAST)
       --thinking-display <mode>  Force the thinking display mode (one of:
-                                 summarized, omitted, env:
+                                 summarized, omitted; env:
                                  MINIMAL_AGENT_THINKING_DISPLAY)
-      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 5m, env:
+      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 5m; env:
                                  MINIMAL_AGENT_CACHE_TTL)
       --service-tier <tier>      Provider service tier: auto, default, flex,
                                  scale, priority (env:
@@ -58,7 +58,7 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       --format, --surface <id>  Generic endpoint wire surface (env:
                                 MINIMAL_AGENT_FORMAT)
       --auth-type <type>        Generic endpoint auth type (one of: api-key,
-                                bearer, none, custom-header, env:
+                                bearer, none, custom-header; env:
                                 MINIMAL_AGENT_AUTH_TYPE)
       --api-key <key>           Generic endpoint key or token (env:
                                 MINIMAL_AGENT_API_KEY)
@@ -101,7 +101,7 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
                                    --disable-plugin agents-md (env:
                                    MINIMAL_AGENT_NO_AGENTS_MD)
       --platform <os>              Override the platform for plugin and tool
-                                   gating (one of: macos, linux, windows, all,
+                                   gating (one of: macos, linux, windows, all;
                                    env: MINIMAL_AGENT_PLATFORM)
       --host-mode <id>             Hand the process to a plugin host mode, for
                                    example acp
@@ -111,35 +111,35 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
     System prompt (override or omit individual system-prompt parts)
       --system-prompt <text>            Replace the whole core-controllable
                                         system prompt (also --system-prompt-file
-                                        <path>, --no-system-prompt, env:
+                                        <path>, --no-system-prompt; env:
                                         MINIMAL_AGENT_SYSTEM_PROMPT)
       --system-identity <text>          Replace the neutral identity block (also
                                         --system-identity-file <path>,
-                                        --no-system-identity, env:
+                                        --no-system-identity; env:
                                         MINIMAL_AGENT_SYSTEM_IDENTITY)
       --system-instructions <text>      Replace the base instructions block
                                         (also --system-instructions-file <path>,
-                                        --no-system-instructions, env:
+                                        --no-system-instructions; env:
                                         MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
       --system-loop-safety <text>       Replace the loop-safety paragraph (also
                                         --system-loop-safety-file <path>,
-                                        --no-system-loop-safety, env:
+                                        --no-system-loop-safety; env:
                                         MINIMAL_AGENT_SYSTEM_LOOP_SAFETY)
       --system-tool-output-conventions <text>
           Replace the tool-output-conventions paragraph (also
           --system-tool-output-conventions-file <path>,
-          --no-system-tool-output-conventions, env:
+          --no-system-tool-output-conventions; env:
           MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS)
       --system-session-context <text>   Replace the session-context block of
                                         plugin prompts (also
                                         --system-session-context-file <path>,
-                                        --no-system-session-context, env:
+                                        --no-system-session-context; env:
                                         MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT)
       --provider-system-preamble <text>
                                         Replace the provider preamble, needs
                                         --unsafe-system-prompt-overrides (also
                                         --provider-system-preamble-file <path>,
-                                        --no-provider-system-preamble, env:
+                                        --no-provider-system-preamble; env:
                                         MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE)
       --unsafe-system-prompt-overrides  Allow a provider preamble override or
                                         omission
@@ -153,7 +153,7 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
 
   ENVIRONMENT
     DEBUG                               Verbose request and response debug
-                                        diagnostics (set to 1, flag: --debug)
+                                        diagnostics (set to 1; flag: --debug)
     MINIMAL_AGENT_LOG_STDERR            Mirror every diagnostic to stderr (set
                                         to 1)
     MINIMAL_AGENT_TRANSPORT             Transport: http2 or fetch (default:
@@ -167,7 +167,7 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
     CLAUDE_CODE_EXTRA_METADATA          JSON object merged into metadata.user_id
     MINIMAL_AGENT_SPINNER               Spinner preset id (flag: --spinner)
     MINIMAL_AGENT_EFFORT                Reasoning effort (flag: --effort)
-    MINIMAL_AGENT_FAST                  Opt into fast-mode dispatch (set to 1,
+    MINIMAL_AGENT_FAST                  Opt into fast-mode dispatch (set to 1;
                                         flag: --fast)
     MINIMAL_AGENT_THINKING_DISPLAY      Force the thinking display mode (flag:
                                         --thinking-display)
@@ -200,9 +200,9 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
     MINIMAL_AGENT_CONTINUATION_PROMPT   Override the continuation-prompt prefix
                                         (default: " ")
     MINIMAL_AGENT_SHOW_HIDDEN_CHARS     Show spaces, tabs, and newlines as faint
-                                        glyphs (set to 1, flag:
+                                        glyphs (set to 1; flag:
                                         --show-hidden-chars)
-    MINIMAL_AGENT_SKIP_QUOTA            Skip the startup quota check (set to 1,
+    MINIMAL_AGENT_SKIP_QUOTA            Skip the startup quota check (set to 1;
                                         flag: --skip-quota)
     MINIMAL_AGENT_NO_PLUGIN_SYNC        Skip the first-run extended-plugins
                                         clone (set to 1)
@@ -217,7 +217,7 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
     MINIMAL_AGENT_ENABLE_PLUGINS        Comma-separated plugin ids to force on
                                         this run (flag: --enable-plugin)
     MINIMAL_AGENT_NO_AGENTS_MD          Skip AGENTS.md system-prompt injection
-                                        (set to 1, flag: --no-agents-md)
+                                        (set to 1; flag: --no-agents-md)
     MINIMAL_AGENT_PLUGINS_REPO          Git URL of the extended plugins repo,
                                         for a fork or mirror
     MINIMAL_AGENT_GITHUB_TOKEN          Token to clone a private plugins repo,
@@ -299,16 +299,16 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       --provider <id>            Select the provider for --model (env: MINIMAL_AGENT_PROVIDER)
       -e, --effort <level>       Reasoning effort: low, medium, high, xhigh, max (env: MINIMAL_AGENT_EFFORT)
       -F, --fast                 Fast-mode dispatch on fast-capable models (env: MINIMAL_AGENT_FAST)
-      --thinking-display <mode>  Force the thinking display mode (one of: summarized, omitted, env:
+      --thinking-display <mode>  Force the thinking display mode (one of: summarized, omitted; env:
                                  MINIMAL_AGENT_THINKING_DISPLAY)
-      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 5m, env: MINIMAL_AGENT_CACHE_TTL)
+      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 5m; env: MINIMAL_AGENT_CACHE_TTL)
       --service-tier <tier>      Provider service tier: auto, default, flex, scale, priority (env:
                                  MINIMAL_AGENT_SERVICE_TIER)
       --credential-name <name>   Select a stored credential by name (env: MINIMAL_AGENT_CREDENTIAL_NAME)
     Generic endpoint
       --endpoint <url>          Generic endpoint URL (env: MINIMAL_AGENT_ENDPOINT)
       --format, --surface <id>  Generic endpoint wire surface (env: MINIMAL_AGENT_FORMAT)
-      --auth-type <type>        Generic endpoint auth type (one of: api-key, bearer, none, custom-header, env:
+      --auth-type <type>        Generic endpoint auth type (one of: api-key, bearer, none, custom-header; env:
                                 MINIMAL_AGENT_AUTH_TYPE)
       --api-key <key>           Generic endpoint key or token (env: MINIMAL_AGENT_API_KEY)
       --auth-header <name>      Auth header name for --auth-type custom-header (env: MINIMAL_AGENT_AUTH_HEADER)
@@ -336,31 +336,31 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       --enable-plugin <id>         Force-enable a plugin for this run, repeatable (env: MINIMAL_AGENT_ENABLE_PLUGINS)
       --no-agents-md, --no-agents  Skip AGENTS.md injection, same as --disable-plugin agents-md (env:
                                    MINIMAL_AGENT_NO_AGENTS_MD)
-      --platform <os>              Override the platform for plugin and tool gating (one of: macos, linux, windows, all,
+      --platform <os>              Override the platform for plugin and tool gating (one of: macos, linux, windows, all;
                                    env: MINIMAL_AGENT_PLATFORM)
       --host-mode <id>             Hand the process to a plugin host mode, for example acp
     Session
       --session-id <uuid>  Pin the session id of this run (env: MINIMAL_AGENT_SESSION_ID)
     System prompt (override or omit individual system-prompt parts)
       --system-prompt <text>                   Replace the whole core-controllable system prompt (also
-                                               --system-prompt-file <path>, --no-system-prompt, env:
+                                               --system-prompt-file <path>, --no-system-prompt; env:
                                                MINIMAL_AGENT_SYSTEM_PROMPT)
       --system-identity <text>                 Replace the neutral identity block (also --system-identity-file <path>,
-                                               --no-system-identity, env: MINIMAL_AGENT_SYSTEM_IDENTITY)
+                                               --no-system-identity; env: MINIMAL_AGENT_SYSTEM_IDENTITY)
       --system-instructions <text>             Replace the base instructions block (also --system-instructions-file
-                                               <path>, --no-system-instructions, env: MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
+                                               <path>, --no-system-instructions; env: MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
       --system-loop-safety <text>              Replace the loop-safety paragraph (also --system-loop-safety-file <path>,
-                                               --no-system-loop-safety, env: MINIMAL_AGENT_SYSTEM_LOOP_SAFETY)
+                                               --no-system-loop-safety; env: MINIMAL_AGENT_SYSTEM_LOOP_SAFETY)
       --system-tool-output-conventions <text>  Replace the tool-output-conventions paragraph (also
                                                --system-tool-output-conventions-file <path>,
-                                               --no-system-tool-output-conventions, env:
+                                               --no-system-tool-output-conventions; env:
                                                MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS)
       --system-session-context <text>          Replace the session-context block of plugin prompts (also
-                                               --system-session-context-file <path>, --no-system-session-context, env:
+                                               --system-session-context-file <path>, --no-system-session-context; env:
                                                MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT)
       --provider-system-preamble <text>        Replace the provider preamble, needs --unsafe-system-prompt-overrides
                                                (also --provider-system-preamble-file <path>,
-                                               --no-provider-system-preamble, env:
+                                               --no-provider-system-preamble; env:
                                                MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE)
       --unsafe-system-prompt-overrides         Allow a provider preamble override or omission
     Debug
@@ -371,7 +371,7 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       -h, --help  Show help
 
   ENVIRONMENT
-    DEBUG                               Verbose request and response debug diagnostics (set to 1, flag: --debug)
+    DEBUG                               Verbose request and response debug diagnostics (set to 1; flag: --debug)
     MINIMAL_AGENT_LOG_STDERR            Mirror every diagnostic to stderr (set to 1)
     MINIMAL_AGENT_TRANSPORT             Transport: http2 or fetch (default: http2)
     MINIMAL_AGENT_NO_PLAINTEXT_HTTP1    Keep http:// on HTTP/2, no plaintext auto-route (set to 1)
@@ -380,7 +380,7 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
     CLAUDE_CODE_EXTRA_METADATA          JSON object merged into metadata.user_id
     MINIMAL_AGENT_SPINNER               Spinner preset id (flag: --spinner)
     MINIMAL_AGENT_EFFORT                Reasoning effort (flag: --effort)
-    MINIMAL_AGENT_FAST                  Opt into fast-mode dispatch (set to 1, flag: --fast)
+    MINIMAL_AGENT_FAST                  Opt into fast-mode dispatch (set to 1; flag: --fast)
     MINIMAL_AGENT_THINKING_DISPLAY      Force the thinking display mode (flag: --thinking-display)
     MINIMAL_AGENT_FORMATTER_ARGS        Extra formatter args, shell-style (flag: --formatter-args)
     MINIMAL_AGENT_CONFIG                Override the config path (default: ~/.minimal-agent/config.jsonc)
@@ -399,16 +399,16 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
     MINIMAL_AGENT_HEADER                Force the startup tree: 0 or 1 (flag: --header)
     MINIMAL_AGENT_MODE                  Initial mode id, or none (flag: --mode)
     MINIMAL_AGENT_CONTINUATION_PROMPT   Override the continuation-prompt prefix (default: "  ")
-    MINIMAL_AGENT_SHOW_HIDDEN_CHARS     Show spaces, tabs, and newlines as faint glyphs (set to 1, flag:
+    MINIMAL_AGENT_SHOW_HIDDEN_CHARS     Show spaces, tabs, and newlines as faint glyphs (set to 1; flag:
                                         --show-hidden-chars)
-    MINIMAL_AGENT_SKIP_QUOTA            Skip the startup quota check (set to 1, flag: --skip-quota)
+    MINIMAL_AGENT_SKIP_QUOTA            Skip the startup quota check (set to 1; flag: --skip-quota)
     MINIMAL_AGENT_NO_PLUGIN_SYNC        Skip the first-run extended-plugins clone (set to 1)
     MINIMAL_AGENT_PLUGIN_SIBLINGS       Dev plugin checkout dirs, colon-separated
     MINIMAL_AGENT_AUTO_ASK              Turn off automatic ASK mode in the REPL (set to 0)
     MINIMAL_AGENT_AUTO_COMPACT          Turn off auto compact on a context overflow (set to 0)
     MINIMAL_AGENT_DISABLE_PLUGINS       Comma-separated plugin ids to skip this run (flag: --disable-plugin)
     MINIMAL_AGENT_ENABLE_PLUGINS        Comma-separated plugin ids to force on this run (flag: --enable-plugin)
-    MINIMAL_AGENT_NO_AGENTS_MD          Skip AGENTS.md system-prompt injection (set to 1, flag: --no-agents-md)
+    MINIMAL_AGENT_NO_AGENTS_MD          Skip AGENTS.md system-prompt injection (set to 1; flag: --no-agents-md)
     MINIMAL_AGENT_PLUGINS_REPO          Git URL of the extended plugins repo, for a fork or mirror
     MINIMAL_AGENT_GITHUB_TOKEN          Token to clone a private plugins repo, else GITHUB_TOKEN, GH_TOKEN, gh
     MINIMAL_AGENT_NO_HISTORY            Disable prompt history (set to 1)
