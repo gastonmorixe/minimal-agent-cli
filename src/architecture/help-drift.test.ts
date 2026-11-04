@@ -1,8 +1,8 @@
 /**
- * Help drift: the long flags the parser knows against the long flags root
- * help shows (SPEC-HELP M-2, R-33, V-4).
+ * Help drift: the long flags the parser knows against the long flags the
+ * help side declares (SPEC-HELP M-2, M-8b, R-33, V-4).
  *
- * There is no flag registry yet (SPEC-HELP 2.1). So the parser set is the
+ * The parser is not registry-driven yet (M-12). So the parser set is the
  * union of:
  *   - the exported arity sets `FLAGS_WITH_VALUES` and `FLAGS_NO_VALUE`
  *     (src/cli/extract-prompt.ts), which include the system-prompt override
@@ -12,12 +12,21 @@
  *     `SHORT_TO_LONG` and `LONG_ALIAS` (src/cli/cli-args.ts), which are not
  *     exported, and the ad hoc `args.includes` reads.
  *
- * The help set is every `--x` token in the ANSI-free root help text.
+ * The help set is the union of:
+ *   - the registry set: every long form (name, aliases, `--no-<name>`) of
+ *     every FlagSpec in the built-in registry (src/cli/registry and the
+ *     `*.command.ts` files), global and per command, hidden included, and
+ *   - the text set: every `--x` token in the ANSI-free root help text. This
+ *     catches flag names that only appear in note text.
  *
  * Both differences (parser minus help, help minus parser) must equal the
  * entries in help-drift.allow.txt. The test fails on a new mismatch and on
  * a stale entry (an entry that no longer mismatches). The list must only
- * shrink. M-8 replaces the literal scan with a registry read.
+ * shrink.
+ *
+ * A second check keeps root help text in step with the registry until
+ * M-8c builds root help from it: the text shows every long form of every
+ * visible global flag.
  *
  * @module architecture/help-drift.test
  */
@@ -29,6 +38,7 @@ import { join } from "node:path"
 import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { FLAGS_NO_VALUE, FLAGS_WITH_VALUES } from "../cli/extract-prompt.ts"
+import { allFlags, builtinRegistry, longForms } from "../cli/registry/index.ts"
 import { renderHelp } from "../startup/help.ts"
 import { flagLiterals } from "./flag-ownership.ts"
 
@@ -83,9 +93,27 @@ function parserFlags(): Set<string> {
   return out
 }
 
-function helpFlags(): Set<string> {
+/** Every long form of every FlagSpec in the registry, at every depth, hidden included. */
+function registryFlags(): Set<string> {
+  return new Set(allFlags(builtinRegistry()).flatMap((f) => f.longs))
+}
+
+/** Every `--x` token in the ANSI-free root help text. */
+function helpTextFlags(): Set<string> {
   const text = stripAnsi(renderHelp().join("\n"))
   return new Set([...text.matchAll(HELP_FLAG_RE)].map((m) => m[0]))
+}
+
+/** The help side of the drift: the registry set plus the root help text set. */
+function helpFlags(): Set<string> {
+  return new Set([...registryFlags(), ...helpTextFlags()])
+}
+
+/** Every long form of every visible global flag in the registry. */
+function visibleGlobalFlags(): string[] {
+  return builtinRegistry()
+    .globalFlags.filter((spec) => spec.hidden !== true)
+    .flatMap((spec) => longForms(spec))
 }
 
 /** Entry lines of the allowlist text: no comments, no blank lines. */
@@ -137,22 +165,32 @@ describe("help drift allowlist file", () => {
 })
 
 describe("help drift", () => {
-  test("parser and root help differ only by the allowlist", () => {
+  test("parser and help (registry plus root help text) differ only by the allowlist", () => {
     const allow = allowLines(readFileSync(ALLOW_FILE, "utf8")).map(parseAllowLine)
     const drift = computeDrift(parserFlags(), helpFlags(), allow)
-    // `unlisted`: document the flag in src/startup/help.ts (do not grow the list).
+    // `unlisted`: add a FlagSpec in src/cli/registry or a `*.command.ts` file,
+    // or fix the help text (do not grow the list).
     // `stale`: the mismatch is fixed, so remove the entry from help-drift.allow.txt.
     expect(drift).toEqual({ unlisted: [], stale: [] })
   })
 
-  test("the scan finds real flags on both sides", () => {
+  test("root help text shows every visible global flag in the registry", () => {
+    const text = helpTextFlags()
+    // A missing flag means root help dropped a row (src/startup/help.ts).
+    expect(visibleGlobalFlags().filter((flag) => !text.has(flag))).toEqual([])
+  })
+
+  test("the scan finds real flags on every side", () => {
     const parser = parserFlags()
-    const help = helpFlags()
+    const registry = registryFlags()
+    const text = helpTextFlags()
     // Guards against a scan that silently finds nothing (an empty set has no drift).
     for (const flag of ["--model", "--list-models", "--help", "--host-mode"]) {
       expect(parser.has(flag)).toBe(true)
-      expect(help.has(flag)).toBe(true)
+      expect(registry.has(flag)).toBe(true)
+      expect(text.has(flag)).toBe(true)
     }
+    expect(visibleGlobalFlags().length).toBeGreaterThan(0)
   })
 })
 
