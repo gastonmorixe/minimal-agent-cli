@@ -21,6 +21,7 @@ import {
 import { builtinRegistry } from "../cli/registry/index.ts"
 import { visibleCommandPaths } from "../ui/help/model.ts"
 import { prepareEntrypointArgs } from "./entry-args.ts"
+import { fixtureHelpCatalog } from "./fixtures/help-catalog.ts"
 import { printHelp, renderCommandHelp, renderHelpJson } from "./help.ts"
 
 class ExitSignal extends Error {
@@ -30,6 +31,9 @@ class ExitSignal extends Error {
 }
 
 const ENV = { NO_COLOR: "1", COLUMNS: "80" }
+
+/** The fixture catalog: help output does not depend on the plugins of the machine. */
+const CATALOG = fixtureHelpCatalog()
 
 /** Run startup with `rawArgv` and return the exit code plus both streams. */
 function run(rawArgv: string[]): { code: number | undefined; stdout: string; stderr: string } {
@@ -41,6 +45,7 @@ function run(rawArgv: string[]): { code: number | undefined; stdout: string; std
       rawArgv,
       env: { ...ENV },
       cwd: "/tmp",
+      helpCatalog: () => CATALOG,
       stdout: { write: (s: string) => out.push(s) },
       stderr: { write: (s: string) => (err.push(s), true) as unknown as boolean },
       exit: (c: number): never => {
@@ -59,7 +64,7 @@ const PATHS = visibleCommandPaths(builtinRegistry())
 describe("root help forms", () => {
   test("--help, -h, and help give the same bytes as printHelp", () => {
     const expected: string[] = []
-    printHelp({ write: (s: string) => expected.push(s) }, { env: ENV })
+    printHelp({ write: (s: string) => expected.push(s) }, { env: ENV, catalog: CATALOG })
     for (const argv of [["--help"], ["-h"], ["help"]]) {
       const r = run(argv)
       expect(r.code).toBe(0)
@@ -175,7 +180,7 @@ function jsonForms(path: readonly string[]): string[][] {
 
 describe("JSON help (R-30, Q-4, plan M-11)", () => {
   test("root: every form prints the root model, kind root, contract version", () => {
-    const expected = renderHelpJson()
+    const expected = renderHelpJson([], { catalog: CATALOG })
     for (const argv of [...jsonForms([]), ["--help", "--output-format", "json"]]) {
       const r = run(argv)
       expect(r.code).toBe(0)

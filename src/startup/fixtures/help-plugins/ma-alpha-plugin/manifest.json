@@ -1,0 +1,42 @@
+{
+  "id": "alpha",
+  "name": "Alpha",
+  "version": "0.0.0",
+  "description": "Help fixture: an enabled plugin with a host mode, args, examples, and help sections.",
+  "permissions": ["hostMode:stdio"],
+  "cli": {
+    "contractVersion": 1,
+    "helpSections": [
+      {
+        "id": "usage-notes",
+        "title": "Alpha notes",
+        "text": ["Alpha runs as an ACP agent for editors."],
+        "rows": [
+          { "term": "Zed", "summary": "Set the agent command to minimal-agent --host-mode acp" }
+        ]
+      },
+      {
+        "id": "limits",
+        "title": "Alpha limits",
+        "rows": [{ "term": "Level 1", "summary": "No file system or terminal capabilities" }]
+      }
+    ]
+  },
+  "headless": {
+    "hostModes": [
+      {
+        "id": "acp",
+        "description": "Agent Client Protocol v1 over stdio.",
+        "entry": { "type": "module", "path": "./host-mode.ts", "export": "default" },
+        "args": [
+          {
+            "name": "flags",
+            "summary": "Args for the host mode, for example --approval",
+            "variadic": true
+          }
+        ],
+        "examples": [{ "argv": "--host-mode acp", "summary": "Serve ACP on stdin and stdout." }]
+      }
+    ]
+  }
+}

@@ -21,6 +21,16 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-04: Root help reads the core plugin catalog (manifest JSON only,
+  no plugin module import). A new HOST MODES section lists usable host
+  modes with their plugin id. PLUGIN NOTES keeps the static block first,
+  then the plugin `cli.helpSections`, by plugin id, then declared order.
+  `--help --all` also shows disabled host modes and off plugins with the
+  reason (`cli`, `env`, `config`, `manifest`, `platform`, `invalid`,
+  `permission`, `collision`). `--all` keeps its meaning outside help
+  (`auth-status plan --all`). `--host-mode <id> --help` prints help for
+  that host mode (description, plugin id, args, examples). An unknown id
+  exits 2 with the help error format. JSON help has the new sections.
 - 2026-11-04: `--help --json` and `--help --output-format json` print the
   help model as JSON (with `contractVersion`) for root help and for every
   command help form (`<cmd> --help --json`, `help <cmd> --json`). No color,

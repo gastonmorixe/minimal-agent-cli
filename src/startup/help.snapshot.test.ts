@@ -17,6 +17,9 @@
  * help drift. A separate test checks that the title line has the real
  * version, so the mask cannot hide a lost version.
  *
+ * M-10 adds HOST MODES and PLUGIN NOTES groups from the fixture plugin root
+ * (`fixtures/help-plugins`), so the plugin rows are pinned too.
+ *
  * The source is `printHelp` with a collector stream and an explicit env, so
  * the result does not depend on the terminal that runs the tests. The CLI
  * path (`--help` in src/startup/entry-args.ts) calls the same function with
@@ -30,9 +33,13 @@ import { describe, expect, test } from "bun:test"
 import { AGENT_VERSION } from "@minimal-agent/core/host/build-info"
 import { displayWidth, stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
+import { fixtureHelpCatalog } from "./fixtures/help-catalog.ts"
 import { type PrintHelpOptions, printHelp } from "./help.ts"
 
 const VERSION_MASK = "v<AGENT_VERSION>"
+
+/** The fixture plugin catalog (R-34): HOST MODES and PLUGIN NOTES do not depend on the machine. */
+const CATALOG = fixtureHelpCatalog()
 
 /** The exact bytes `printHelp` writes to a stream with this TTY state. */
 function helpBytes(
@@ -49,7 +56,7 @@ function helpBytes(
         return true
       },
     },
-    { env, ...opts },
+    { env, catalog: CATALOG, ...opts },
   )
   return out
 }

@@ -20,6 +20,9 @@
  * - Strict walk (R-16): go down while the next positional is a child name or
  *   alias. The first other token stops the walk.
  * - Hidden commands resolve. They are never suggested.
+ * - In help mode, `--host-mode <id>` selects host-mode help (R-19, M-10)
+ *   and `--all` marks the request (R-12). Outside help mode `--all` is not
+ *   read here.
  * - Exit codes are not decided here (M-9c).
  *
  * @module cli/registry/resolve
@@ -33,14 +36,30 @@ import type { BuiltinRegistry } from "./types.ts"
 
 /** The result of {@link resolveHelpRequest} in help mode. */
 export type HelpRequest =
-  /** Print help for `path` (canonical names). Empty path: root help. */
-  | { kind: "help"; path: string[] }
+  /**
+   * Print help for `path` (canonical names). Empty path: root help. `all`
+   * is set (only) for `--help --all`: show disabled plugin entries (R-12).
+   */
+  | { kind: "help"; path: string[]; all?: true }
+  /**
+   * `--host-mode <id> --help` (R-19): help for the host mode `id`. The
+   * resolver has no plugin catalog, so the caller checks that `id` exists.
+   */
+  | { kind: "host-mode"; id: string }
   /**
    * `token` is not a child of the command at `at` (canonical names, the
    * deepest known path), and that command takes no free positional.
-   * `suggestions` holds up to 3 visible child names or aliases.
+   * `suggestions` holds up to 3 visible child names or aliases. `subject`
+   * is `"host-mode"` when `token` is an unknown host-mode id (`at` is then
+   * `["--host-mode"]`).
    */
-  | { kind: "unknown"; at: string[]; token: string; suggestions: string[] }
+  | {
+      kind: "unknown"
+      at: string[]
+      token: string
+      suggestions: string[]
+      subject?: "host-mode"
+    }
 
 /** Value mode of a flag token. */
 type Arity = "none" | "required" | "optional"
@@ -118,13 +137,46 @@ function findChild(node: CommandSpec, name: string): CommandSpec | undefined {
 }
 
 /**
+ * The `--host-mode` value in `tokens`: `--host-mode <id>` or
+ * `--host-mode=<id>`. A missing value or a flag token in the value slot
+ * gives `undefined`.
+ */
+export function hostModeValue(tokens: readonly string[]): string | undefined {
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i] ?? ""
+    if (token.startsWith("--host-mode=")) {
+      const value = token.slice("--host-mode=".length)
+      return value === "" ? undefined : value
+    }
+    if (token === "--host-mode") {
+      const next = tokens[i + 1]
+      return next === undefined || isFlagToken(next) || next === "" ? undefined : next
+    }
+  }
+  return undefined
+}
+
+/**
  * Resolve raw argv to a help request, or `undefined` when argv is not a help
- * request. See the module doc for the rules.
+ * request. See the module doc for the rules. In help mode,
+ * `--host-mode <id>` selects host-mode help (R-19), and `--all` sets `all` on a help
+ * request (R-12). Outside help mode, `--all` keeps its command meaning
+ * (`auth-status plan --all`).
  */
 export function resolveHelpRequest(
   raw: readonly string[],
   reg: BuiltinRegistry,
 ): HelpRequest | undefined {
+  const req = resolveHelpPath(raw, reg)
+  if (req === undefined) return undefined
+  const hostMode = hostModeValue(raw)
+  if (hostMode !== undefined) return { kind: "host-mode", id: hostMode }
+  if (req.kind === "help" && raw.includes("--all")) return { ...req, all: true }
+  return req
+}
+
+/** The path walk of {@link resolveHelpRequest}, with no `--host-mode` or `--all` step. */
+function resolveHelpPath(raw: readonly string[], reg: BuiltinRegistry): HelpRequest | undefined {
   const flagForm = raw.includes("--help") || raw.includes("-h")
   // `help --help` and `help -h` (no path after `help`) ask for the help
   // command's own help: read `help` as a path there, not as the form (R-14).
