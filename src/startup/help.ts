@@ -11,8 +11,35 @@
 import { AGENT_VERSION } from "@minimal-agent/core/host/build-info"
 import pkg from "../../package.json" with { type: "json" }
 import { type CommandOutput, writeCommandRows } from "../ui/command-output.ts"
-import { type HelpSection, renderHelpSections } from "../ui/help/render.ts"
+import { resolveHelpPolicy } from "../ui/help/policy.ts"
+import {
+  type HelpRow,
+  type HelpSection,
+  renderHelpSections,
+  wrapHelpText,
+} from "../ui/help/render.ts"
 import { c } from "../ui/style/ansi.ts"
+
+/** Layout and color for {@link renderHelp}. */
+export interface RenderHelpOptions {
+  /** Wrap width in cells. Omit for no wrapping. */
+  readonly width?: number
+  /** `false` makes the renderer strip every SGR. Default `true`. */
+  readonly color?: boolean
+}
+
+/** Inputs of {@link printHelp} that the policy reads (SPEC-HELP R-28, R-29). */
+export interface PrintHelpOptions {
+  /** Explicit wrap width. Wins over every other width source. */
+  readonly columns?: number
+  /** `--no-color` was passed. */
+  readonly noColor?: boolean
+  /** Environment for `COLUMNS`, `NO_COLOR`, and `TERM`. Default `process.env`. */
+  readonly env?: Readonly<Record<string, string | undefined>>
+}
+
+/** A help sink. `isTTY` and `columns` are read when the stream has them. */
+export type HelpOutput = CommandOutput & { readonly isTTY?: boolean; readonly columns?: number }
 
 /**
  * The CLI's semver from its own `package.json`, or `"0.0.0"` when the
@@ -25,34 +52,92 @@ export function readEmbeddedPackageVersion(): string {
   return typeof version === "string" ? version : "0.0.0"
 }
 
-/** Render the full `--help` usage text without writing to stdout. */
-export function renderHelp(): string[] {
+/**
+ * Render the full `--help` usage text without writing to stdout. Pure: the
+ * default is color on and no wrapping. {@link printHelp} resolves the policy.
+ */
+export function renderHelp(opts: RenderHelpOptions = {}): string[] {
+  const color = opts.color !== false
+  const width = opts.width
+  const text = (line: string): string[] => wrapHelpText(line, { indent: 2, width, color })
+  const sections = (list: HelpSection[]): string[] => renderHelpSections(list, { width, color })
   return [
     "",
-    `  ${c.bold(c.cyan("minimal-agent"))} ${c.dim(`v${AGENT_VERSION}`)}`,
-    `  ${c.faintWhite("A small, inspectable terminal agent harness.")}`,
-    `  ${c.faintWhite(c.italic("github.com/gastonmorixe/minimal-agent"))}`,
+    ...text(`${c.bold(c.cyan("minimal-agent"))} ${c.dim(`v${AGENT_VERSION}`)}`),
+    ...text(c.faintWhite("A small, inspectable terminal agent harness.")),
+    ...text(c.faintWhite(c.italic("github.com/gastonmorixe/minimal-agent"))),
     "",
-    `  ${c.bold("Start here")}`,
-    `    ${c.dim("$")} minimal-agent                             ${c.dim("interactive REPL")}`,
-    `    ${c.dim("$")} minimal-agent ${c.cyan('"explain this codebase"')}     ${c.dim("one prompt, then exit")}`,
-    `    ${c.dim("$")} echo ${c.cyan('"summarize stdin"')} | minimal-agent ${c.cyan("-")}  ${c.dim("read a prompt from stdin")}`,
+    ...sections(buildIntroSections()),
     "",
-    `  ${c.bold("Command map")}`,
-    `    ${c.cyan("providers")} ${c.dim("·")} ${c.cyan("providers models")} ${c.dim("·")} ${c.cyan("providers models-live")}  ${c.dim("discover models and providers")}`,
-    `    ${c.cyan("sessions")} ${c.dim("·")} ${c.cyan("sessions dump")} ${c.dim("·")} ${c.cyan("resume")} ${c.dim("·")} ${c.cyan("usage")}             ${c.dim("inspect or continue past work")}`,
-    `    ${c.cyan("provider <id> login")} ${c.dim("·")} ${c.cyan("logout")} ${c.dim("·")} ${c.cyan("auth-status")}            ${c.dim("manage provider credentials")}`,
-    `    ${c.cyan("plugins")} ${c.dim("·")} ${c.cyan("flags")} ${c.dim("·")} ${c.cyan("spinners")} ${c.dim("·")} ${c.cyan("help")}                     ${c.dim("inspect the local installation")}`,
+    ...text(c.dim("Every command also accepts --help. Flags win over a positional prompt.")),
     "",
-    `  ${c.dim("Every command also accepts --help. Flags win over a positional prompt.")}`,
-    "",
-    ...renderHelpSections(buildHelpSections()),
+    ...sections(buildHelpSections()),
   ]
 }
 
-/** Print the full `--help` usage text to stdout. */
-export function printHelp(output: CommandOutput = process.stdout): void {
-  writeCommandRows(renderHelp(), output)
+/**
+ * Print the full `--help` usage text. Width and color come from
+ * {@link resolveHelpPolicy} for `output`: color only on a TTY with no
+ * `NO_COLOR`, no `TERM=dumb`, and no `--no-color`.
+ */
+export function printHelp(output: HelpOutput = process.stdout, opts: PrintHelpOptions = {}): void {
+  const policy = resolveHelpPolicy({
+    env: opts.env ?? process.env,
+    isTTY: output.isTTY,
+    columns: { explicit: opts.columns, output: output.columns, stdout: process.stdout.columns },
+    flags: { noColor: opts.noColor },
+  })
+  writeCommandRows(renderHelp(policy), output)
+}
+
+function buildIntroSections(): HelpSection[] {
+  const sep = ` ${c.dim("·")} `
+  return [
+    {
+      title: c.bold("Start here"),
+      rows: [
+        { term: `${c.dim("$")} minimal-agent`, summary: c.dim("interactive REPL") },
+        {
+          term: `${c.dim("$")} minimal-agent ${c.cyan('"explain this codebase"')}`,
+          summary: c.dim("one prompt, then exit"),
+        },
+        {
+          term: `${c.dim("$")} echo ${c.cyan('"summarize stdin"')} | minimal-agent ${c.cyan("-")}`,
+          summary: c.dim("read a prompt from stdin"),
+        },
+      ],
+    },
+    {
+      title: c.bold("Command map"),
+      rows: [
+        {
+          term: [
+            c.cyan("providers"),
+            c.cyan("providers models"),
+            c.cyan("providers models-live"),
+          ].join(sep),
+          summary: c.dim("discover models and providers"),
+        },
+        {
+          term: [
+            c.cyan("sessions"),
+            c.cyan("sessions dump"),
+            c.cyan("resume"),
+            c.cyan("usage"),
+          ].join(sep),
+          summary: c.dim("inspect or continue past work"),
+        },
+        {
+          term: [c.cyan("provider <id> login"), c.cyan("logout"), c.cyan("auth-status")].join(sep),
+          summary: c.dim("manage provider credentials"),
+        },
+        {
+          term: [c.cyan("plugins"), c.cyan("flags"), c.cyan("spinners"), c.cyan("help")].join(sep),
+          summary: c.dim("inspect the local installation"),
+        },
+      ],
+    },
+  ]
 }
 
 function buildHelpSections(): HelpSection[] {
@@ -193,6 +278,9 @@ function buildHelpSections(): HelpSection[] {
         ]),
         row(c.cyan("--skip-quota"), "Skip startup quota check", ["or MINIMAL_AGENT_SKIP_QUOTA=1"]),
         row(c.cyan("--show-hidden-chars"), "Reveal spaces/tabs/newlines as faint glyphs"),
+        row(c.cyan("--no-color"), "Print this help with no color", [
+          "help is also plain when NO_COLOR is set and not empty, TERM=dumb, or output is not a TTY",
+        ]),
         row(
           `${c.cyan("--credential-name")} ${c.dim("<name>")}`,
           "Select a stored credential by name",
@@ -522,11 +610,7 @@ function buildHelpSections(): HelpSection[] {
   ]
 }
 
-function row(
-  term: string,
-  summary: string,
-  notes: string[] = [],
-): { term: string; summary: string } {
+function row(term: string, summary: string, notes: string[] = []): HelpRow {
   return {
     term,
     summary: notes.length > 0 ? `${summary} ${c.dim(`(${notes.join(", ")})`)}` : summary,

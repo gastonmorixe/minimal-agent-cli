@@ -1,325 +1,578 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
-exports[`root help snapshot COLUMNS=80, NO_COLOR=1 set (ignored before M-7) 1`] = `
+exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] = `
 "
-  <ESC>[1m<ESC>[36mminimal-agent<ESC>[39m<ESC>[22m <ESC>[2mv<AGENT_VERSION><ESC>[22m
-  <ESC>[2;37mA small, inspectable terminal agent harness.<ESC>[22;39m
-  <ESC>[2;37m<ESC>[3mgithub.com/gastonmorixe/minimal-agent<ESC>[23m<ESC>[22;39m
+  minimal-agent v<AGENT_VERSION>
+  A small, inspectable terminal agent harness.
+  github.com/gastonmorixe/minimal-agent
 
-  <ESC>[1mStart here<ESC>[22m
-    <ESC>[2m$<ESC>[22m minimal-agent                             <ESC>[2minteractive REPL<ESC>[22m
-    <ESC>[2m$<ESC>[22m minimal-agent <ESC>[36m"explain this codebase"<ESC>[39m     <ESC>[2mone prompt, then exit<ESC>[22m
-    <ESC>[2m$<ESC>[22m echo <ESC>[36m"summarize stdin"<ESC>[39m | minimal-agent <ESC>[36m-<ESC>[39m  <ESC>[2mread a prompt from stdin<ESC>[22m
+  Start here
+    $ minimal-agent  interactive REPL
+    $ minimal-agent "explain this codebase"
+                     one prompt, then exit
+    $ echo "summarize stdin" | minimal-agent -
+                     read a prompt from stdin
 
-  <ESC>[1mCommand map<ESC>[22m
-    <ESC>[36mproviders<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mproviders models<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mproviders models-live<ESC>[39m  <ESC>[2mdiscover models and providers<ESC>[22m
-    <ESC>[36msessions<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36msessions dump<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mresume<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36musage<ESC>[39m             <ESC>[2minspect or continue past work<ESC>[22m
-    <ESC>[36mprovider <id> login<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mlogout<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mauth-status<ESC>[39m            <ESC>[2mmanage provider credentials<ESC>[22m
-    <ESC>[36mplugins<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mflags<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mspinners<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mhelp<ESC>[39m                     <ESC>[2minspect the local installation<ESC>[22m
+  Command map
+    providers · providers models · providers models-live
+                                       discover models and providers
+    sessions · sessions dump · resume · usage
+                                       inspect or continue past work
+    provider <id> login · logout · auth-status
+                                       manage provider credentials
+    plugins · flags · spinners · help  inspect the local installation
 
-  <ESC>[2mEvery command also accepts --help. Flags win over a positional prompt.<ESC>[22m
+  Every command also accepts --help. Flags win over a positional prompt.
 
-  <ESC>[1mOptions<ESC>[22m
-    <ESC>[36m-m<ESC>[39m, <ESC>[36m--model<ESC>[39m <ESC>[2m<id><ESC>[22m                         Select model <ESC>[2m(requires --provider, else MINIMAL_AGENT_MODEL, config model)<ESC>[22m
-    <ESC>[36m--provider<ESC>[39m <ESC>[2m<id><ESC>[22m                          Select provider for --model <ESC>[2m(else MINIMAL_AGENT_PROVIDER, config provider)<ESC>[22m
-    <ESC>[36m--endpoint<ESC>[39m <ESC>[2m<url><ESC>[22m                         Generic endpoint URL <ESC>[2m(use with --provider generic-endpoint, or MINIMAL_AGENT_ENDPOINT)<ESC>[22m
-    <ESC>[36m--format<ESC>[39m, <ESC>[36m--surface<ESC>[39m <ESC>[2m<id><ESC>[22m                 Generic endpoint surface <ESC>[2m(a registered wire surface, or MINIMAL_AGENT_FORMAT)<ESC>[22m
-    <ESC>[36m--auth-type<ESC>[39m <ESC>[2m<type><ESC>[22m                       Generic endpoint auth <ESC>[2m(api-key | bearer | none | custom-header, or MINIMAL_AGENT_AUTH_TYPE)<ESC>[22m
-    <ESC>[36m--api-key<ESC>[39m <ESC>[2m<key><ESC>[22m                          Generic endpoint key/token <ESC>[2m(or MINIMAL_AGENT_API_KEY)<ESC>[22m
-    <ESC>[36m--auth-header<ESC>[39m <ESC>[2m<name><ESC>[22m                     Custom auth header name <ESC>[2m(for --auth-type custom-header, or MINIMAL_AGENT_AUTH_HEADER)<ESC>[22m
-    <ESC>[36m--provider-model<ESC>[39m <ESC>[2m<id><ESC>[22m                    Wire model id override <ESC>[2m(separate from local --model, or MINIMAL_AGENT_PROVIDER_MODEL)<ESC>[22m
-    <ESC>[36m--effort-levels<ESC>[39m <ESC>[2m<levels><ESC>[22m                 Generic endpoint effort ladder <ESC>[2m(comma-separated, e.g. "low,medium,high", lets --effort pass through, or MINIMAL_AGENT_EFFORT_LEVELS)<ESC>[22m
-    <ESC>[36m-e<ESC>[39m, <ESC>[36m--effort<ESC>[39m <ESC>[2m<level><ESC>[22m                     Reasoning effort: low, medium, high, xhigh, max <ESC>[2m(or MINIMAL_AGENT_EFFORT)<ESC>[22m
-    <ESC>[36m-F<ESC>[39m, <ESC>[36m--fast<ESC>[39m                               Fast-mode dispatch <ESC>[2m(speed:"fast", fast-capable models only, ~2.5x tok/s, ~2x cost, or MINIMAL_AGENT_FAST=1)<ESC>[22m
-    <ESC>[36m--thinking-display<ESC>[39m <ESC>[2m<mode><ESC>[22m                Force thinking display: summarized or omitted <ESC>[2m(or MINIMAL_AGENT_THINKING_DISPLAY)<ESC>[22m
-    <ESC>[36m--cache-ttl<ESC>[39m <ESC>[2m<5m|1h><ESC>[22m                      Prompt-cache breakpoint TTL <ESC>[2m(default: 5m, or MINIMAL_AGENT_CACHE_TTL, config cacheTtl)<ESC>[22m
-    <ESC>[36m-f<ESC>[39m, <ESC>[36m--formatter<ESC>[39m <ESC>[2m<cmd><ESC>[22m                    Pipe output through formatter <ESC>[2m(default: mdstream)<ESC>[22m
-    <ESC>[36m--formatter-args<ESC>[39m <ESC>[2m<args><ESC>[22m                  Extra args appended to the formatter <ESC>[2m(e.g. "--table-fit", or MINIMAL_AGENT_FORMATTER_ARGS)<ESC>[22m
-    <ESC>[36m-s<ESC>[39m, <ESC>[36m--spinner<ESC>[39m <ESC>[2m<preset><ESC>[22m                   Pick a status spinner preset <ESC>[2m(see --list-spinners)<ESC>[22m
-    <ESC>[36m-p<ESC>[39m, <ESC>[36m--prompt<ESC>[39m <ESC>[2m<text><ESC>[22m                      Non-interactive: send prompt, print, exit
-    <ESC>[36m--output-format<ESC>[39m <ESC>[2m<text|json|stream-json><ESC>[22m  Non-interactive output <ESC>[2m(text is human output; json is buffered JSONL; stream-json flushes JSONL events live, --json is an alias for --output-format json, json, stream-json: stdout carries only JSON lines; a stray write fails the run)<ESC>[22m
-    <ESC>[36m--diagnostics<ESC>[39m                            With --output-format json, also write diagnostics <ESC>[2m(each line is a session log entry with ch "event" or "diag")<ESC>[22m
-    <ESC>[36m--output-schema<ESC>[39m <ESC>[2m<file><ESC>[22m                   Constrain the final answer to a JSON Schema <ESC>[2m(run exits non-zero if the answer is absent or non-conforming, enforces a SUBSET: type, required, properties, additionalProperties, items, enum (deep-equal), accepted but NOT enforced: minimum/maxLength/pattern/anyOf/oneOf/allOf/not/$ref/format/const, don't rely on them)<ESC>[22m
-    <ESC>[36m--mode<ESC>[39m <ESC>[2m<id|none><ESC>[22m                         Initial mode <ESC>[2m(default: ask in non-interactive, plugin default otherwise)<ESC>[22m
-    <ESC>[36m--tools<ESC>[39m <ESC>[2m<names><ESC>[22m                          Advertise only these tools <ESC>[2m(comma-separated allow-list, e.g. --tools "WebSearch,Task", model only sees listed tools; checked before mode permissions)<ESC>[22m
-    <ESC>[36m--no-tools<ESC>[39m                               Advertise no tools (pure Q&A) <ESC>[2m(empty tools array on the request; checked before mode permissions)<ESC>[22m
-    <ESC>[36m--disable-plugin<ESC>[39m <ESC>[2m<id><ESC>[22m                    Skip a plugin for this run <ESC>[2m(repeatable, comma-separated ok, see plugins list)<ESC>[22m
-    <ESC>[36m--enable-plugin<ESC>[39m <ESC>[2m<id><ESC>[22m                     Force-enable a plugin for this run <ESC>[2m(overrides config + manifest opt-out)<ESC>[22m
-    <ESC>[36m--no-agents-md<ESC>[39m, <ESC>[36m--no-agents<ESC>[39m              Skip AGENTS.md injection <ESC>[2m(alias for --disable-plugin agents-md, or MINIMAL_AGENT_NO_AGENTS_MD=1)<ESC>[22m
-    <ESC>[36m--header<ESC>[39m <ESC>[2m/<ESC>[22m <ESC>[36m--no-header<ESC>[39m                   Force startup tree on/off <ESC>[2m(default: hidden in non-interactive)<ESC>[22m
-    <ESC>[36m--session-id<ESC>[39m <ESC>[2m<uuid><ESC>[22m                      Pin this run's session id <ESC>[2m(else MINIMAL_AGENT_SESSION_ID, else random)<ESC>[22m
-    <ESC>[36m--host-mode<ESC>[39m <ESC>[2m<id><ESC>[22m                         Hand the process to a plugin host mode (e.g. acp) <ESC>[2m(needs a loaded, enabled plugin that declares that hostModes[] id, stdin/stdout carry the protocol, logs go to stderr, every arg after the id goes to the host mode, cannot be combined with --prompt, -p, or a stdin prompt)<ESC>[22m
-    <ESC>[36m-d<ESC>[39m, <ESC>[36m--debug<ESC>[39m                              Enable debug logging <ESC>[2m(or DEBUG=1, outside the REPL, also mirror diagnostics to stderr)<ESC>[22m
-    <ESC>[36m-v<ESC>[39m, <ESC>[36m--verbose<ESC>[39m                            Don't truncate debug output <ESC>[2m(or VERBOSE=1)<ESC>[22m
-    <ESC>[36m--skip-quota<ESC>[39m                             Skip startup quota check <ESC>[2m(or MINIMAL_AGENT_SKIP_QUOTA=1)<ESC>[22m
-    <ESC>[36m--show-hidden-chars<ESC>[39m                      Reveal spaces/tabs/newlines as faint glyphs
-    <ESC>[36m--credential-name<ESC>[39m <ESC>[2m<name><ESC>[22m                 Select a stored credential by name <ESC>[2m(use when the provider has multiple credentials (e.g. Work and Personal), or MINIMAL_AGENT_CREDENTIAL_NAME, config credentialName, --resume reuses the session pin only for the same provider)<ESC>[22m
-    <ESC>[36m--service-tier<ESC>[39m <ESC>[2m<tier><ESC>[22m                    Provider service tier (auto, default, flex, scale, priority) <ESC>[2m(or MINIMAL_AGENT_SERVICE_TIER)<ESC>[22m
-    <ESC>[36m--platform<ESC>[39m <ESC>[2m<os><ESC>[22m                          Override platform for plugin/tool gating: macos, linux, windows, all <ESC>[2m(or MINIMAL_AGENT_PLATFORM)<ESC>[22m
+  Options
+    -m, --model <id>             Select model (requires --provider, else
+                                 MINIMAL_AGENT_MODEL, config model)
+    --provider <id>              Select provider for --model (else
+                                 MINIMAL_AGENT_PROVIDER, config provider)
+    --endpoint <url>             Generic endpoint URL (use with --provider
+                                 generic-endpoint, or MINIMAL_AGENT_ENDPOINT)
+    --format, --surface <id>     Generic endpoint surface (a registered wire
+                                 surface, or MINIMAL_AGENT_FORMAT)
+    --auth-type <type>           Generic endpoint auth (api-key | bearer | none
+                                 | custom-header, or MINIMAL_AGENT_AUTH_TYPE)
+    --api-key <key>              Generic endpoint key/token (or
+                                 MINIMAL_AGENT_API_KEY)
+    --auth-header <name>         Custom auth header name (for --auth-type
+                                 custom-header, or MINIMAL_AGENT_AUTH_HEADER)
+    --provider-model <id>        Wire model id override (separate from local
+                                 --model, or MINIMAL_AGENT_PROVIDER_MODEL)
+    --effort-levels <levels>     Generic endpoint effort ladder
+                                 (comma-separated, e.g. "low,medium,high", lets
+                                 --effort pass through, or
+                                 MINIMAL_AGENT_EFFORT_LEVELS)
+    -e, --effort <level>         Reasoning effort: low, medium, high, xhigh, max
+                                 (or MINIMAL_AGENT_EFFORT)
+    -F, --fast                   Fast-mode dispatch (speed:"fast", fast-capable
+                                 models only, ~2.5x tok/s, ~2x cost, or
+                                 MINIMAL_AGENT_FAST=1)
+    --thinking-display <mode>    Force thinking display: summarized or omitted
+                                 (or MINIMAL_AGENT_THINKING_DISPLAY)
+    --cache-ttl <5m|1h>          Prompt-cache breakpoint TTL (default: 5m, or
+                                 MINIMAL_AGENT_CACHE_TTL, config cacheTtl)
+    -f, --formatter <cmd>        Pipe output through formatter (default:
+                                 mdstream)
+    --formatter-args <args>      Extra args appended to the formatter (e.g.
+                                 "--table-fit", or MINIMAL_AGENT_FORMATTER_ARGS)
+    -s, --spinner <preset>       Pick a status spinner preset (see
+                                 --list-spinners)
+    -p, --prompt <text>          Non-interactive: send prompt, print, exit
+    --output-format <text|json|stream-json>
+                                 Non-interactive output (text is human output;
+                                 json is buffered JSONL; stream-json flushes
+                                 JSONL events live, --json is an alias for
+                                 --output-format json, json, stream-json: stdout
+                                 carries only JSON lines; a stray write fails
+                                 the run)
+    --diagnostics                With --output-format json, also write
+                                 diagnostics (each line is a session log entry
+                                 with ch "event" or "diag")
+    --output-schema <file>
+        Constrain the final answer to a JSON Schema (run exits non-zero if the
+        answer is absent or non-conforming, enforces a SUBSET: type, required,
+        properties, additionalProperties, items, enum (deep-equal), accepted but
+        NOT enforced:
+        minimum/maxLength/pattern/anyOf/oneOf/allOf/not/$ref/format/const, don't
+        rely on them)
+    --mode <id|none>             Initial mode (default: ask in non-interactive,
+                                 plugin default otherwise)
+    --tools <names>              Advertise only these tools (comma-separated
+                                 allow-list, e.g. --tools "WebSearch,Task",
+                                 model only sees listed tools; checked before
+                                 mode permissions)
+    --no-tools                   Advertise no tools (pure Q&A) (empty tools
+                                 array on the request; checked before mode
+                                 permissions)
+    --disable-plugin <id>        Skip a plugin for this run (repeatable,
+                                 comma-separated ok, see plugins list)
+    --enable-plugin <id>         Force-enable a plugin for this run (overrides
+                                 config + manifest opt-out)
+    --no-agents-md, --no-agents  Skip AGENTS.md injection (alias for
+                                 --disable-plugin agents-md, or
+                                 MINIMAL_AGENT_NO_AGENTS_MD=1)
+    --header / --no-header       Force startup tree on/off (default: hidden in
+                                 non-interactive)
+    --session-id <uuid>          Pin this run's session id (else
+                                 MINIMAL_AGENT_SESSION_ID, else random)
+    --host-mode <id>             Hand the process to a plugin host mode (e.g.
+                                 acp) (needs a loaded, enabled plugin that
+                                 declares that hostModes[] id, stdin/stdout
+                                 carry the protocol, logs go to stderr, every
+                                 arg after the id goes to the host mode, cannot
+                                 be combined with --prompt, -p, or a stdin
+                                 prompt)
+    -d, --debug                  Enable debug logging (or DEBUG=1, outside the
+                                 REPL, also mirror diagnostics to stderr)
+    -v, --verbose                Don't truncate debug output (or VERBOSE=1)
+    --skip-quota                 Skip startup quota check (or
+                                 MINIMAL_AGENT_SKIP_QUOTA=1)
+    --show-hidden-chars          Reveal spaces/tabs/newlines as faint glyphs
+    --no-color                   Print this help with no color (help is also
+                                 plain when NO_COLOR is set and not empty,
+                                 TERM=dumb, or output is not a TTY)
+    --credential-name <name>     Select a stored credential by name (use when
+                                 the provider has multiple credentials (e.g.
+                                 Work and Personal), or
+                                 MINIMAL_AGENT_CREDENTIAL_NAME, config
+                                 credentialName, --resume reuses the session pin
+                                 only for the same provider)
+    --service-tier <tier>        Provider service tier (auto, default, flex,
+                                 scale, priority) (or
+                                 MINIMAL_AGENT_SERVICE_TIER)
+    --platform <os>              Override platform for plugin/tool gating:
+                                 macos, linux, windows, all (or
+                                 MINIMAL_AGENT_PLATFORM)
 
-  <ESC>[1mSystem prompt<ESC>[22m <ESC>[2m(override or omit individual system-prompt parts)<ESC>[22m
-    <ESC>[36m--system-prompt<ESC>[39m <ESC>[2m<text><ESC>[22m                   Replace the whole core-controllable system prompt <ESC>[2m(every override accepts <flag>-file <path> or --no-<flag-name> to omit)<ESC>[22m
-    <ESC>[36m--system-identity<ESC>[39m <ESC>[2m<text><ESC>[22m                 Replace the neutral identity block <ESC>[2m(or --system-identity-file <path>, or --no-system-identity)<ESC>[22m
-    <ESC>[36m--system-instructions<ESC>[39m <ESC>[2m<text><ESC>[22m             Replace the base instructions block <ESC>[2m(or --system-instructions-file <path>, or --no-system-instructions)<ESC>[22m
-    <ESC>[36m--system-loop-safety<ESC>[39m <ESC>[2m<text><ESC>[22m              Replace the loop-safety paragraph <ESC>[2m(or --system-loop-safety-file <path>, or --no-system-loop-safety)<ESC>[22m
-    <ESC>[36m--system-tool-output-conventions<ESC>[39m <ESC>[2m<text><ESC>[22m  Replace the tool-output-conventions paragraph <ESC>[2m(or --system-tool-output-conventions-file <path>, or --no-system-tool-output-conventions)<ESC>[22m
-    <ESC>[36m--system-session-context<ESC>[39m <ESC>[2m<text><ESC>[22m          Replace the session-context block (plugin prompts) <ESC>[2m(or --system-session-context-file <path>, or --no-system-session-context)<ESC>[22m
-    <ESC>[36m--provider-system-preamble<ESC>[39m <ESC>[2m<text><ESC>[22m        Replace the provider-owned preamble (requires --unsafe-system-prompt-overrides) <ESC>[2m(or --provider-system-preamble-file <path>, or --no-provider-system-preamble)<ESC>[22m
-    <ESC>[36m--unsafe-system-prompt-overrides<ESC>[39m         Allow provider preamble replacement/omission <ESC>[2m(without this flag, provider preamble overrides are rejected)<ESC>[22m
+  System prompt (override or omit individual system-prompt parts)
+    --system-prompt <text>             Replace the whole core-controllable
+                                       system prompt (every override accepts
+                                       <flag>-file <path> or --no-<flag-name> to
+                                       omit)
+    --system-identity <text>           Replace the neutral identity block (or
+                                       --system-identity-file <path>, or
+                                       --no-system-identity)
+    --system-instructions <text>       Replace the base instructions block (or
+                                       --system-instructions-file <path>, or
+                                       --no-system-instructions)
+    --system-loop-safety <text>        Replace the loop-safety paragraph (or
+                                       --system-loop-safety-file <path>, or
+                                       --no-system-loop-safety)
+    --system-tool-output-conventions <text>
+                                       Replace the tool-output-conventions
+                                       paragraph (or
+                                       --system-tool-output-conventions-file
+                                       <path>, or
+                                       --no-system-tool-output-conventions)
+    --system-session-context <text>    Replace the session-context block (plugin
+                                       prompts) (or
+                                       --system-session-context-file <path>, or
+                                       --no-system-session-context)
+    --provider-system-preamble <text>  Replace the provider-owned preamble
+                                       (requires
+                                       --unsafe-system-prompt-overrides) (or
+                                       --provider-system-preamble-file <path>,
+                                       or --no-provider-system-preamble)
+    --unsafe-system-prompt-overrides   Allow provider preamble
+                                       replacement/omission (without this flag,
+                                       provider preamble overrides are rejected)
 
-  <ESC>[1mAuth<ESC>[22m <ESC>[2m(provider-owned auth flows, flags remain legacy aliases)<ESC>[22m
-    <ESC>[36mprovider<ESC>[39m <ESC>[2m<id><ESC>[22m <ESC>[36mlogin<ESC>[39m <ESC>[2m[method]<ESC>[22m                                        Sign in to a provider <ESC>[2m(also: login [provider] [method], providers login <id> [method])<ESC>[22m
-    <ESC>[36mprovider<ESC>[39m <ESC>[2m<id><ESC>[22m <ESC>[36mlogout<ESC>[39m                                                Clear one provider's credentials <ESC>[2m(also: logout [provider], providers logout <id>)<ESC>[22m
-    <ESC>[36mauth-status [--table]<ESC>[39m                                               Show login status, account, scopes, and expiry
-    <ESC>[36mauth-status<ESC>[39m <ESC>[2m<credential><ESC>[22m <ESC>[36mrefresh<ESC>[39m <ESC>[2m[--name <n>] [--provider <id>]<ESC>[22m     Refresh one stored OAuth credential
-    <ESC>[36mauth-status<ESC>[39m <ESC>[36mrefresh-all<ESC>[39m <ESC>[2m[--parallel <n>]<ESC>[22m                            Refresh all stored OAuth credentials (max 8)
-    <ESC>[36mauth-status<ESC>[39m <ESC>[36mplan<ESC>[39m <ESC>[2m[<credential>] [--all] [--table] [--parallel <n>]<ESC>[22m  Show plan, seat, role, and usage limits (spends no quota)
-    <ESC>[36mauth-status<ESC>[39m <ESC>[36mprune<ESC>[39m <ESC>[2m--dry-run|--force [--table] [--parallel <n>]<ESC>[22m      Delete stored credentials the server rejects (dry run lists only)
-    <ESC>[36m--auth-method<ESC>[39m <ESC>[2m<oauth|api-key><ESC>[22m                                       Choose a login method
-    <ESC>[36m--email<ESC>[39m, <ESC>[36m--email-hint<ESC>[39m <ESC>[2m<address><ESC>[22m                                     Pre-fill login email
-    <ESC>[36m--name<ESC>[39m <ESC>[2m<label><ESC>[22m                                                      Label a credential during login <ESC>[2m(e.g. --name work-account)<ESC>[22m
+  Auth (provider-owned auth flows, flags remain legacy aliases)
+    provider <id> login [method]     Sign in to a provider (also: login
+                                     [provider] [method], providers login <id>
+                                     [method])
+    provider <id> logout             Clear one provider's credentials (also:
+                                     logout [provider], providers logout <id>)
+    auth-status [--table]            Show login status, account, scopes, and
+                                     expiry
+    auth-status <credential> refresh [--name <n>] [--provider <id>]
+                                     Refresh one stored OAuth credential
+    auth-status refresh-all [--parallel <n>]
+                                     Refresh all stored OAuth credentials (max
+                                     8)
+    auth-status plan [<credential>] [--all] [--table] [--parallel <n>]
+                                     Show plan, seat, role, and usage limits
+                                     (spends no quota)
+    auth-status prune --dry-run|--force [--table] [--parallel <n>]
+                                     Delete stored credentials the server
+                                     rejects (dry run lists only)
+    --auth-method <oauth|api-key>    Choose a login method
+    --email, --email-hint <address>  Pre-fill login email
+    --name <label>                   Label a credential during login (e.g.
+                                     --name work-account)
 
-  <ESC>[1mInfo<ESC>[22m <ESC>[2m(subcommands are preferred, flags and aliases stay supported)<ESC>[22m
-    <ESC>[36mproviders [list]<ESC>[39m                   List registered providers <ESC>[2m(aliases: --list-providers, --providers)<ESC>[22m
-    <ESC>[36mproviders models<ESC>[39m <ESC>[2m[<id>]<ESC>[22m            List registered models (offline, no network) <ESC>[2m(also: models [list], provider <id> models, aliases: --list-models, --models)<ESC>[22m
-    <ESC>[36mproviders models-live<ESC>[39m <ESC>[2m[<id>]<ESC>[22m       List live provider catalogs (network) <ESC>[2m(also: models-live [list], provider <id> models-live, aliases: --list-models-live, --models-live)<ESC>[22m
-    <ESC>[36m--print-format<ESC>[39m <ESC>[2m<text|json|md|xml><ESC>[22m  Output shape for providers models <ESC>[2m(default: text; aliases: tui/console/stdout; or MINIMAL_AGENT_PRINT_FORMAT)<ESC>[22m
-    <ESC>[36mplugins<ESC>[39m <ESC>[2m[list]<ESC>[22m                     List installed plugins and effective on/off state <ESC>[2m(aliases: --list-plugins, --plugins)<ESC>[22m
-    <ESC>[36mflags [list]<ESC>[39m                       Show beta feature flags <ESC>[2m(aliases: --list-flags, --flags)<ESC>[22m
-    <ESC>[36mspinners [list]<ESC>[39m                    Show available spinner presets <ESC>[2m(aliases: --list-spinners, --spinners)<ESC>[22m
-    <ESC>[36msessions<ESC>[39m <ESC>[2m[list|query]<ESC>[22m              List saved sessions <ESC>[2m(fuzzy filter on date/sid/cwd; aliases: --sessions, --session, --list-sessions)<ESC>[22m
-    <ESC>[36msessions dump<ESC>[39m <ESC>[2m<sid|last><ESC>[22m           Dump a full session history to stdout <ESC>[2m(alias: --dump <sid|last>; --dump-format md|xml; --dump-paths)<ESC>[22m
-    <ESC>[36musage<ESC>[39m <ESC>[2m[<period>]<ESC>[22m                   Token-usage stats <ESC>[2m(today|last-day|last-month|ytd|year|all; alias: --usage-stats)<ESC>[22m
-    <ESC>[36mresume<ESC>[39m <ESC>[2m<sid|last><ESC>[22m                  Resume a saved session <ESC>[2m(also: sessions resume <sid>; aliases: -r, --resume, reuses credential pin only when provider matches the session)<ESC>[22m
-    <ESC>[36mresume-same<ESC>[39m <ESC>[2m<sid|last><ESC>[22m             Resume in place, keeping the same session id <ESC>[2m(also: sessions resume-same <sid>; alias: --resume-same-sid)<ESC>[22m
-    <ESC>[36mhelp<ESC>[39m, <ESC>[36m-h<ESC>[39m, <ESC>[36m--help<ESC>[39m                   Show this help
+  Info (subcommands are preferred, flags and aliases stay supported)
+    providers [list]                   List registered providers (aliases:
+                                       --list-providers, --providers)
+    providers models [<id>]            List registered models (offline, no
+                                       network) (also: models [list], provider
+                                       <id> models, aliases: --list-models,
+                                       --models)
+    providers models-live [<id>]       List live provider catalogs (network)
+                                       (also: models-live [list], provider <id>
+                                       models-live, aliases: --list-models-live,
+                                       --models-live)
+    --print-format <text|json|md|xml>  Output shape for providers models
+                                       (default: text; aliases:
+                                       tui/console/stdout; or
+                                       MINIMAL_AGENT_PRINT_FORMAT)
+    plugins [list]                     List installed plugins and effective
+                                       on/off state (aliases: --list-plugins,
+                                       --plugins)
+    flags [list]                       Show beta feature flags (aliases:
+                                       --list-flags, --flags)
+    spinners [list]                    Show available spinner presets (aliases:
+                                       --list-spinners, --spinners)
+    sessions [list|query]              List saved sessions (fuzzy filter on
+                                       date/sid/cwd; aliases: --sessions,
+                                       --session, --list-sessions)
+    sessions dump <sid|last>           Dump a full session history to stdout
+                                       (alias: --dump <sid|last>; --dump-format
+                                       md|xml; --dump-paths)
+    usage [<period>]                   Token-usage stats
+                                       (today|last-day|last-month|ytd|year|all;
+                                       alias: --usage-stats)
+    resume <sid|last>                  Resume a saved session (also: sessions
+                                       resume <sid>; aliases: -r, --resume,
+                                       reuses credential pin only when provider
+                                       matches the session)
+    resume-same <sid|last>             Resume in place, keeping the same session
+                                       id (also: sessions resume-same <sid>;
+                                       alias: --resume-same-sid)
+    help, -h, --help                   Show this help
 
-  <ESC>[1mEnv<ESC>[22m
-    <ESC>[36mDEBUG=1<ESC>[39m                               Verbose request/response debug diagnostics <ESC>[2m(session log file, stderr with MINIMAL_AGENT_LOG_STDERR=1)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_LOG_STDERR=1<ESC>[39m            Mirror every diagnostic to stderr
-    <ESC>[36mMINIMAL_AGENT_TRANSPORT<ESC>[39m               Transport: http2 or fetch <ESC>[2m(default: http2; plaintext http:// auto-routes to HTTP/1.1)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_NO_PLAINTEXT_HTTP1=1<ESC>[39m    Keep http:// on HTTP/2 (disable the plaintext auto-route) <ESC>[2m(for an h2c-capable local server)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_ALLOW_FETCH_FALLBACK=1<ESC>[39m  Allow fetch fallback after HTTP/2 failure
-    <ESC>[36mMINIMAL_AGENT_NET_DBG=1<ESC>[39m               Mirror raw HTTP req/res to ~/.minimal-agent/net-dbg/
-    <ESC>[36mCLAUDE_CODE_EXTRA_METADATA<ESC>[39m            JSON object merged into metadata.user_id
-    <ESC>[36mMINIMAL_AGENT_SPINNER<ESC>[39m                 Spinner preset id <ESC>[2m(same values as --spinner)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_EFFORT<ESC>[39m                  Reasoning effort <ESC>[2m(low | medium | high | xhigh | max)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_FAST=1<ESC>[39m                  Opt into fast-mode dispatch <ESC>[2m(fast-capable models only)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_THINKING_DISPLAY<ESC>[39m        Force thinking display <ESC>[2m(summarized | omitted)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_FORMATTER_ARGS<ESC>[39m          Extra args for the formatter <ESC>[2m(shell-style, e.g. "--table-fit")<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_CONFIG<ESC>[39m                  Override config path <ESC>[2m(default: ~/.minimal-agent/config.jsonc)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_MODEL<ESC>[39m                   Default model id <ESC>[2m(same as --model)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_PROVIDER<ESC>[39m                Default provider id <ESC>[2m(same as --provider)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_ENDPOINT<ESC>[39m                Generic endpoint URL <ESC>[2m(same as --endpoint)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_FORMAT<ESC>[39m                  Generic endpoint surface id <ESC>[2m(same as --format / --surface)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_AUTH_TYPE<ESC>[39m               Generic endpoint auth <ESC>[2m(api-key | bearer | none | custom-header, same as --auth-type)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_API_KEY<ESC>[39m                 Generic endpoint key/token <ESC>[2m(same as --api-key)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_AUTH_HEADER<ESC>[39m             Custom auth header name <ESC>[2m(same as --auth-header)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_PROVIDER_MODEL<ESC>[39m          Wire model id override <ESC>[2m(same as --provider-model)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_EFFORT_LEVELS<ESC>[39m           Generic endpoint effort ladder <ESC>[2m(comma-separated, same as --effort-levels)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_MEMORY_NAMESPACE<ESC>[39m        Namespace memory paths under namespaces/<ns>/ <ESC>[2m(memory plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_THEME<ESC>[39m                   UI theme <ESC>[2m(dark | light | high-contrast)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_NO_LIVE_AREA=1<ESC>[39m          Disable live-area REPL <ESC>[2m(fall back to legacy raw input)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_HEADER<ESC>[39m                  Force startup tree <ESC>[2m(0|1, default hidden in non-interactive)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_MODE<ESC>[39m                    Initial mode id <ESC>[2m(or "none" to disable)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_CONTINUATION_PROMPT<ESC>[39m     Override continuation-prompt prefix <ESC>[2m(default: "  ")<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_SHOW_HIDDEN_CHARS=1<ESC>[39m     Show spaces/tabs/newlines as faint glyphs
-    <ESC>[36mMINIMAL_AGENT_SKIP_QUOTA=1<ESC>[39m            Skip startup quota check
-    <ESC>[36mMINIMAL_AGENT_NO_PLUGIN_SYNC=1<ESC>[39m        Skip the first-run extended-plugins clone
-    <ESC>[36mMINIMAL_AGENT_PLUGIN_SIBLINGS<ESC>[39m         Dev plugin checkout dirs (colon-separated) <ESC>[2m(default: ../minimal-agent-plugins next to the CLI repo)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_AUTO_ASK=0<ESC>[39m              Turn off automatic ASK mode in the REPL <ESC>[2m(or config autoAsk: false)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_AUTO_COMPACT=0<ESC>[39m          Turn off auto compact on a context overflow
-    <ESC>[36mMINIMAL_AGENT_DISABLE_PLUGINS<ESC>[39m         Comma-separated plugin ids to skip this run <ESC>[2m(same as --disable-plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_ENABLE_PLUGINS<ESC>[39m          Comma-separated plugin ids to force on this run <ESC>[2m(same as --enable-plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_NO_AGENTS_MD=1<ESC>[39m          Skip AGENTS.md system-prompt injection <ESC>[2m(same as --no-agents-md / --disable-plugin agents-md)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_PLUGINS_REPO<ESC>[39m            Git URL for the extended plugins repo <ESC>[2m(fork/mirror)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_GITHUB_TOKEN<ESC>[39m            Token to clone a private plugins repo <ESC>[2m(else GITHUB_TOKEN / GH_TOKEN / gh)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_NO_HISTORY=1<ESC>[39m            Disable prompt history <ESC>[2m(history plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_FILE_LOCK_DISABLED=1<ESC>[39m    Disable cooperative file locking <ESC>[2m(file-lock plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_SUBAGENT_MODEL<ESC>[39m          Force a model for spawned workers <ESC>[2m(else inherit your model)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_SUBAGENT_AUTO_TIER=1<ESC>[39m    Let specialists pick a per-role model <ESC>[2m(default off)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_SYSTEM_*<ESC>[39m                Override system-prompt parts (see System prompt section) <ESC>[2m(_INSTRUCTIONS, _IDENTITY, _LOOP_SAFETY, _TOOL_OUTPUT_CONVENTIONS, _SESSION_CONTEXT, _PROMPT, also MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE; each also *_FILE for a path; empty = omit)<ESC>[22m
+  Env
+    DEBUG=1                             Verbose request/response debug
+                                        diagnostics (session log file, stderr
+                                        with MINIMAL_AGENT_LOG_STDERR=1)
+    MINIMAL_AGENT_LOG_STDERR=1          Mirror every diagnostic to stderr
+    MINIMAL_AGENT_TRANSPORT             Transport: http2 or fetch (default:
+                                        http2; plaintext http:// auto-routes to
+                                        HTTP/1.1)
+    MINIMAL_AGENT_NO_PLAINTEXT_HTTP1=1  Keep http:// on HTTP/2 (disable the
+                                        plaintext auto-route) (for an
+                                        h2c-capable local server)
+    MINIMAL_AGENT_ALLOW_FETCH_FALLBACK=1
+                                        Allow fetch fallback after HTTP/2
+                                        failure
+    MINIMAL_AGENT_NET_DBG=1             Mirror raw HTTP req/res to
+                                        ~/.minimal-agent/net-dbg/
+    CLAUDE_CODE_EXTRA_METADATA          JSON object merged into metadata.user_id
+    MINIMAL_AGENT_SPINNER               Spinner preset id (same values as
+                                        --spinner)
+    MINIMAL_AGENT_EFFORT                Reasoning effort (low | medium | high |
+                                        xhigh | max)
+    MINIMAL_AGENT_FAST=1                Opt into fast-mode dispatch
+                                        (fast-capable models only)
+    MINIMAL_AGENT_THINKING_DISPLAY      Force thinking display (summarized |
+                                        omitted)
+    MINIMAL_AGENT_FORMATTER_ARGS        Extra args for the formatter
+                                        (shell-style, e.g. "--table-fit")
+    MINIMAL_AGENT_CONFIG                Override config path (default:
+                                        ~/.minimal-agent/config.jsonc)
+    MINIMAL_AGENT_MODEL                 Default model id (same as --model)
+    MINIMAL_AGENT_PROVIDER              Default provider id (same as --provider)
+    MINIMAL_AGENT_ENDPOINT              Generic endpoint URL (same as
+                                        --endpoint)
+    MINIMAL_AGENT_FORMAT                Generic endpoint surface id (same as
+                                        --format / --surface)
+    MINIMAL_AGENT_AUTH_TYPE             Generic endpoint auth (api-key | bearer
+                                        | none | custom-header, same as
+                                        --auth-type)
+    MINIMAL_AGENT_API_KEY               Generic endpoint key/token (same as
+                                        --api-key)
+    MINIMAL_AGENT_AUTH_HEADER           Custom auth header name (same as
+                                        --auth-header)
+    MINIMAL_AGENT_PROVIDER_MODEL        Wire model id override (same as
+                                        --provider-model)
+    MINIMAL_AGENT_EFFORT_LEVELS         Generic endpoint effort ladder
+                                        (comma-separated, same as
+                                        --effort-levels)
+    MINIMAL_AGENT_MEMORY_NAMESPACE      Namespace memory paths under
+                                        namespaces/<ns>/ (memory plugin)
+    MINIMAL_AGENT_THEME                 UI theme (dark | light | high-contrast)
+    MINIMAL_AGENT_NO_LIVE_AREA=1        Disable live-area REPL (fall back to
+                                        legacy raw input)
+    MINIMAL_AGENT_HEADER                Force startup tree (0|1, default hidden
+                                        in non-interactive)
+    MINIMAL_AGENT_MODE                  Initial mode id (or "none" to disable)
+    MINIMAL_AGENT_CONTINUATION_PROMPT   Override continuation-prompt prefix
+                                        (default: " ")
+    MINIMAL_AGENT_SHOW_HIDDEN_CHARS=1   Show spaces/tabs/newlines as faint
+                                        glyphs
+    MINIMAL_AGENT_SKIP_QUOTA=1          Skip startup quota check
+    MINIMAL_AGENT_NO_PLUGIN_SYNC=1      Skip the first-run extended-plugins
+                                        clone
+    MINIMAL_AGENT_PLUGIN_SIBLINGS       Dev plugin checkout dirs
+                                        (colon-separated) (default:
+                                        ../minimal-agent-plugins next to the CLI
+                                        repo)
+    MINIMAL_AGENT_AUTO_ASK=0            Turn off automatic ASK mode in the REPL
+                                        (or config autoAsk: false)
+    MINIMAL_AGENT_AUTO_COMPACT=0        Turn off auto compact on a context
+                                        overflow
+    MINIMAL_AGENT_DISABLE_PLUGINS       Comma-separated plugin ids to skip this
+                                        run (same as --disable-plugin)
+    MINIMAL_AGENT_ENABLE_PLUGINS        Comma-separated plugin ids to force on
+                                        this run (same as --enable-plugin)
+    MINIMAL_AGENT_NO_AGENTS_MD=1        Skip AGENTS.md system-prompt injection
+                                        (same as --no-agents-md /
+                                        --disable-plugin agents-md)
+    MINIMAL_AGENT_PLUGINS_REPO          Git URL for the extended plugins repo
+                                        (fork/mirror)
+    MINIMAL_AGENT_GITHUB_TOKEN          Token to clone a private plugins repo
+                                        (else GITHUB_TOKEN / GH_TOKEN / gh)
+    MINIMAL_AGENT_NO_HISTORY=1          Disable prompt history (history plugin)
+    MINIMAL_AGENT_FILE_LOCK_DISABLED=1  Disable cooperative file locking
+                                        (file-lock plugin)
+    MINIMAL_AGENT_SUBAGENT_MODEL        Force a model for spawned workers (else
+                                        inherit your model)
+    MINIMAL_AGENT_SUBAGENT_AUTO_TIER=1  Let specialists pick a per-role model
+                                        (default off)
+    MINIMAL_AGENT_SYSTEM_*              Override system-prompt parts (see System
+                                        prompt section) (_INSTRUCTIONS,
+                                        _IDENTITY, _LOOP_SAFETY,
+                                        _TOOL_OUTPUT_CONVENTIONS,
+                                        _SESSION_CONTEXT, _PROMPT, also
+                                        MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE;
+                                        each also *_FILE for a path; empty =
+                                        omit)
 
-  <ESC>[1mPlugins<ESC>[22m <ESC>[2m(enable/disable precedence: CLI → env → config → manifest)<ESC>[22m
-    <ESC>[2mList<ESC>[22m              <ESC>[2mminimal-agent plugins list<ESC>[22m
-    <ESC>[2mOne-shot disable<ESC>[22m  <ESC>[2mminimal-agent --disable-plugin web-search -p "…"<ESC>[22m
-    <ESC>[2mDisable many<ESC>[22m      <ESC>[2mminimal-agent --disable-plugin web-search,memory<ESC>[22m
-    <ESC>[2mOne-shot enable<ESC>[22m   <ESC>[2mminimal-agent --enable-plugin interleave-thinking<ESC>[22m
-    <ESC>[2mPersistent<ESC>[22m        <ESC>[2m{ "plugins": { "<id>": { "enabled": false } } }<ESC>[22m
-    <ESC>[2mOpt in<ESC>[22m            <ESC>[2m{ "plugins": { "<id>": { "enabled": true } } }<ESC>[22m <ESC>[2m(for plugins shipped disabled)<ESC>[22m
-    <ESC>[2mBuilt-in<ESC>[22m          <ESC>[2mask-mode, config, diff-view, env-info, file-lock,<ESC>[22m
-                      <ESC>[2mhistory, memory, model-info, quota-status, schedule,<ESC>[22m
-                      <ESC>[2msession-info, sub-agents, tasks, usage, web-search<ESC>[22m
-    <ESC>[2mDisabled<ESC>[22m          interleave-thinking, security, minimal-agent-cloud <ESC>[2m(opt in to use, see Opt in above)<ESC>[22m
+  Plugins (enable/disable precedence: CLI → env → config → manifest)
+    List              minimal-agent plugins list
+    One-shot disable  minimal-agent --disable-plugin web-search -p "…"
+    Disable many      minimal-agent --disable-plugin web-search,memory
+    One-shot enable   minimal-agent --enable-plugin interleave-thinking
+    Persistent        { "plugins": { "<id>": { "enabled": false } } }
+    Opt in            { "plugins": { "<id>": { "enabled": true } } } (for
+                      plugins shipped disabled)
+    Built-in          ask-mode, config, diff-view, env-info, file-lock,
+                      history, memory, model-info, quota-status, schedule,
+                      session-info, sub-agents, tasks, usage, web-search
+    Disabled          interleave-thinking, security, minimal-agent-cloud (opt in
+                      to use, see Opt in above)
 
-  <ESC>[1mDocs<ESC>[22m
-    <ESC>[2mCHANGELOG.md<ESC>[22m                    CLI release notes, newest first (minimal-agent-cli repo)
-    <ESC>[2mdocs/tui/<ESC>[22m                       Terminal renderer architecture (compositor, live area, editor)
-    <ESC>[2mcore docs/CHANGELOG.md<ESC>[22m          Core release notes (minimal-agent-core repo)
-    <ESC>[2mcore docs/network/<ESC>[22m              HTTP transport, retry, and wire-capture notes
-    <ESC>[2mcore docs/sub-agents-prompt.md<ESC>[22m  How the sub-agents system prompt composes
-    <ESC>[2mcore docs/changes/<ESC>[22m              Per-change write-ups, dated
+  Docs
+    CHANGELOG.md                    CLI release notes, newest first
+                                    (minimal-agent-cli repo)
+    docs/tui/                       Terminal renderer architecture (compositor,
+                                    live area, editor)
+    core docs/CHANGELOG.md          Core release notes (minimal-agent-core repo)
+    core docs/network/              HTTP transport, retry, and wire-capture
+                                    notes
+    core docs/sub-agents-prompt.md  How the sub-agents system prompt composes
+    core docs/changes/              Per-change write-ups, dated
 "
 `;
 
-exports[`root help snapshot COLUMNS=120, NO_COLOR=1 set (ignored before M-7) 1`] = `
+exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`] = `
 "
-  <ESC>[1m<ESC>[36mminimal-agent<ESC>[39m<ESC>[22m <ESC>[2mv<AGENT_VERSION><ESC>[22m
-  <ESC>[2;37mA small, inspectable terminal agent harness.<ESC>[22;39m
-  <ESC>[2;37m<ESC>[3mgithub.com/gastonmorixe/minimal-agent<ESC>[23m<ESC>[22;39m
+  minimal-agent v<AGENT_VERSION>
+  A small, inspectable terminal agent harness.
+  github.com/gastonmorixe/minimal-agent
 
-  <ESC>[1mStart here<ESC>[22m
-    <ESC>[2m$<ESC>[22m minimal-agent                             <ESC>[2minteractive REPL<ESC>[22m
-    <ESC>[2m$<ESC>[22m minimal-agent <ESC>[36m"explain this codebase"<ESC>[39m     <ESC>[2mone prompt, then exit<ESC>[22m
-    <ESC>[2m$<ESC>[22m echo <ESC>[36m"summarize stdin"<ESC>[39m | minimal-agent <ESC>[36m-<ESC>[39m  <ESC>[2mread a prompt from stdin<ESC>[22m
+  Start here
+    $ minimal-agent                             interactive REPL
+    $ minimal-agent "explain this codebase"     one prompt, then exit
+    $ echo "summarize stdin" | minimal-agent -  read a prompt from stdin
 
-  <ESC>[1mCommand map<ESC>[22m
-    <ESC>[36mproviders<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mproviders models<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mproviders models-live<ESC>[39m  <ESC>[2mdiscover models and providers<ESC>[22m
-    <ESC>[36msessions<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36msessions dump<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mresume<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36musage<ESC>[39m             <ESC>[2minspect or continue past work<ESC>[22m
-    <ESC>[36mprovider <id> login<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mlogout<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mauth-status<ESC>[39m            <ESC>[2mmanage provider credentials<ESC>[22m
-    <ESC>[36mplugins<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mflags<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mspinners<ESC>[39m <ESC>[2m·<ESC>[22m <ESC>[36mhelp<ESC>[39m                     <ESC>[2minspect the local installation<ESC>[22m
+  Command map
+    providers · providers models · providers models-live  discover models and providers
+    sessions · sessions dump · resume · usage             inspect or continue past work
+    provider <id> login · logout · auth-status            manage provider credentials
+    plugins · flags · spinners · help                     inspect the local installation
 
-  <ESC>[2mEvery command also accepts --help. Flags win over a positional prompt.<ESC>[22m
+  Every command also accepts --help. Flags win over a positional prompt.
 
-  <ESC>[1mOptions<ESC>[22m
-    <ESC>[36m-m<ESC>[39m, <ESC>[36m--model<ESC>[39m <ESC>[2m<id><ESC>[22m                         Select model <ESC>[2m(requires --provider, else MINIMAL_AGENT_MODEL, config model)<ESC>[22m
-    <ESC>[36m--provider<ESC>[39m <ESC>[2m<id><ESC>[22m                          Select provider for --model <ESC>[2m(else MINIMAL_AGENT_PROVIDER, config provider)<ESC>[22m
-    <ESC>[36m--endpoint<ESC>[39m <ESC>[2m<url><ESC>[22m                         Generic endpoint URL <ESC>[2m(use with --provider generic-endpoint, or MINIMAL_AGENT_ENDPOINT)<ESC>[22m
-    <ESC>[36m--format<ESC>[39m, <ESC>[36m--surface<ESC>[39m <ESC>[2m<id><ESC>[22m                 Generic endpoint surface <ESC>[2m(a registered wire surface, or MINIMAL_AGENT_FORMAT)<ESC>[22m
-    <ESC>[36m--auth-type<ESC>[39m <ESC>[2m<type><ESC>[22m                       Generic endpoint auth <ESC>[2m(api-key | bearer | none | custom-header, or MINIMAL_AGENT_AUTH_TYPE)<ESC>[22m
-    <ESC>[36m--api-key<ESC>[39m <ESC>[2m<key><ESC>[22m                          Generic endpoint key/token <ESC>[2m(or MINIMAL_AGENT_API_KEY)<ESC>[22m
-    <ESC>[36m--auth-header<ESC>[39m <ESC>[2m<name><ESC>[22m                     Custom auth header name <ESC>[2m(for --auth-type custom-header, or MINIMAL_AGENT_AUTH_HEADER)<ESC>[22m
-    <ESC>[36m--provider-model<ESC>[39m <ESC>[2m<id><ESC>[22m                    Wire model id override <ESC>[2m(separate from local --model, or MINIMAL_AGENT_PROVIDER_MODEL)<ESC>[22m
-    <ESC>[36m--effort-levels<ESC>[39m <ESC>[2m<levels><ESC>[22m                 Generic endpoint effort ladder <ESC>[2m(comma-separated, e.g. "low,medium,high", lets --effort pass through, or MINIMAL_AGENT_EFFORT_LEVELS)<ESC>[22m
-    <ESC>[36m-e<ESC>[39m, <ESC>[36m--effort<ESC>[39m <ESC>[2m<level><ESC>[22m                     Reasoning effort: low, medium, high, xhigh, max <ESC>[2m(or MINIMAL_AGENT_EFFORT)<ESC>[22m
-    <ESC>[36m-F<ESC>[39m, <ESC>[36m--fast<ESC>[39m                               Fast-mode dispatch <ESC>[2m(speed:"fast", fast-capable models only, ~2.5x tok/s, ~2x cost, or MINIMAL_AGENT_FAST=1)<ESC>[22m
-    <ESC>[36m--thinking-display<ESC>[39m <ESC>[2m<mode><ESC>[22m                Force thinking display: summarized or omitted <ESC>[2m(or MINIMAL_AGENT_THINKING_DISPLAY)<ESC>[22m
-    <ESC>[36m--cache-ttl<ESC>[39m <ESC>[2m<5m|1h><ESC>[22m                      Prompt-cache breakpoint TTL <ESC>[2m(default: 5m, or MINIMAL_AGENT_CACHE_TTL, config cacheTtl)<ESC>[22m
-    <ESC>[36m-f<ESC>[39m, <ESC>[36m--formatter<ESC>[39m <ESC>[2m<cmd><ESC>[22m                    Pipe output through formatter <ESC>[2m(default: mdstream)<ESC>[22m
-    <ESC>[36m--formatter-args<ESC>[39m <ESC>[2m<args><ESC>[22m                  Extra args appended to the formatter <ESC>[2m(e.g. "--table-fit", or MINIMAL_AGENT_FORMATTER_ARGS)<ESC>[22m
-    <ESC>[36m-s<ESC>[39m, <ESC>[36m--spinner<ESC>[39m <ESC>[2m<preset><ESC>[22m                   Pick a status spinner preset <ESC>[2m(see --list-spinners)<ESC>[22m
-    <ESC>[36m-p<ESC>[39m, <ESC>[36m--prompt<ESC>[39m <ESC>[2m<text><ESC>[22m                      Non-interactive: send prompt, print, exit
-    <ESC>[36m--output-format<ESC>[39m <ESC>[2m<text|json|stream-json><ESC>[22m  Non-interactive output <ESC>[2m(text is human output; json is buffered JSONL; stream-json flushes JSONL events live, --json is an alias for --output-format json, json, stream-json: stdout carries only JSON lines; a stray write fails the run)<ESC>[22m
-    <ESC>[36m--diagnostics<ESC>[39m                            With --output-format json, also write diagnostics <ESC>[2m(each line is a session log entry with ch "event" or "diag")<ESC>[22m
-    <ESC>[36m--output-schema<ESC>[39m <ESC>[2m<file><ESC>[22m                   Constrain the final answer to a JSON Schema <ESC>[2m(run exits non-zero if the answer is absent or non-conforming, enforces a SUBSET: type, required, properties, additionalProperties, items, enum (deep-equal), accepted but NOT enforced: minimum/maxLength/pattern/anyOf/oneOf/allOf/not/$ref/format/const, don't rely on them)<ESC>[22m
-    <ESC>[36m--mode<ESC>[39m <ESC>[2m<id|none><ESC>[22m                         Initial mode <ESC>[2m(default: ask in non-interactive, plugin default otherwise)<ESC>[22m
-    <ESC>[36m--tools<ESC>[39m <ESC>[2m<names><ESC>[22m                          Advertise only these tools <ESC>[2m(comma-separated allow-list, e.g. --tools "WebSearch,Task", model only sees listed tools; checked before mode permissions)<ESC>[22m
-    <ESC>[36m--no-tools<ESC>[39m                               Advertise no tools (pure Q&A) <ESC>[2m(empty tools array on the request; checked before mode permissions)<ESC>[22m
-    <ESC>[36m--disable-plugin<ESC>[39m <ESC>[2m<id><ESC>[22m                    Skip a plugin for this run <ESC>[2m(repeatable, comma-separated ok, see plugins list)<ESC>[22m
-    <ESC>[36m--enable-plugin<ESC>[39m <ESC>[2m<id><ESC>[22m                     Force-enable a plugin for this run <ESC>[2m(overrides config + manifest opt-out)<ESC>[22m
-    <ESC>[36m--no-agents-md<ESC>[39m, <ESC>[36m--no-agents<ESC>[39m              Skip AGENTS.md injection <ESC>[2m(alias for --disable-plugin agents-md, or MINIMAL_AGENT_NO_AGENTS_MD=1)<ESC>[22m
-    <ESC>[36m--header<ESC>[39m <ESC>[2m/<ESC>[22m <ESC>[36m--no-header<ESC>[39m                   Force startup tree on/off <ESC>[2m(default: hidden in non-interactive)<ESC>[22m
-    <ESC>[36m--session-id<ESC>[39m <ESC>[2m<uuid><ESC>[22m                      Pin this run's session id <ESC>[2m(else MINIMAL_AGENT_SESSION_ID, else random)<ESC>[22m
-    <ESC>[36m--host-mode<ESC>[39m <ESC>[2m<id><ESC>[22m                         Hand the process to a plugin host mode (e.g. acp) <ESC>[2m(needs a loaded, enabled plugin that declares that hostModes[] id, stdin/stdout carry the protocol, logs go to stderr, every arg after the id goes to the host mode, cannot be combined with --prompt, -p, or a stdin prompt)<ESC>[22m
-    <ESC>[36m-d<ESC>[39m, <ESC>[36m--debug<ESC>[39m                              Enable debug logging <ESC>[2m(or DEBUG=1, outside the REPL, also mirror diagnostics to stderr)<ESC>[22m
-    <ESC>[36m-v<ESC>[39m, <ESC>[36m--verbose<ESC>[39m                            Don't truncate debug output <ESC>[2m(or VERBOSE=1)<ESC>[22m
-    <ESC>[36m--skip-quota<ESC>[39m                             Skip startup quota check <ESC>[2m(or MINIMAL_AGENT_SKIP_QUOTA=1)<ESC>[22m
-    <ESC>[36m--show-hidden-chars<ESC>[39m                      Reveal spaces/tabs/newlines as faint glyphs
-    <ESC>[36m--credential-name<ESC>[39m <ESC>[2m<name><ESC>[22m                 Select a stored credential by name <ESC>[2m(use when the provider has multiple credentials (e.g. Work and Personal), or MINIMAL_AGENT_CREDENTIAL_NAME, config credentialName, --resume reuses the session pin only for the same provider)<ESC>[22m
-    <ESC>[36m--service-tier<ESC>[39m <ESC>[2m<tier><ESC>[22m                    Provider service tier (auto, default, flex, scale, priority) <ESC>[2m(or MINIMAL_AGENT_SERVICE_TIER)<ESC>[22m
-    <ESC>[36m--platform<ESC>[39m <ESC>[2m<os><ESC>[22m                          Override platform for plugin/tool gating: macos, linux, windows, all <ESC>[2m(or MINIMAL_AGENT_PLATFORM)<ESC>[22m
+  Options
+    -m, --model <id>                         Select model (requires --provider, else MINIMAL_AGENT_MODEL, config model)
+    --provider <id>                          Select provider for --model (else MINIMAL_AGENT_PROVIDER, config provider)
+    --endpoint <url>                         Generic endpoint URL (use with --provider generic-endpoint, or
+                                             MINIMAL_AGENT_ENDPOINT)
+    --format, --surface <id>                 Generic endpoint surface (a registered wire surface, or
+                                             MINIMAL_AGENT_FORMAT)
+    --auth-type <type>                       Generic endpoint auth (api-key | bearer | none | custom-header, or
+                                             MINIMAL_AGENT_AUTH_TYPE)
+    --api-key <key>                          Generic endpoint key/token (or MINIMAL_AGENT_API_KEY)
+    --auth-header <name>                     Custom auth header name (for --auth-type custom-header, or
+                                             MINIMAL_AGENT_AUTH_HEADER)
+    --provider-model <id>                    Wire model id override (separate from local --model, or
+                                             MINIMAL_AGENT_PROVIDER_MODEL)
+    --effort-levels <levels>                 Generic endpoint effort ladder (comma-separated, e.g. "low,medium,high",
+                                             lets --effort pass through, or MINIMAL_AGENT_EFFORT_LEVELS)
+    -e, --effort <level>                     Reasoning effort: low, medium, high, xhigh, max (or MINIMAL_AGENT_EFFORT)
+    -F, --fast                               Fast-mode dispatch (speed:"fast", fast-capable models only, ~2.5x tok/s,
+                                             ~2x cost, or MINIMAL_AGENT_FAST=1)
+    --thinking-display <mode>                Force thinking display: summarized or omitted (or
+                                             MINIMAL_AGENT_THINKING_DISPLAY)
+    --cache-ttl <5m|1h>                      Prompt-cache breakpoint TTL (default: 5m, or MINIMAL_AGENT_CACHE_TTL,
+                                             config cacheTtl)
+    -f, --formatter <cmd>                    Pipe output through formatter (default: mdstream)
+    --formatter-args <args>                  Extra args appended to the formatter (e.g. "--table-fit", or
+                                             MINIMAL_AGENT_FORMATTER_ARGS)
+    -s, --spinner <preset>                   Pick a status spinner preset (see --list-spinners)
+    -p, --prompt <text>                      Non-interactive: send prompt, print, exit
+    --output-format <text|json|stream-json>  Non-interactive output (text is human output; json is buffered JSONL;
+                                             stream-json flushes JSONL events live, --json is an alias for
+                                             --output-format json, json, stream-json: stdout carries only JSON lines; a
+                                             stray write fails the run)
+    --diagnostics                            With --output-format json, also write diagnostics (each line is a session
+                                             log entry with ch "event" or "diag")
+    --output-schema <file>                   Constrain the final answer to a JSON Schema (run exits non-zero if the
+                                             answer is absent or non-conforming, enforces a SUBSET: type, required,
+                                             properties, additionalProperties, items, enum (deep-equal), accepted but
+                                             NOT enforced:
+                                             minimum/maxLength/pattern/anyOf/oneOf/allOf/not/$ref/format/const, don't
+                                             rely on them)
+    --mode <id|none>                         Initial mode (default: ask in non-interactive, plugin default otherwise)
+    --tools <names>                          Advertise only these tools (comma-separated allow-list, e.g. --tools
+                                             "WebSearch,Task", model only sees listed tools; checked before mode
+                                             permissions)
+    --no-tools                               Advertise no tools (pure Q&A) (empty tools array on the request; checked
+                                             before mode permissions)
+    --disable-plugin <id>                    Skip a plugin for this run (repeatable, comma-separated ok, see plugins
+                                             list)
+    --enable-plugin <id>                     Force-enable a plugin for this run (overrides config + manifest opt-out)
+    --no-agents-md, --no-agents              Skip AGENTS.md injection (alias for --disable-plugin agents-md, or
+                                             MINIMAL_AGENT_NO_AGENTS_MD=1)
+    --header / --no-header                   Force startup tree on/off (default: hidden in non-interactive)
+    --session-id <uuid>                      Pin this run's session id (else MINIMAL_AGENT_SESSION_ID, else random)
+    --host-mode <id>                         Hand the process to a plugin host mode (e.g. acp) (needs a loaded, enabled
+                                             plugin that declares that hostModes[] id, stdin/stdout carry the protocol,
+                                             logs go to stderr, every arg after the id goes to the host mode, cannot be
+                                             combined with --prompt, -p, or a stdin prompt)
+    -d, --debug                              Enable debug logging (or DEBUG=1, outside the REPL, also mirror diagnostics
+                                             to stderr)
+    -v, --verbose                            Don't truncate debug output (or VERBOSE=1)
+    --skip-quota                             Skip startup quota check (or MINIMAL_AGENT_SKIP_QUOTA=1)
+    --show-hidden-chars                      Reveal spaces/tabs/newlines as faint glyphs
+    --no-color                               Print this help with no color (help is also plain when NO_COLOR is set and
+                                             not empty, TERM=dumb, or output is not a TTY)
+    --credential-name <name>                 Select a stored credential by name (use when the provider has multiple
+                                             credentials (e.g. Work and Personal), or MINIMAL_AGENT_CREDENTIAL_NAME,
+                                             config credentialName, --resume reuses the session pin only for the same
+                                             provider)
+    --service-tier <tier>                    Provider service tier (auto, default, flex, scale, priority) (or
+                                             MINIMAL_AGENT_SERVICE_TIER)
+    --platform <os>                          Override platform for plugin/tool gating: macos, linux, windows, all (or
+                                             MINIMAL_AGENT_PLATFORM)
 
-  <ESC>[1mSystem prompt<ESC>[22m <ESC>[2m(override or omit individual system-prompt parts)<ESC>[22m
-    <ESC>[36m--system-prompt<ESC>[39m <ESC>[2m<text><ESC>[22m                   Replace the whole core-controllable system prompt <ESC>[2m(every override accepts <flag>-file <path> or --no-<flag-name> to omit)<ESC>[22m
-    <ESC>[36m--system-identity<ESC>[39m <ESC>[2m<text><ESC>[22m                 Replace the neutral identity block <ESC>[2m(or --system-identity-file <path>, or --no-system-identity)<ESC>[22m
-    <ESC>[36m--system-instructions<ESC>[39m <ESC>[2m<text><ESC>[22m             Replace the base instructions block <ESC>[2m(or --system-instructions-file <path>, or --no-system-instructions)<ESC>[22m
-    <ESC>[36m--system-loop-safety<ESC>[39m <ESC>[2m<text><ESC>[22m              Replace the loop-safety paragraph <ESC>[2m(or --system-loop-safety-file <path>, or --no-system-loop-safety)<ESC>[22m
-    <ESC>[36m--system-tool-output-conventions<ESC>[39m <ESC>[2m<text><ESC>[22m  Replace the tool-output-conventions paragraph <ESC>[2m(or --system-tool-output-conventions-file <path>, or --no-system-tool-output-conventions)<ESC>[22m
-    <ESC>[36m--system-session-context<ESC>[39m <ESC>[2m<text><ESC>[22m          Replace the session-context block (plugin prompts) <ESC>[2m(or --system-session-context-file <path>, or --no-system-session-context)<ESC>[22m
-    <ESC>[36m--provider-system-preamble<ESC>[39m <ESC>[2m<text><ESC>[22m        Replace the provider-owned preamble (requires --unsafe-system-prompt-overrides) <ESC>[2m(or --provider-system-preamble-file <path>, or --no-provider-system-preamble)<ESC>[22m
-    <ESC>[36m--unsafe-system-prompt-overrides<ESC>[39m         Allow provider preamble replacement/omission <ESC>[2m(without this flag, provider preamble overrides are rejected)<ESC>[22m
+  System prompt (override or omit individual system-prompt parts)
+    --system-prompt <text>                   Replace the whole core-controllable system prompt (every override accepts
+                                             <flag>-file <path> or --no-<flag-name> to omit)
+    --system-identity <text>                 Replace the neutral identity block (or --system-identity-file <path>, or
+                                             --no-system-identity)
+    --system-instructions <text>             Replace the base instructions block (or --system-instructions-file <path>,
+                                             or --no-system-instructions)
+    --system-loop-safety <text>              Replace the loop-safety paragraph (or --system-loop-safety-file <path>, or
+                                             --no-system-loop-safety)
+    --system-tool-output-conventions <text>  Replace the tool-output-conventions paragraph (or
+                                             --system-tool-output-conventions-file <path>, or
+                                             --no-system-tool-output-conventions)
+    --system-session-context <text>          Replace the session-context block (plugin prompts) (or
+                                             --system-session-context-file <path>, or --no-system-session-context)
+    --provider-system-preamble <text>        Replace the provider-owned preamble (requires
+                                             --unsafe-system-prompt-overrides) (or --provider-system-preamble-file
+                                             <path>, or --no-provider-system-preamble)
+    --unsafe-system-prompt-overrides         Allow provider preamble replacement/omission (without this flag, provider
+                                             preamble overrides are rejected)
 
-  <ESC>[1mAuth<ESC>[22m <ESC>[2m(provider-owned auth flows, flags remain legacy aliases)<ESC>[22m
-    <ESC>[36mprovider<ESC>[39m <ESC>[2m<id><ESC>[22m <ESC>[36mlogin<ESC>[39m <ESC>[2m[method]<ESC>[22m                                        Sign in to a provider <ESC>[2m(also: login [provider] [method], providers login <id> [method])<ESC>[22m
-    <ESC>[36mprovider<ESC>[39m <ESC>[2m<id><ESC>[22m <ESC>[36mlogout<ESC>[39m                                                Clear one provider's credentials <ESC>[2m(also: logout [provider], providers logout <id>)<ESC>[22m
-    <ESC>[36mauth-status [--table]<ESC>[39m                                               Show login status, account, scopes, and expiry
-    <ESC>[36mauth-status<ESC>[39m <ESC>[2m<credential><ESC>[22m <ESC>[36mrefresh<ESC>[39m <ESC>[2m[--name <n>] [--provider <id>]<ESC>[22m     Refresh one stored OAuth credential
-    <ESC>[36mauth-status<ESC>[39m <ESC>[36mrefresh-all<ESC>[39m <ESC>[2m[--parallel <n>]<ESC>[22m                            Refresh all stored OAuth credentials (max 8)
-    <ESC>[36mauth-status<ESC>[39m <ESC>[36mplan<ESC>[39m <ESC>[2m[<credential>] [--all] [--table] [--parallel <n>]<ESC>[22m  Show plan, seat, role, and usage limits (spends no quota)
-    <ESC>[36mauth-status<ESC>[39m <ESC>[36mprune<ESC>[39m <ESC>[2m--dry-run|--force [--table] [--parallel <n>]<ESC>[22m      Delete stored credentials the server rejects (dry run lists only)
-    <ESC>[36m--auth-method<ESC>[39m <ESC>[2m<oauth|api-key><ESC>[22m                                       Choose a login method
-    <ESC>[36m--email<ESC>[39m, <ESC>[36m--email-hint<ESC>[39m <ESC>[2m<address><ESC>[22m                                     Pre-fill login email
-    <ESC>[36m--name<ESC>[39m <ESC>[2m<label><ESC>[22m                                                      Label a credential during login <ESC>[2m(e.g. --name work-account)<ESC>[22m
+  Auth (provider-owned auth flows, flags remain legacy aliases)
+    provider <id> login [method]              Sign in to a provider (also: login [provider] [method], providers login
+                                              <id> [method])
+    provider <id> logout                      Clear one provider's credentials (also: logout [provider], providers
+                                              logout <id>)
+    auth-status [--table]                     Show login status, account, scopes, and expiry
+    auth-status <credential> refresh [--name <n>] [--provider <id>]
+                                              Refresh one stored OAuth credential
+    auth-status refresh-all [--parallel <n>]  Refresh all stored OAuth credentials (max 8)
+    auth-status plan [<credential>] [--all] [--table] [--parallel <n>]
+                                              Show plan, seat, role, and usage limits (spends no quota)
+    auth-status prune --dry-run|--force [--table] [--parallel <n>]
+                                              Delete stored credentials the server rejects (dry run lists only)
+    --auth-method <oauth|api-key>             Choose a login method
+    --email, --email-hint <address>           Pre-fill login email
+    --name <label>                            Label a credential during login (e.g. --name work-account)
 
-  <ESC>[1mInfo<ESC>[22m <ESC>[2m(subcommands are preferred, flags and aliases stay supported)<ESC>[22m
-    <ESC>[36mproviders [list]<ESC>[39m                   List registered providers <ESC>[2m(aliases: --list-providers, --providers)<ESC>[22m
-    <ESC>[36mproviders models<ESC>[39m <ESC>[2m[<id>]<ESC>[22m            List registered models (offline, no network) <ESC>[2m(also: models [list], provider <id> models, aliases: --list-models, --models)<ESC>[22m
-    <ESC>[36mproviders models-live<ESC>[39m <ESC>[2m[<id>]<ESC>[22m       List live provider catalogs (network) <ESC>[2m(also: models-live [list], provider <id> models-live, aliases: --list-models-live, --models-live)<ESC>[22m
-    <ESC>[36m--print-format<ESC>[39m <ESC>[2m<text|json|md|xml><ESC>[22m  Output shape for providers models <ESC>[2m(default: text; aliases: tui/console/stdout; or MINIMAL_AGENT_PRINT_FORMAT)<ESC>[22m
-    <ESC>[36mplugins<ESC>[39m <ESC>[2m[list]<ESC>[22m                     List installed plugins and effective on/off state <ESC>[2m(aliases: --list-plugins, --plugins)<ESC>[22m
-    <ESC>[36mflags [list]<ESC>[39m                       Show beta feature flags <ESC>[2m(aliases: --list-flags, --flags)<ESC>[22m
-    <ESC>[36mspinners [list]<ESC>[39m                    Show available spinner presets <ESC>[2m(aliases: --list-spinners, --spinners)<ESC>[22m
-    <ESC>[36msessions<ESC>[39m <ESC>[2m[list|query]<ESC>[22m              List saved sessions <ESC>[2m(fuzzy filter on date/sid/cwd; aliases: --sessions, --session, --list-sessions)<ESC>[22m
-    <ESC>[36msessions dump<ESC>[39m <ESC>[2m<sid|last><ESC>[22m           Dump a full session history to stdout <ESC>[2m(alias: --dump <sid|last>; --dump-format md|xml; --dump-paths)<ESC>[22m
-    <ESC>[36musage<ESC>[39m <ESC>[2m[<period>]<ESC>[22m                   Token-usage stats <ESC>[2m(today|last-day|last-month|ytd|year|all; alias: --usage-stats)<ESC>[22m
-    <ESC>[36mresume<ESC>[39m <ESC>[2m<sid|last><ESC>[22m                  Resume a saved session <ESC>[2m(also: sessions resume <sid>; aliases: -r, --resume, reuses credential pin only when provider matches the session)<ESC>[22m
-    <ESC>[36mresume-same<ESC>[39m <ESC>[2m<sid|last><ESC>[22m             Resume in place, keeping the same session id <ESC>[2m(also: sessions resume-same <sid>; alias: --resume-same-sid)<ESC>[22m
-    <ESC>[36mhelp<ESC>[39m, <ESC>[36m-h<ESC>[39m, <ESC>[36m--help<ESC>[39m                   Show this help
+  Info (subcommands are preferred, flags and aliases stay supported)
+    providers [list]                   List registered providers (aliases: --list-providers, --providers)
+    providers models [<id>]            List registered models (offline, no network) (also: models [list], provider <id>
+                                       models, aliases: --list-models, --models)
+    providers models-live [<id>]       List live provider catalogs (network) (also: models-live [list], provider <id>
+                                       models-live, aliases: --list-models-live, --models-live)
+    --print-format <text|json|md|xml>  Output shape for providers models (default: text; aliases: tui/console/stdout; or
+                                       MINIMAL_AGENT_PRINT_FORMAT)
+    plugins [list]                     List installed plugins and effective on/off state (aliases: --list-plugins,
+                                       --plugins)
+    flags [list]                       Show beta feature flags (aliases: --list-flags, --flags)
+    spinners [list]                    Show available spinner presets (aliases: --list-spinners, --spinners)
+    sessions [list|query]              List saved sessions (fuzzy filter on date/sid/cwd; aliases: --sessions,
+                                       --session, --list-sessions)
+    sessions dump <sid|last>           Dump a full session history to stdout (alias: --dump <sid|last>; --dump-format
+                                       md|xml; --dump-paths)
+    usage [<period>]                   Token-usage stats (today|last-day|last-month|ytd|year|all; alias: --usage-stats)
+    resume <sid|last>                  Resume a saved session (also: sessions resume <sid>; aliases: -r, --resume,
+                                       reuses credential pin only when provider matches the session)
+    resume-same <sid|last>             Resume in place, keeping the same session id (also: sessions resume-same <sid>;
+                                       alias: --resume-same-sid)
+    help, -h, --help                   Show this help
 
-  <ESC>[1mEnv<ESC>[22m
-    <ESC>[36mDEBUG=1<ESC>[39m                               Verbose request/response debug diagnostics <ESC>[2m(session log file, stderr with MINIMAL_AGENT_LOG_STDERR=1)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_LOG_STDERR=1<ESC>[39m            Mirror every diagnostic to stderr
-    <ESC>[36mMINIMAL_AGENT_TRANSPORT<ESC>[39m               Transport: http2 or fetch <ESC>[2m(default: http2; plaintext http:// auto-routes to HTTP/1.1)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_NO_PLAINTEXT_HTTP1=1<ESC>[39m    Keep http:// on HTTP/2 (disable the plaintext auto-route) <ESC>[2m(for an h2c-capable local server)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_ALLOW_FETCH_FALLBACK=1<ESC>[39m  Allow fetch fallback after HTTP/2 failure
-    <ESC>[36mMINIMAL_AGENT_NET_DBG=1<ESC>[39m               Mirror raw HTTP req/res to ~/.minimal-agent/net-dbg/
-    <ESC>[36mCLAUDE_CODE_EXTRA_METADATA<ESC>[39m            JSON object merged into metadata.user_id
-    <ESC>[36mMINIMAL_AGENT_SPINNER<ESC>[39m                 Spinner preset id <ESC>[2m(same values as --spinner)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_EFFORT<ESC>[39m                  Reasoning effort <ESC>[2m(low | medium | high | xhigh | max)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_FAST=1<ESC>[39m                  Opt into fast-mode dispatch <ESC>[2m(fast-capable models only)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_THINKING_DISPLAY<ESC>[39m        Force thinking display <ESC>[2m(summarized | omitted)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_FORMATTER_ARGS<ESC>[39m          Extra args for the formatter <ESC>[2m(shell-style, e.g. "--table-fit")<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_CONFIG<ESC>[39m                  Override config path <ESC>[2m(default: ~/.minimal-agent/config.jsonc)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_MODEL<ESC>[39m                   Default model id <ESC>[2m(same as --model)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_PROVIDER<ESC>[39m                Default provider id <ESC>[2m(same as --provider)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_ENDPOINT<ESC>[39m                Generic endpoint URL <ESC>[2m(same as --endpoint)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_FORMAT<ESC>[39m                  Generic endpoint surface id <ESC>[2m(same as --format / --surface)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_AUTH_TYPE<ESC>[39m               Generic endpoint auth <ESC>[2m(api-key | bearer | none | custom-header, same as --auth-type)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_API_KEY<ESC>[39m                 Generic endpoint key/token <ESC>[2m(same as --api-key)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_AUTH_HEADER<ESC>[39m             Custom auth header name <ESC>[2m(same as --auth-header)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_PROVIDER_MODEL<ESC>[39m          Wire model id override <ESC>[2m(same as --provider-model)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_EFFORT_LEVELS<ESC>[39m           Generic endpoint effort ladder <ESC>[2m(comma-separated, same as --effort-levels)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_MEMORY_NAMESPACE<ESC>[39m        Namespace memory paths under namespaces/<ns>/ <ESC>[2m(memory plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_THEME<ESC>[39m                   UI theme <ESC>[2m(dark | light | high-contrast)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_NO_LIVE_AREA=1<ESC>[39m          Disable live-area REPL <ESC>[2m(fall back to legacy raw input)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_HEADER<ESC>[39m                  Force startup tree <ESC>[2m(0|1, default hidden in non-interactive)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_MODE<ESC>[39m                    Initial mode id <ESC>[2m(or "none" to disable)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_CONTINUATION_PROMPT<ESC>[39m     Override continuation-prompt prefix <ESC>[2m(default: "  ")<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_SHOW_HIDDEN_CHARS=1<ESC>[39m     Show spaces/tabs/newlines as faint glyphs
-    <ESC>[36mMINIMAL_AGENT_SKIP_QUOTA=1<ESC>[39m            Skip startup quota check
-    <ESC>[36mMINIMAL_AGENT_NO_PLUGIN_SYNC=1<ESC>[39m        Skip the first-run extended-plugins clone
-    <ESC>[36mMINIMAL_AGENT_PLUGIN_SIBLINGS<ESC>[39m         Dev plugin checkout dirs (colon-separated) <ESC>[2m(default: ../minimal-agent-plugins next to the CLI repo)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_AUTO_ASK=0<ESC>[39m              Turn off automatic ASK mode in the REPL <ESC>[2m(or config autoAsk: false)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_AUTO_COMPACT=0<ESC>[39m          Turn off auto compact on a context overflow
-    <ESC>[36mMINIMAL_AGENT_DISABLE_PLUGINS<ESC>[39m         Comma-separated plugin ids to skip this run <ESC>[2m(same as --disable-plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_ENABLE_PLUGINS<ESC>[39m          Comma-separated plugin ids to force on this run <ESC>[2m(same as --enable-plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_NO_AGENTS_MD=1<ESC>[39m          Skip AGENTS.md system-prompt injection <ESC>[2m(same as --no-agents-md / --disable-plugin agents-md)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_PLUGINS_REPO<ESC>[39m            Git URL for the extended plugins repo <ESC>[2m(fork/mirror)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_GITHUB_TOKEN<ESC>[39m            Token to clone a private plugins repo <ESC>[2m(else GITHUB_TOKEN / GH_TOKEN / gh)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_NO_HISTORY=1<ESC>[39m            Disable prompt history <ESC>[2m(history plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_FILE_LOCK_DISABLED=1<ESC>[39m    Disable cooperative file locking <ESC>[2m(file-lock plugin)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_SUBAGENT_MODEL<ESC>[39m          Force a model for spawned workers <ESC>[2m(else inherit your model)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_SUBAGENT_AUTO_TIER=1<ESC>[39m    Let specialists pick a per-role model <ESC>[2m(default off)<ESC>[22m
-    <ESC>[36mMINIMAL_AGENT_SYSTEM_*<ESC>[39m                Override system-prompt parts (see System prompt section) <ESC>[2m(_INSTRUCTIONS, _IDENTITY, _LOOP_SAFETY, _TOOL_OUTPUT_CONVENTIONS, _SESSION_CONTEXT, _PROMPT, also MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE; each also *_FILE for a path; empty = omit)<ESC>[22m
+  Env
+    DEBUG=1                               Verbose request/response debug diagnostics (session log file, stderr with
+                                          MINIMAL_AGENT_LOG_STDERR=1)
+    MINIMAL_AGENT_LOG_STDERR=1            Mirror every diagnostic to stderr
+    MINIMAL_AGENT_TRANSPORT               Transport: http2 or fetch (default: http2; plaintext http:// auto-routes to
+                                          HTTP/1.1)
+    MINIMAL_AGENT_NO_PLAINTEXT_HTTP1=1    Keep http:// on HTTP/2 (disable the plaintext auto-route) (for an h2c-capable
+                                          local server)
+    MINIMAL_AGENT_ALLOW_FETCH_FALLBACK=1  Allow fetch fallback after HTTP/2 failure
+    MINIMAL_AGENT_NET_DBG=1               Mirror raw HTTP req/res to ~/.minimal-agent/net-dbg/
+    CLAUDE_CODE_EXTRA_METADATA            JSON object merged into metadata.user_id
+    MINIMAL_AGENT_SPINNER                 Spinner preset id (same values as --spinner)
+    MINIMAL_AGENT_EFFORT                  Reasoning effort (low | medium | high | xhigh | max)
+    MINIMAL_AGENT_FAST=1                  Opt into fast-mode dispatch (fast-capable models only)
+    MINIMAL_AGENT_THINKING_DISPLAY        Force thinking display (summarized | omitted)
+    MINIMAL_AGENT_FORMATTER_ARGS          Extra args for the formatter (shell-style, e.g. "--table-fit")
+    MINIMAL_AGENT_CONFIG                  Override config path (default: ~/.minimal-agent/config.jsonc)
+    MINIMAL_AGENT_MODEL                   Default model id (same as --model)
+    MINIMAL_AGENT_PROVIDER                Default provider id (same as --provider)
+    MINIMAL_AGENT_ENDPOINT                Generic endpoint URL (same as --endpoint)
+    MINIMAL_AGENT_FORMAT                  Generic endpoint surface id (same as --format / --surface)
+    MINIMAL_AGENT_AUTH_TYPE               Generic endpoint auth (api-key | bearer | none | custom-header, same as
+                                          --auth-type)
+    MINIMAL_AGENT_API_KEY                 Generic endpoint key/token (same as --api-key)
+    MINIMAL_AGENT_AUTH_HEADER             Custom auth header name (same as --auth-header)
+    MINIMAL_AGENT_PROVIDER_MODEL          Wire model id override (same as --provider-model)
+    MINIMAL_AGENT_EFFORT_LEVELS           Generic endpoint effort ladder (comma-separated, same as --effort-levels)
+    MINIMAL_AGENT_MEMORY_NAMESPACE        Namespace memory paths under namespaces/<ns>/ (memory plugin)
+    MINIMAL_AGENT_THEME                   UI theme (dark | light | high-contrast)
+    MINIMAL_AGENT_NO_LIVE_AREA=1          Disable live-area REPL (fall back to legacy raw input)
+    MINIMAL_AGENT_HEADER                  Force startup tree (0|1, default hidden in non-interactive)
+    MINIMAL_AGENT_MODE                    Initial mode id (or "none" to disable)
+    MINIMAL_AGENT_CONTINUATION_PROMPT     Override continuation-prompt prefix (default: "  ")
+    MINIMAL_AGENT_SHOW_HIDDEN_CHARS=1     Show spaces/tabs/newlines as faint glyphs
+    MINIMAL_AGENT_SKIP_QUOTA=1            Skip startup quota check
+    MINIMAL_AGENT_NO_PLUGIN_SYNC=1        Skip the first-run extended-plugins clone
+    MINIMAL_AGENT_PLUGIN_SIBLINGS         Dev plugin checkout dirs (colon-separated) (default: ../minimal-agent-plugins
+                                          next to the CLI repo)
+    MINIMAL_AGENT_AUTO_ASK=0              Turn off automatic ASK mode in the REPL (or config autoAsk: false)
+    MINIMAL_AGENT_AUTO_COMPACT=0          Turn off auto compact on a context overflow
+    MINIMAL_AGENT_DISABLE_PLUGINS         Comma-separated plugin ids to skip this run (same as --disable-plugin)
+    MINIMAL_AGENT_ENABLE_PLUGINS          Comma-separated plugin ids to force on this run (same as --enable-plugin)
+    MINIMAL_AGENT_NO_AGENTS_MD=1          Skip AGENTS.md system-prompt injection (same as --no-agents-md /
+                                          --disable-plugin agents-md)
+    MINIMAL_AGENT_PLUGINS_REPO            Git URL for the extended plugins repo (fork/mirror)
+    MINIMAL_AGENT_GITHUB_TOKEN            Token to clone a private plugins repo (else GITHUB_TOKEN / GH_TOKEN / gh)
+    MINIMAL_AGENT_NO_HISTORY=1            Disable prompt history (history plugin)
+    MINIMAL_AGENT_FILE_LOCK_DISABLED=1    Disable cooperative file locking (file-lock plugin)
+    MINIMAL_AGENT_SUBAGENT_MODEL          Force a model for spawned workers (else inherit your model)
+    MINIMAL_AGENT_SUBAGENT_AUTO_TIER=1    Let specialists pick a per-role model (default off)
+    MINIMAL_AGENT_SYSTEM_*                Override system-prompt parts (see System prompt section) (_INSTRUCTIONS,
+                                          _IDENTITY, _LOOP_SAFETY, _TOOL_OUTPUT_CONVENTIONS, _SESSION_CONTEXT, _PROMPT,
+                                          also MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE; each also *_FILE for a path;
+                                          empty = omit)
 
-  <ESC>[1mPlugins<ESC>[22m <ESC>[2m(enable/disable precedence: CLI → env → config → manifest)<ESC>[22m
-    <ESC>[2mList<ESC>[22m              <ESC>[2mminimal-agent plugins list<ESC>[22m
-    <ESC>[2mOne-shot disable<ESC>[22m  <ESC>[2mminimal-agent --disable-plugin web-search -p "…"<ESC>[22m
-    <ESC>[2mDisable many<ESC>[22m      <ESC>[2mminimal-agent --disable-plugin web-search,memory<ESC>[22m
-    <ESC>[2mOne-shot enable<ESC>[22m   <ESC>[2mminimal-agent --enable-plugin interleave-thinking<ESC>[22m
-    <ESC>[2mPersistent<ESC>[22m        <ESC>[2m{ "plugins": { "<id>": { "enabled": false } } }<ESC>[22m
-    <ESC>[2mOpt in<ESC>[22m            <ESC>[2m{ "plugins": { "<id>": { "enabled": true } } }<ESC>[22m <ESC>[2m(for plugins shipped disabled)<ESC>[22m
-    <ESC>[2mBuilt-in<ESC>[22m          <ESC>[2mask-mode, config, diff-view, env-info, file-lock,<ESC>[22m
-                      <ESC>[2mhistory, memory, model-info, quota-status, schedule,<ESC>[22m
-                      <ESC>[2msession-info, sub-agents, tasks, usage, web-search<ESC>[22m
-    <ESC>[2mDisabled<ESC>[22m          interleave-thinking, security, minimal-agent-cloud <ESC>[2m(opt in to use, see Opt in above)<ESC>[22m
+  Plugins (enable/disable precedence: CLI → env → config → manifest)
+    List              minimal-agent plugins list
+    One-shot disable  minimal-agent --disable-plugin web-search -p "…"
+    Disable many      minimal-agent --disable-plugin web-search,memory
+    One-shot enable   minimal-agent --enable-plugin interleave-thinking
+    Persistent        { "plugins": { "<id>": { "enabled": false } } }
+    Opt in            { "plugins": { "<id>": { "enabled": true } } } (for plugins shipped disabled)
+    Built-in          ask-mode, config, diff-view, env-info, file-lock,
+                      history, memory, model-info, quota-status, schedule,
+                      session-info, sub-agents, tasks, usage, web-search
+    Disabled          interleave-thinking, security, minimal-agent-cloud (opt in to use, see Opt in above)
 
-  <ESC>[1mDocs<ESC>[22m
-    <ESC>[2mCHANGELOG.md<ESC>[22m                    CLI release notes, newest first (minimal-agent-cli repo)
-    <ESC>[2mdocs/tui/<ESC>[22m                       Terminal renderer architecture (compositor, live area, editor)
-    <ESC>[2mcore docs/CHANGELOG.md<ESC>[22m          Core release notes (minimal-agent-core repo)
-    <ESC>[2mcore docs/network/<ESC>[22m              HTTP transport, retry, and wire-capture notes
-    <ESC>[2mcore docs/sub-agents-prompt.md<ESC>[22m  How the sub-agents system prompt composes
-    <ESC>[2mcore docs/changes/<ESC>[22m              Per-change write-ups, dated
+  Docs
+    CHANGELOG.md                    CLI release notes, newest first (minimal-agent-cli repo)
+    docs/tui/                       Terminal renderer architecture (compositor, live area, editor)
+    core docs/CHANGELOG.md          Core release notes (minimal-agent-core repo)
+    core docs/network/              HTTP transport, retry, and wire-capture notes
+    core docs/sub-agents-prompt.md  How the sub-agents system prompt composes
+    core docs/changes/              Per-change write-ups, dated
 "
 `;

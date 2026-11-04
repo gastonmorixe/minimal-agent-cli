@@ -76,7 +76,6 @@ export interface EntrypointArgs {
 export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): EntrypointArgs {
   const stderr = input.stderr ?? process.stderr
   const exit = input.exit ?? ((code: number): never => process.exit(code))
-  const renderHelp = input.printHelp ?? printHelp
 
   const dashTypos = findDashTypos(input.rawArgv)
   if (dashTypos.length > 0) {
@@ -87,7 +86,8 @@ export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): Entryp
   const args = normalizeArgs(input.rawArgv)
 
   if (args.includes("--help") || args.includes("-h")) {
-    renderHelp()
+    if (input.printHelp) input.printHelp()
+    else printHelp(process.stdout, { noColor: args.includes("--no-color"), env: input.env })
     exit(0)
   }
 
