@@ -1,24 +1,14 @@
-# Known drift between the parser flags and the root help flags (SPEC-HELP M-2, V-4).
+# Known drift between the parser flags and the help flags (SPEC-HELP M-2, M-8b, V-4).
+# The help flags are the registry flags plus the `--x` tokens in root help text.
 #
 # Checked by src/architecture/help-drift.test.ts.
 # Format: one entry per line, `<marker> <flag>`, sorted, no duplicates.
-#   parser-only <flag>  the parser reads the flag, root help does not show it
-#   help-only <flag>    root help shows the token, the parser does not read it
+#   parser-only <flag>  the parser reads the flag, the help side does not have it
+#   help-only <flag>    the help side has the token, the parser does not read it
 #
-# This list must only shrink. Do not add an entry for a new flag: document
-# the flag in src/startup/help.ts instead. When you fix an entry, remove it
-# here. The test fails on a stale entry.
+# This list must only shrink. Do not add an entry for a new flag: add a
+# FlagSpec in src/cli/registry or a `*.command.ts` file instead. When you
+# fix an entry, remove it here. The test fails on a stale entry.
 # --table-fit: formatter argument example in the --formatter-args and
 # MINIMAL_AGENT_FORMATTER_ARGS help text (src/startup/help.ts), not a CLI flag.
 help-only --table-fit
-parser-only --auth-status
-parser-only --list-flag
-parser-only --list-model
-parser-only --list-model-live
-parser-only --list-plugin
-parser-only --list-spinner
-parser-only --login
-parser-only --logout
-parser-only --no-system-prompt
-parser-only --system-prompt-file
-parser-only --usage
