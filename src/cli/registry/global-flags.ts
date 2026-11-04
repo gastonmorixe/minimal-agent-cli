@@ -137,6 +137,19 @@ const MODEL_FLAGS: readonly FlagSpec[] = [
     group: "model",
     global: true,
   },
+  {
+    // Hidden until SPEC-ONESHOT wires the parse site. Remove `hidden` in the same commit that wires it.
+    name: "temperature",
+    type: "number",
+    value: "required",
+    valueName: "n",
+    env: "MINIMAL_AGENT_TEMPERATURE",
+    summary: "Sampling temperature",
+    description: ["Ignored with a warning when the model does not accept it."],
+    group: "model",
+    hidden: true,
+    global: true,
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -350,6 +363,42 @@ const OUTPUT_FLAGS: readonly FlagSpec[] = [
     group: "output",
     global: true,
   },
+  {
+    // Hidden until SPEC-ONESHOT wires the parse site. Remove `hidden` in the same commit that wires it.
+    name: "strict",
+    type: "boolean",
+    value: "none",
+    summary: "Ask the provider to enforce --output-schema",
+    description: ["The provider plugin skips it when the model cannot enforce a schema."],
+    group: "output",
+    hidden: true,
+    global: true,
+  },
+  {
+    // Hidden until SPEC-ONESHOT wires the parse site. Remove `hidden` in the same commit that wires it.
+    name: "schema-retries",
+    type: "number",
+    value: "required",
+    valueName: "n",
+    default: 0,
+    summary: "Retry when the answer does not match --output-schema",
+    group: "output",
+    hidden: true,
+    global: true,
+  },
+  {
+    // Hidden until SPEC-ONESHOT wires the parse site. Remove `hidden` in the same commit that wires it.
+    name: "input-format",
+    type: "string",
+    value: "required",
+    valueName: "format",
+    choices: ["text", "open-responses"],
+    default: "text",
+    summary: "Read the run request from stdin in this format",
+    group: "output",
+    hidden: true,
+    global: true,
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -465,6 +514,17 @@ const PLUGINS_FLAGS: readonly FlagSpec[] = [
     group: "plugins",
     global: true,
   },
+  {
+    // Hidden until SPEC-ONESHOT wires the parse site. Remove `hidden` in the same commit that wires it.
+    name: "bare",
+    type: "boolean",
+    value: "none",
+    summary: "Load only the provider plugin and skip AGENTS.md",
+    description: ["For fast one-shot runs."],
+    group: "plugins",
+    hidden: true,
+    global: true,
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -503,6 +563,40 @@ const SESSION_FLAGS: readonly FlagSpec[] = [
     valueName: "sid|last",
     summary: "Resume in place, keeping the same session id",
     group: "session",
+    hidden: true,
+    global: true,
+  },
+]
+
+// ---------------------------------------------------------------------------
+// system-prompt: the append flags (SPEC-ONESHOT R8)
+// ---------------------------------------------------------------------------
+
+/**
+ * The append flags. They sit here, not in `system-prompt-flags.ts`: they
+ * are not core override keys, so the name match with the parser override
+ * specs does not include them.
+ */
+const APPEND_SYSTEM_PROMPT_FLAGS: readonly FlagSpec[] = [
+  {
+    // Hidden until SPEC-ONESHOT wires the parse site. Remove `hidden` in the same commit that wires it.
+    name: "append-system-prompt",
+    type: "string",
+    value: "required",
+    valueName: "text",
+    summary: "Add text after the base instructions",
+    group: "system-prompt",
+    hidden: true,
+    global: true,
+  },
+  {
+    // Hidden until SPEC-ONESHOT wires the parse site. Remove `hidden` in the same commit that wires it.
+    name: "append-system-prompt-file",
+    type: "string",
+    value: "required",
+    valueName: "path",
+    summary: "Read text to add after the base instructions from a file",
+    group: "system-prompt",
     hidden: true,
     global: true,
   },
@@ -630,6 +724,7 @@ export const GLOBAL_FLAGS: readonly FlagSpec[] = [
   ...PLUGINS_FLAGS,
   ...SESSION_FLAGS,
   ...SYSTEM_PROMPT_FLAGS,
+  ...APPEND_SYSTEM_PROMPT_FLAGS,
   ...DEBUG_FLAGS,
   HELP_FLAG,
   ...COMMAND_FORM_FLAGS,

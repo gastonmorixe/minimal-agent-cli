@@ -170,6 +170,24 @@ const GAINED_NO_VALUE: Readonly<Record<string, string>> = {
   "--usage-stats": "alias of --usage",
 }
 
+/**
+ * Intended additions: SPEC-ONESHOT flags added after the freeze. They are
+ * hidden until wired, but the parser tables hold them now.
+ */
+const ONESHOT_WITH_VALUES: Readonly<Record<string, string>> = {
+  "--append-system-prompt": "SPEC-ONESHOT, hidden until wired",
+  "--append-system-prompt-file": "SPEC-ONESHOT, hidden until wired",
+  "--input-format": "SPEC-ONESHOT, hidden until wired",
+  "--schema-retries": "SPEC-ONESHOT, hidden until wired",
+  "--temperature": "SPEC-ONESHOT, hidden until wired",
+}
+
+/** Intended additions: SPEC-ONESHOT booleans added after the freeze. */
+const ONESHOT_NO_VALUE: Readonly<Record<string, string>> = {
+  "--bare": "SPEC-ONESHOT, hidden until wired",
+  "--strict": "SPEC-ONESHOT, hidden until wired",
+}
+
 /** Optional-value flags. Spec M-12: they stay in `FLAGS_NO_VALUE`. */
 const OPTIONAL_VALUE_FLAGS = [
   "--list-models",
@@ -183,15 +201,27 @@ const sorted = (items: Iterable<string>): string[] => [...items].sort()
 describe("V-18: derived arity tables equal the old hand tables plus the pinned gaps", () => {
   const derived = builtinArity()
 
-  test("FLAGS_WITH_VALUES: old set plus --parallel", () => {
+  test("FLAGS_WITH_VALUES: old set plus --parallel and the SPEC-ONESHOT flags", () => {
     expect(sorted(derived.flagsWithValues)).toEqual(
-      sorted(new Set([...OLD_FLAGS_WITH_VALUES, ...Object.keys(GAINED_WITH_VALUES)])),
+      sorted(
+        new Set([
+          ...OLD_FLAGS_WITH_VALUES,
+          ...Object.keys(GAINED_WITH_VALUES),
+          ...Object.keys(ONESHOT_WITH_VALUES),
+        ]),
+      ),
     )
   })
 
-  test("FLAGS_NO_VALUE: old set plus the pinned gaps", () => {
+  test("FLAGS_NO_VALUE: old set plus the pinned gaps and the SPEC-ONESHOT flags", () => {
     expect(sorted(derived.flagsNoValue)).toEqual(
-      sorted(new Set([...OLD_FLAGS_NO_VALUE, ...Object.keys(GAINED_NO_VALUE)])),
+      sorted(
+        new Set([
+          ...OLD_FLAGS_NO_VALUE,
+          ...Object.keys(GAINED_NO_VALUE),
+          ...Object.keys(ONESHOT_NO_VALUE),
+        ]),
+      ),
     )
   })
 
@@ -248,6 +278,12 @@ describe("gap fixes through the real parser path", () => {
     for (const flag of ["--fast", "-F", "--json", "--diagnostics", "--table", "--all"]) {
       expect(prompt([flag, "word"])).toEqual({ kind: "literal", text: "word" })
     }
+  })
+
+  test("a SPEC-ONESHOT value flag does not leak its value as the prompt", () => {
+    expect(prompt(["--temperature", "0.5", "hello"])).toEqual({ kind: "literal", text: "hello" })
+    expect(prompt(["--schema-retries", "2", "hello"])).toEqual({ kind: "literal", text: "hello" })
+    expect(prompt(["--bare", "--strict", "hello"])).toEqual({ kind: "literal", text: "hello" })
   })
 
   test("an optional-value flag keeps today's scan result", () => {
