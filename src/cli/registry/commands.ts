@@ -46,15 +46,16 @@ export const BUILTIN_COMMANDS: readonly CommandSpec[] = [
   HELP_COMMAND,
 ]
 
-/** The program node. Root help examples are the "Start here" rows. */
+/** The program node. Root help USAGE and EXAMPLES come from it (spec 8.4). */
 export const ROOT_COMMAND: CommandSpec = {
   name: PROGRAM_NAME,
   summary: "A small, inspectable terminal agent harness.",
+  usage: ["[flags] [prompt]", "<command> [args] [flags]"],
   args: [{ name: "prompt", summary: "Prompt text, or - to read a prompt from stdin" }],
   examples: [
-    { argv: "", summary: "interactive REPL" },
-    { argv: '"explain this codebase"', summary: "one prompt, then exit" },
-    { argv: "-", summary: "read a prompt from stdin" },
+    { argv: "", summary: "Start the interactive REPL" },
+    { argv: '"explain this codebase"', summary: "Run one prompt, then exit" },
+    { argv: "-", summary: "Read the prompt from stdin" },
   ],
   commands: [...BUILTIN_COMMANDS],
 }

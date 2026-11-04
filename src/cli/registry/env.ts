@@ -1,15 +1,16 @@
 /**
  * Built-in environment variables as registry data (plan M-8a, 2.1).
  *
- * The visible entries are the 44 rows of the root help "Env" section in
- * `src/startup/help.ts`, in the same order, with the same summary and notes.
- * `set` keeps the value hint of the 16 rows whose term is `NAME=1` or
- * `NAME=0` (legacy override 3, plan 2.4). `flag` names the FlagSpec a
- * variable backs, when one exists.
+ * The visible entries are the 44 rows of the root help ENVIRONMENT section,
+ * in display order. `summary` is one line (no closing period). `set` is the
+ * value that turns a switch on or off (16 rows), `default` the value when
+ * unset, `flag` the FlagSpec a variable backs. Help makes notes from these
+ * three fields, so the text does not repeat them. `description` holds
+ * longer text that root help does not print (R-13, plan M-8d).
  *
- * The system-prompt override variables follow as hidden entries. Root help
- * shows them through the wildcard row `MINIMAL_AGENT_SYSTEM_*`, which is the
- * last visible entry here (legacy override 4).
+ * The system-prompt override variables follow as hidden entries. The
+ * wildcard row `MINIMAL_AGENT_SYSTEM_*` (the last visible entry) points at
+ * them. Root help also shows each one in the row of its flag.
  *
  * @module cli/registry/env
  */
@@ -23,21 +24,23 @@ const VISIBLE_ENV: readonly BuiltinEnvSpec[] = [
     name: "DEBUG",
     set: "1",
     flag: "debug",
-    summary: "Verbose request/response debug diagnostics",
-    description: ["session log file, stderr with MINIMAL_AGENT_LOG_STDERR=1"],
+    summary: "Verbose request and response debug diagnostics",
+    description: [
+      "Writes to the session log file. Also to stderr with MINIMAL_AGENT_LOG_STDERR=1.",
+    ],
   },
   { name: "MINIMAL_AGENT_LOG_STDERR", set: "1", summary: "Mirror every diagnostic to stderr" },
   {
     name: "MINIMAL_AGENT_TRANSPORT",
     default: "http2",
     summary: "Transport: http2 or fetch",
-    description: ["default: http2; plaintext http:// auto-routes to HTTP/1.1"],
+    description: ["Plaintext http:// auto-routes to HTTP/1.1."],
   },
   {
     name: "MINIMAL_AGENT_NO_PLAINTEXT_HTTP1",
     set: "1",
-    summary: "Keep http:// on HTTP/2 (disable the plaintext auto-route)",
-    description: ["for an h2c-capable local server"],
+    summary: "Keep http:// on HTTP/2, no plaintext auto-route",
+    description: ["Use it for an h2c-capable local server."],
   },
   {
     name: "MINIMAL_AGENT_ALLOW_FETCH_FALLBACK",
@@ -47,145 +50,127 @@ const VISIBLE_ENV: readonly BuiltinEnvSpec[] = [
   {
     name: "MINIMAL_AGENT_NET_DBG",
     set: "1",
-    summary: "Mirror raw HTTP req/res to ~/.minimal-agent/net-dbg/",
+    summary: "Mirror raw HTTP traffic to ~/.minimal-agent/net-dbg/",
   },
   { name: "CLAUDE_CODE_EXTRA_METADATA", summary: "JSON object merged into metadata.user_id" },
   {
     name: "MINIMAL_AGENT_SPINNER",
     flag: "spinner",
     summary: "Spinner preset id",
-    description: ["same values as --spinner"],
   },
   {
     name: "MINIMAL_AGENT_EFFORT",
     flag: "effort",
     summary: "Reasoning effort",
-    description: ["low | medium | high | xhigh | max"],
   },
   {
     name: "MINIMAL_AGENT_FAST",
     set: "1",
     flag: "fast",
     summary: "Opt into fast-mode dispatch",
-    description: ["fast-capable models only"],
   },
   {
     name: "MINIMAL_AGENT_THINKING_DISPLAY",
     flag: "thinking-display",
-    summary: "Force thinking display",
-    description: ["summarized | omitted"],
+    summary: "Force the thinking display mode",
   },
   {
     name: "MINIMAL_AGENT_FORMATTER_ARGS",
     flag: "formatter-args",
-    summary: "Extra args for the formatter",
-    description: ['shell-style, e.g. "--table-fit"'],
+    summary: "Extra formatter args, shell-style",
   },
   {
     name: "MINIMAL_AGENT_CONFIG",
     default: "~/.minimal-agent/config.jsonc",
-    summary: "Override config path",
-    description: ["default: ~/.minimal-agent/config.jsonc"],
+    summary: "Override the config path",
   },
   {
     name: "MINIMAL_AGENT_MODEL",
     flag: "model",
     summary: "Default model id",
-    description: ["same as --model"],
   },
   {
     name: "MINIMAL_AGENT_PROVIDER",
     flag: "provider",
     summary: "Default provider id",
-    description: ["same as --provider"],
   },
   {
     name: "MINIMAL_AGENT_ENDPOINT",
     flag: "endpoint",
     summary: "Generic endpoint URL",
-    description: ["same as --endpoint"],
   },
   {
     name: "MINIMAL_AGENT_FORMAT",
     flag: "format",
     summary: "Generic endpoint surface id",
-    description: ["same as --format / --surface"],
   },
   {
     name: "MINIMAL_AGENT_AUTH_TYPE",
     flag: "auth-type",
-    summary: "Generic endpoint auth",
-    description: ["api-key | bearer | none | custom-header, same as --auth-type"],
+    summary: "Generic endpoint auth type",
   },
   {
     name: "MINIMAL_AGENT_API_KEY",
     flag: "api-key",
-    summary: "Generic endpoint key/token",
-    description: ["same as --api-key"],
+    summary: "Generic endpoint key or token",
   },
   {
     name: "MINIMAL_AGENT_AUTH_HEADER",
     flag: "auth-header",
     summary: "Custom auth header name",
-    description: ["same as --auth-header"],
   },
   {
     name: "MINIMAL_AGENT_PROVIDER_MODEL",
     flag: "provider-model",
     summary: "Wire model id override",
-    description: ["same as --provider-model"],
   },
   {
     name: "MINIMAL_AGENT_EFFORT_LEVELS",
     flag: "effort-levels",
-    summary: "Generic endpoint effort ladder",
-    description: ["comma-separated, same as --effort-levels"],
+    summary: "Generic endpoint effort ladder, comma-separated",
   },
   {
     name: "MINIMAL_AGENT_MEMORY_NAMESPACE",
     summary: "Namespace memory paths under namespaces/<ns>/",
-    description: ["memory plugin"],
+    description: ["Read by the memory plugin."],
   },
   {
     name: "MINIMAL_AGENT_THEME",
-    summary: "UI theme",
-    description: ["dark | light | high-contrast"],
+    summary: "UI theme: dark, light, or high-contrast",
   },
   {
     name: "MINIMAL_AGENT_NO_LIVE_AREA",
     set: "1",
-    summary: "Disable live-area REPL",
-    description: ["fall back to legacy raw input"],
+    summary: "Disable the live-area REPL",
+    description: ["Falls back to the legacy raw input."],
   },
   {
     name: "MINIMAL_AGENT_HEADER",
     flag: "header",
-    summary: "Force startup tree",
-    description: ["0|1, default hidden in non-interactive"],
+    summary: "Force the startup tree: 0 or 1",
+    description: ["Default: hidden in non-interactive runs."],
   },
   {
     name: "MINIMAL_AGENT_MODE",
     flag: "mode",
-    summary: "Initial mode id",
-    description: ['or "none" to disable'],
+    summary: "Initial mode id, or none",
   },
   {
     name: "MINIMAL_AGENT_CONTINUATION_PROMPT",
     default: "  ",
-    summary: "Override continuation-prompt prefix",
-    description: ['default: "  "'],
+    summary: "Override the continuation-prompt prefix",
   },
   {
     name: "MINIMAL_AGENT_SHOW_HIDDEN_CHARS",
     set: "1",
     flag: "show-hidden-chars",
-    summary: "Show spaces/tabs/newlines as faint glyphs",
+    summary: "Show spaces, tabs, and newlines as faint glyphs",
   },
   {
     name: "MINIMAL_AGENT_SKIP_QUOTA",
     set: "1",
     flag: "skip-quota",
-    summary: "Skip startup quota check",
+    summary: "Skip the startup quota check",
   },
   {
     name: "MINIMAL_AGENT_NO_PLUGIN_SYNC",
@@ -194,14 +179,14 @@ const VISIBLE_ENV: readonly BuiltinEnvSpec[] = [
   },
   {
     name: "MINIMAL_AGENT_PLUGIN_SIBLINGS",
-    summary: "Dev plugin checkout dirs (colon-separated)",
-    description: ["default: ../minimal-agent-plugins next to the CLI repo"],
+    summary: "Dev plugin checkout dirs, colon-separated",
+    description: ["Default: ../minimal-agent-plugins next to the CLI repo."],
   },
   {
     name: "MINIMAL_AGENT_AUTO_ASK",
     set: "0",
     summary: "Turn off automatic ASK mode in the REPL",
-    description: ["or config autoAsk: false"],
+    description: ["Or set the config key autoAsk to false."],
   },
   {
     name: "MINIMAL_AGENT_AUTO_COMPACT",
@@ -212,62 +197,58 @@ const VISIBLE_ENV: readonly BuiltinEnvSpec[] = [
     name: "MINIMAL_AGENT_DISABLE_PLUGINS",
     flag: "disable-plugin",
     summary: "Comma-separated plugin ids to skip this run",
-    description: ["same as --disable-plugin"],
   },
   {
     name: "MINIMAL_AGENT_ENABLE_PLUGINS",
     flag: "enable-plugin",
     summary: "Comma-separated plugin ids to force on this run",
-    description: ["same as --enable-plugin"],
   },
   {
     name: "MINIMAL_AGENT_NO_AGENTS_MD",
     set: "1",
     flag: "no-agents-md",
     summary: "Skip AGENTS.md system-prompt injection",
-    description: ["same as --no-agents-md / --disable-plugin agents-md"],
+    description: ["Same as --disable-plugin agents-md."],
   },
   {
     name: "MINIMAL_AGENT_PLUGINS_REPO",
-    summary: "Git URL for the extended plugins repo",
-    description: ["fork/mirror"],
+    summary: "Git URL of the extended plugins repo, for a fork or mirror",
   },
   {
     name: "MINIMAL_AGENT_GITHUB_TOKEN",
-    summary: "Token to clone a private plugins repo",
-    description: ["else GITHUB_TOKEN / GH_TOKEN / gh"],
+    summary: "Token to clone a private plugins repo, else GITHUB_TOKEN, GH_TOKEN, gh",
   },
   {
     name: "MINIMAL_AGENT_NO_HISTORY",
     set: "1",
     summary: "Disable prompt history",
-    description: ["history plugin"],
+    description: ["Read by the history plugin."],
   },
   {
     name: "MINIMAL_AGENT_FILE_LOCK_DISABLED",
     set: "1",
     summary: "Disable cooperative file locking",
-    description: ["file-lock plugin"],
+    description: ["Read by the file-lock plugin."],
   },
   {
     name: "MINIMAL_AGENT_SUBAGENT_MODEL",
     summary: "Force a model for spawned workers",
-    description: ["else inherit your model"],
+    description: ["Else the workers inherit your model."],
   },
   {
     name: "MINIMAL_AGENT_SUBAGENT_AUTO_TIER",
     set: "1",
     summary: "Let specialists pick a per-role model",
-    description: ["default off"],
+    description: ["Default: off."],
   },
   {
-    // Wildcard row (legacy override 4). Not a real variable: it stands for
-    // the hidden system-prompt entries below.
+    // Wildcard row. Not a real variable: it stands for the hidden
+    // system-prompt entries below.
     name: "MINIMAL_AGENT_SYSTEM_*",
-    summary: "Override system-prompt parts (see System prompt section)",
+    summary: "Override system-prompt parts, see the System prompt flags",
     description: [
-      "_INSTRUCTIONS, _IDENTITY, _LOOP_SAFETY, _TOOL_OUTPUT_CONVENTIONS, _SESSION_CONTEXT, _PROMPT",
-      "also MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE; each also *_FILE for a path; empty = omit",
+      "Parts: _INSTRUCTIONS, _IDENTITY, _LOOP_SAFETY, _TOOL_OUTPUT_CONVENTIONS, _SESSION_CONTEXT, _PROMPT.",
+      "Also MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE. Each one also has a *_FILE form for a path. An empty value omits the part.",
     ],
   },
 ]

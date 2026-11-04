@@ -185,11 +185,14 @@ describe("help drift", () => {
     const registry = registryFlags()
     const text = helpTextFlags()
     // Guards against a scan that silently finds nothing (an empty set has no drift).
-    for (const flag of ["--model", "--list-models", "--help", "--host-mode"]) {
+    for (const flag of ["--model", "--output-format", "--help", "--host-mode"]) {
       expect(parser.has(flag)).toBe(true)
       expect(registry.has(flag)).toBe(true)
       expect(text.has(flag)).toBe(true)
     }
+    // A hidden command form (M-8d: only in command help, not root help text).
+    expect(parser.has("--list-models")).toBe(true)
+    expect(registry.has("--list-models")).toBe(true)
     expect(visibleGlobalFlags().length).toBeGreaterThan(0)
   })
 })

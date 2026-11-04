@@ -1,327 +1,238 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
 exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] = `
-"
-  minimal-agent v<AGENT_VERSION>
-  A small, inspectable terminal agent harness.
-  github.com/gastonmorixe/minimal-agent
+"  minimal-agent v<AGENT_VERSION>
+    A small, inspectable terminal agent harness.
 
-  Start here
-    $ minimal-agent  interactive REPL
-    $ minimal-agent "explain this codebase"
-                     one prompt, then exit
-    $ echo "summarize stdin" | minimal-agent -
-                     read a prompt from stdin
+  USAGE
+    minimal-agent [flags] [prompt]
+    minimal-agent <command> [args] [flags]
 
-  Command map
-    providers · providers models · providers models-live
-                                       discover models and providers
-    sessions · sessions dump · resume · usage
-                                       inspect or continue past work
-    provider <id> login · logout · auth-status
-                                       manage provider credentials
-    plugins · flags · spinners · help  inspect the local installation
+  EXAMPLES
+    minimal-agent    Start the interactive REPL
+    minimal-agent "explain this codebase"
+                     Run one prompt, then exit
+    minimal-agent -  Read the prompt from stdin
 
-  Every command also accepts --help. Flags win over a positional prompt.
+  COMMANDS
+    Discover
+      providers  List registered providers
+    History
+      sessions           List saved sessions
+      usage              Show token usage stats for a period
+      resume <sid>       Resume a saved session
+      resume-same <sid>  Resume in place, keeping the same session id
+    Auth
+      provider <id>  Act on one provider
+      login          Sign in to a provider
+      logout         Clear one provider's credentials
+      auth-status    Show login status, account, scopes, and expiry
+    Local
+      plugins   List installed plugins and their on or off state
+      flags     Show beta feature flags
+      spinners  Show available spinner presets
+      help      Show help for a command
 
-  Options
-    -m, --model <id>             Select model (requires --provider, else
-                                 MINIMAL_AGENT_MODEL, config model)
-    --provider <id>              Select provider for --model (else
-                                 MINIMAL_AGENT_PROVIDER, config provider)
-    --endpoint <url>             Generic endpoint URL (use with --provider
-                                 generic-endpoint, or MINIMAL_AGENT_ENDPOINT)
-    --format, --surface <id>     Generic endpoint surface (a registered wire
-                                 surface, or MINIMAL_AGENT_FORMAT)
-    --auth-type <type>           Generic endpoint auth (api-key | bearer | none
-                                 | custom-header, or MINIMAL_AGENT_AUTH_TYPE)
-    --api-key <key>              Generic endpoint key/token (or
-                                 MINIMAL_AGENT_API_KEY)
-    --auth-header <name>         Custom auth header name (for --auth-type
-                                 custom-header, or MINIMAL_AGENT_AUTH_HEADER)
-    --provider-model <id>        Wire model id override (separate from local
-                                 --model, or MINIMAL_AGENT_PROVIDER_MODEL)
-    --effort-levels <levels>     Generic endpoint effort ladder
-                                 (comma-separated, e.g. "low,medium,high", lets
-                                 --effort pass through, or
-                                 MINIMAL_AGENT_EFFORT_LEVELS)
-    -e, --effort <level>         Reasoning effort: low, medium, high, xhigh, max
-                                 (or MINIMAL_AGENT_EFFORT)
-    -F, --fast                   Fast-mode dispatch (speed:"fast", fast-capable
-                                 models only, ~2.5x tok/s, ~2x cost, or
-                                 MINIMAL_AGENT_FAST=1)
-    --thinking-display <mode>    Force thinking display: summarized or omitted
-                                 (or MINIMAL_AGENT_THINKING_DISPLAY)
-    --cache-ttl <5m|1h>          Prompt-cache breakpoint TTL (default: 5m, or
-                                 MINIMAL_AGENT_CACHE_TTL, config cacheTtl)
-    -f, --formatter <cmd>        Pipe output through formatter (default:
-                                 mdstream)
-    --formatter-args <args>      Extra args appended to the formatter (e.g.
-                                 "--table-fit", or MINIMAL_AGENT_FORMATTER_ARGS)
-    -s, --spinner <preset>       Pick a status spinner preset (see
-                                 --list-spinners)
-    -p, --prompt <text>          Non-interactive: send prompt, print, exit
-    --output-format <text|json|stream-json>
-                                 Non-interactive output (text is human output;
-                                 json is buffered JSONL; stream-json flushes
-                                 JSONL events live, --json is an alias for
-                                 --output-format json, json, stream-json: stdout
-                                 carries only JSON lines; a stray write fails
-                                 the run)
-    --diagnostics                With --output-format json, also write
-                                 diagnostics (each line is a session log entry
-                                 with ch "event" or "diag")
-    --output-schema <file>
-        Constrain the final answer to a JSON Schema (run exits non-zero if the
-        answer is absent or non-conforming, enforces a SUBSET: type, required,
-        properties, additionalProperties, items, enum (deep-equal), accepted but
-        NOT enforced:
-        minimum/maxLength/pattern/anyOf/oneOf/allOf/not/$ref/format/const, don't
-        rely on them)
-    --mode <id|none>             Initial mode (default: ask in non-interactive,
-                                 plugin default otherwise)
-    --tools <names>              Advertise only these tools (comma-separated
-                                 allow-list, e.g. --tools "WebSearch,Task",
-                                 model only sees listed tools; checked before
-                                 mode permissions)
-    --no-tools                   Advertise no tools (pure Q&A) (empty tools
-                                 array on the request; checked before mode
-                                 permissions)
-    --disable-plugin <id>        Skip a plugin for this run (repeatable,
-                                 comma-separated ok, see plugins list)
-    --enable-plugin <id>         Force-enable a plugin for this run (overrides
-                                 config + manifest opt-out)
-    --no-agents-md, --no-agents  Skip AGENTS.md injection (alias for
-                                 --disable-plugin agents-md, or
-                                 MINIMAL_AGENT_NO_AGENTS_MD=1)
-    --header / --no-header       Force startup tree on/off (default: hidden in
-                                 non-interactive)
-    --session-id <uuid>          Pin this run's session id (else
-                                 MINIMAL_AGENT_SESSION_ID, else random)
-    --host-mode <id>             Hand the process to a plugin host mode (e.g.
-                                 acp) (needs a loaded, enabled plugin that
-                                 declares that hostModes[] id, stdin/stdout
-                                 carry the protocol, logs go to stderr, every
-                                 arg after the id goes to the host mode, cannot
-                                 be combined with --prompt, -p, or a stdin
-                                 prompt)
-    -d, --debug                  Enable debug logging (or DEBUG=1, outside the
-                                 REPL, also mirror diagnostics to stderr)
-    -v, --verbose                Don't truncate debug output (or VERBOSE=1)
-    --skip-quota                 Skip startup quota check (or
-                                 MINIMAL_AGENT_SKIP_QUOTA=1)
-    --show-hidden-chars          Reveal spaces/tabs/newlines as faint glyphs
-    --no-color                   Print this help with no color (help is also
-                                 plain when NO_COLOR is set and not empty,
-                                 TERM=dumb, or output is not a TTY)
-    --credential-name <name>     Select a stored credential by name (use when
-                                 the provider has multiple credentials (e.g.
-                                 Work and Personal), or
-                                 MINIMAL_AGENT_CREDENTIAL_NAME, config
-                                 credentialName, --resume reuses the session pin
-                                 only for the same provider)
-    --service-tier <tier>        Provider service tier (auto, default, flex,
-                                 scale, priority) (or
+  FLAGS
+    Model
+      -m, --model <id>           Select the model (env: MINIMAL_AGENT_MODEL)
+      --provider <id>            Select the provider for --model (env:
+                                 MINIMAL_AGENT_PROVIDER)
+      -e, --effort <level>       Reasoning effort: low, medium, high, xhigh, max
+                                 (env: MINIMAL_AGENT_EFFORT)
+      -F, --fast                 Fast-mode dispatch on fast-capable models (env:
+                                 MINIMAL_AGENT_FAST)
+      --thinking-display <mode>  Force the thinking display mode (one of:
+                                 summarized, omitted, env:
+                                 MINIMAL_AGENT_THINKING_DISPLAY)
+      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 5m, env:
+                                 MINIMAL_AGENT_CACHE_TTL)
+      --service-tier <tier>      Provider service tier: auto, default, flex,
+                                 scale, priority (env:
                                  MINIMAL_AGENT_SERVICE_TIER)
-    --platform <os>              Override platform for plugin/tool gating:
-                                 macos, linux, windows, all (or
-                                 MINIMAL_AGENT_PLATFORM)
+      --credential-name <name>   Select a stored credential by name (env:
+                                 MINIMAL_AGENT_CREDENTIAL_NAME)
+    Generic endpoint
+      --endpoint <url>          Generic endpoint URL (env:
+                                MINIMAL_AGENT_ENDPOINT)
+      --format, --surface <id>  Generic endpoint wire surface (env:
+                                MINIMAL_AGENT_FORMAT)
+      --auth-type <type>        Generic endpoint auth type (one of: api-key,
+                                bearer, none, custom-header, env:
+                                MINIMAL_AGENT_AUTH_TYPE)
+      --api-key <key>           Generic endpoint key or token (env:
+                                MINIMAL_AGENT_API_KEY)
+      --auth-header <name>      Auth header name for --auth-type custom-header
+                                (env: MINIMAL_AGENT_AUTH_HEADER)
+      --provider-model <id>     Wire model id override (env:
+                                MINIMAL_AGENT_PROVIDER_MODEL)
+      --effort-levels <levels>  Generic endpoint effort ladder, comma-separated
+                                (env: MINIMAL_AGENT_EFFORT_LEVELS)
+    Output
+      -p, --prompt <text>      Non-interactive: send the prompt, print, exit
+      --output-format <text|json|stream-json>
+                               Non-interactive output format, --json is short
+                               for json (default: text)
+      --diagnostics            With --output-format json, also write diagnostics
+      --output-schema <file>   Constrain the final answer to a JSON Schema
+      -f, --formatter <cmd>    Pipe output through a formatter command (default:
+                               mdstream)
+      --formatter-args <args>  Extra formatter args, for example --table-fit
+                               (env: MINIMAL_AGENT_FORMATTER_ARGS)
+      -s, --spinner <preset>   Pick a status spinner preset, see spinners (env:
+                               MINIMAL_AGENT_SPINNER)
+      --header / --no-header   Force the startup tree on or off (env:
+                               MINIMAL_AGENT_HEADER)
+      --no-color               Print help with no color, as do NO_COLOR and
+                               TERM=dumb
+      --show-hidden-chars      Show spaces, tabs, and newlines as faint glyphs
+                               (env: MINIMAL_AGENT_SHOW_HIDDEN_CHARS)
+    Tools and modes
+      --mode <id|none>  Initial mode id, or none (env: MINIMAL_AGENT_MODE)
+      --tools <names>   Advertise only these tools, comma-separated
+      --no-tools        Advertise no tools, for pure Q&A
+    Plugins
+      --disable-plugin <id>        Skip a plugin for this run, repeatable (env:
+                                   MINIMAL_AGENT_DISABLE_PLUGINS)
+      --enable-plugin <id>         Force-enable a plugin for this run,
+                                   repeatable (env:
+                                   MINIMAL_AGENT_ENABLE_PLUGINS)
+      --no-agents-md, --no-agents  Skip AGENTS.md injection, same as
+                                   --disable-plugin agents-md (env:
+                                   MINIMAL_AGENT_NO_AGENTS_MD)
+      --platform <os>              Override the platform for plugin and tool
+                                   gating (one of: macos, linux, windows, all,
+                                   env: MINIMAL_AGENT_PLATFORM)
+      --host-mode <id>             Hand the process to a plugin host mode, for
+                                   example acp
+    Session
+      --session-id <uuid>  Pin the session id of this run (env:
+                           MINIMAL_AGENT_SESSION_ID)
+    System prompt (override or omit individual system-prompt parts)
+      --system-prompt <text>            Replace the whole core-controllable
+                                        system prompt (also --system-prompt-file
+                                        <path>, --no-system-prompt, env:
+                                        MINIMAL_AGENT_SYSTEM_PROMPT)
+      --system-identity <text>          Replace the neutral identity block (also
+                                        --system-identity-file <path>,
+                                        --no-system-identity, env:
+                                        MINIMAL_AGENT_SYSTEM_IDENTITY)
+      --system-instructions <text>      Replace the base instructions block
+                                        (also --system-instructions-file <path>,
+                                        --no-system-instructions, env:
+                                        MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
+      --system-loop-safety <text>       Replace the loop-safety paragraph (also
+                                        --system-loop-safety-file <path>,
+                                        --no-system-loop-safety, env:
+                                        MINIMAL_AGENT_SYSTEM_LOOP_SAFETY)
+      --system-tool-output-conventions <text>
+          Replace the tool-output-conventions paragraph (also
+          --system-tool-output-conventions-file <path>,
+          --no-system-tool-output-conventions, env:
+          MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS)
+      --system-session-context <text>   Replace the session-context block of
+                                        plugin prompts (also
+                                        --system-session-context-file <path>,
+                                        --no-system-session-context, env:
+                                        MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT)
+      --provider-system-preamble <text>
+                                        Replace the provider preamble, needs
+                                        --unsafe-system-prompt-overrides (also
+                                        --provider-system-preamble-file <path>,
+                                        --no-provider-system-preamble, env:
+                                        MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE)
+      --unsafe-system-prompt-overrides  Allow a provider preamble override or
+                                        omission
+    Debug
+      -d, --debug    Enable debug logging (env: DEBUG)
+      -v, --verbose  Do not truncate debug output (env: VERBOSE)
+      --skip-quota   Skip the startup quota check (env:
+                     MINIMAL_AGENT_SKIP_QUOTA)
+    Help
+      -h, --help  Show help
 
-  System prompt (override or omit individual system-prompt parts)
-    --system-prompt <text>             Replace the whole core-controllable
-                                       system prompt (every override accepts
-                                       <flag>-file <path> or --no-<flag-name> to
-                                       omit)
-    --system-identity <text>           Replace the neutral identity block (or
-                                       --system-identity-file <path>, or
-                                       --no-system-identity)
-    --system-instructions <text>       Replace the base instructions block (or
-                                       --system-instructions-file <path>, or
-                                       --no-system-instructions)
-    --system-loop-safety <text>        Replace the loop-safety paragraph (or
-                                       --system-loop-safety-file <path>, or
-                                       --no-system-loop-safety)
-    --system-tool-output-conventions <text>
-                                       Replace the tool-output-conventions
-                                       paragraph (or
-                                       --system-tool-output-conventions-file
-                                       <path>, or
-                                       --no-system-tool-output-conventions)
-    --system-session-context <text>    Replace the session-context block (plugin
-                                       prompts) (or
-                                       --system-session-context-file <path>, or
-                                       --no-system-session-context)
-    --provider-system-preamble <text>  Replace the provider-owned preamble
-                                       (requires
-                                       --unsafe-system-prompt-overrides) (or
-                                       --provider-system-preamble-file <path>,
-                                       or --no-provider-system-preamble)
-    --unsafe-system-prompt-overrides   Allow provider preamble
-                                       replacement/omission (without this flag,
-                                       provider preamble overrides are rejected)
-
-  Auth (provider-owned auth flows, flags remain legacy aliases)
-    provider <id> login [method]     Sign in to a provider (also: login
-                                     [provider] [method], providers login <id>
-                                     [method])
-    provider <id> logout             Clear one provider's credentials (also:
-                                     logout [provider], providers logout <id>)
-    auth-status [--table]            Show login status, account, scopes, and
-                                     expiry
-    auth-status <credential> refresh [--name <n>] [--provider <id>]
-                                     Refresh one stored OAuth credential
-    auth-status refresh-all [--parallel <n>]
-                                     Refresh all stored OAuth credentials (max
-                                     8)
-    auth-status plan [<credential>] [--all] [--table] [--parallel <n>]
-                                     Show plan, seat, role, and usage limits
-                                     (spends no quota)
-    auth-status prune --dry-run|--force [--table] [--parallel <n>]
-                                     Delete stored credentials the server
-                                     rejects (dry run lists only)
-    --auth-method <oauth|api-key>    Choose a login method
-    --email, --email-hint <address>  Pre-fill login email
-    --name <label>                   Label a credential during login (e.g.
-                                     --name work-account)
-
-  Info (subcommands are preferred, flags and aliases stay supported)
-    providers [list]                   List registered providers (aliases:
-                                       --list-providers, --providers)
-    providers models [<id>]            List registered models (offline, no
-                                       network) (also: models [list], provider
-                                       <id> models, aliases: --list-models,
-                                       --models)
-    providers models-live [<id>]       List live provider catalogs (network)
-                                       (also: models-live [list], provider <id>
-                                       models-live, aliases: --list-models-live,
-                                       --models-live)
-    --print-format <text|json|md|xml>  Output shape for providers models
-                                       (default: text; aliases:
-                                       tui/console/stdout; or
-                                       MINIMAL_AGENT_PRINT_FORMAT)
-    plugins [list]                     List installed plugins and effective
-                                       on/off state (aliases: --list-plugins,
-                                       --plugins)
-    flags [list]                       Show beta feature flags (aliases:
-                                       --list-flags, --flags)
-    spinners [list]                    Show available spinner presets (aliases:
-                                       --list-spinners, --spinners)
-    sessions [list|query]              List saved sessions (fuzzy filter on
-                                       date/sid/cwd; aliases: --sessions,
-                                       --session, --list-sessions)
-    sessions dump <sid|last>           Dump a full session history to stdout
-                                       (alias: --dump <sid|last>; --dump-format
-                                       md|xml; --dump-paths)
-    usage [<period>]                   Token-usage stats
-                                       (today|last-day|last-month|ytd|year|all;
-                                       alias: --usage-stats)
-    resume <sid|last>                  Resume a saved session (also: sessions
-                                       resume <sid>; aliases: -r, --resume,
-                                       reuses credential pin only when provider
-                                       matches the session)
-    resume-same <sid|last>             Resume in place, keeping the same session
-                                       id (also: sessions resume-same <sid>;
-                                       alias: --resume-same-sid)
-    help, -h, --help                   Show this help
-
-  Env
-    DEBUG=1                             Verbose request/response debug
-                                        diagnostics (session log file, stderr
-                                        with MINIMAL_AGENT_LOG_STDERR=1)
-    MINIMAL_AGENT_LOG_STDERR=1          Mirror every diagnostic to stderr
+  ENVIRONMENT
+    DEBUG                               Verbose request and response debug
+                                        diagnostics (set to 1, flag: --debug)
+    MINIMAL_AGENT_LOG_STDERR            Mirror every diagnostic to stderr (set
+                                        to 1)
     MINIMAL_AGENT_TRANSPORT             Transport: http2 or fetch (default:
-                                        http2; plaintext http:// auto-routes to
-                                        HTTP/1.1)
-    MINIMAL_AGENT_NO_PLAINTEXT_HTTP1=1  Keep http:// on HTTP/2 (disable the
-                                        plaintext auto-route) (for an
-                                        h2c-capable local server)
-    MINIMAL_AGENT_ALLOW_FETCH_FALLBACK=1
-                                        Allow fetch fallback after HTTP/2
-                                        failure
-    MINIMAL_AGENT_NET_DBG=1             Mirror raw HTTP req/res to
-                                        ~/.minimal-agent/net-dbg/
+                                        http2)
+    MINIMAL_AGENT_NO_PLAINTEXT_HTTP1    Keep http:// on HTTP/2, no plaintext
+                                        auto-route (set to 1)
+    MINIMAL_AGENT_ALLOW_FETCH_FALLBACK  Allow fetch fallback after HTTP/2
+                                        failure (set to 1)
+    MINIMAL_AGENT_NET_DBG               Mirror raw HTTP traffic to
+                                        ~/.minimal-agent/net-dbg/ (set to 1)
     CLAUDE_CODE_EXTRA_METADATA          JSON object merged into metadata.user_id
-    MINIMAL_AGENT_SPINNER               Spinner preset id (same values as
-                                        --spinner)
-    MINIMAL_AGENT_EFFORT                Reasoning effort (low | medium | high |
-                                        xhigh | max)
-    MINIMAL_AGENT_FAST=1                Opt into fast-mode dispatch
-                                        (fast-capable models only)
-    MINIMAL_AGENT_THINKING_DISPLAY      Force thinking display (summarized |
-                                        omitted)
-    MINIMAL_AGENT_FORMATTER_ARGS        Extra args for the formatter
-                                        (shell-style, e.g. "--table-fit")
-    MINIMAL_AGENT_CONFIG                Override config path (default:
+    MINIMAL_AGENT_SPINNER               Spinner preset id (flag: --spinner)
+    MINIMAL_AGENT_EFFORT                Reasoning effort (flag: --effort)
+    MINIMAL_AGENT_FAST                  Opt into fast-mode dispatch (set to 1,
+                                        flag: --fast)
+    MINIMAL_AGENT_THINKING_DISPLAY      Force the thinking display mode (flag:
+                                        --thinking-display)
+    MINIMAL_AGENT_FORMATTER_ARGS        Extra formatter args, shell-style (flag:
+                                        --formatter-args)
+    MINIMAL_AGENT_CONFIG                Override the config path (default:
                                         ~/.minimal-agent/config.jsonc)
-    MINIMAL_AGENT_MODEL                 Default model id (same as --model)
-    MINIMAL_AGENT_PROVIDER              Default provider id (same as --provider)
-    MINIMAL_AGENT_ENDPOINT              Generic endpoint URL (same as
-                                        --endpoint)
-    MINIMAL_AGENT_FORMAT                Generic endpoint surface id (same as
-                                        --format / --surface)
-    MINIMAL_AGENT_AUTH_TYPE             Generic endpoint auth (api-key | bearer
-                                        | none | custom-header, same as
+    MINIMAL_AGENT_MODEL                 Default model id (flag: --model)
+    MINIMAL_AGENT_PROVIDER              Default provider id (flag: --provider)
+    MINIMAL_AGENT_ENDPOINT              Generic endpoint URL (flag: --endpoint)
+    MINIMAL_AGENT_FORMAT                Generic endpoint surface id (flag:
+                                        --format)
+    MINIMAL_AGENT_AUTH_TYPE             Generic endpoint auth type (flag:
                                         --auth-type)
-    MINIMAL_AGENT_API_KEY               Generic endpoint key/token (same as
+    MINIMAL_AGENT_API_KEY               Generic endpoint key or token (flag:
                                         --api-key)
-    MINIMAL_AGENT_AUTH_HEADER           Custom auth header name (same as
+    MINIMAL_AGENT_AUTH_HEADER           Custom auth header name (flag:
                                         --auth-header)
-    MINIMAL_AGENT_PROVIDER_MODEL        Wire model id override (same as
+    MINIMAL_AGENT_PROVIDER_MODEL        Wire model id override (flag:
                                         --provider-model)
-    MINIMAL_AGENT_EFFORT_LEVELS         Generic endpoint effort ladder
-                                        (comma-separated, same as
-                                        --effort-levels)
+    MINIMAL_AGENT_EFFORT_LEVELS         Generic endpoint effort ladder,
+                                        comma-separated (flag: --effort-levels)
     MINIMAL_AGENT_MEMORY_NAMESPACE      Namespace memory paths under
-                                        namespaces/<ns>/ (memory plugin)
-    MINIMAL_AGENT_THEME                 UI theme (dark | light | high-contrast)
-    MINIMAL_AGENT_NO_LIVE_AREA=1        Disable live-area REPL (fall back to
-                                        legacy raw input)
-    MINIMAL_AGENT_HEADER                Force startup tree (0|1, default hidden
-                                        in non-interactive)
-    MINIMAL_AGENT_MODE                  Initial mode id (or "none" to disable)
-    MINIMAL_AGENT_CONTINUATION_PROMPT   Override continuation-prompt prefix
+                                        namespaces/<ns>/
+    MINIMAL_AGENT_THEME                 UI theme: dark, light, or high-contrast
+    MINIMAL_AGENT_NO_LIVE_AREA          Disable the live-area REPL (set to 1)
+    MINIMAL_AGENT_HEADER                Force the startup tree: 0 or 1 (flag:
+                                        --header)
+    MINIMAL_AGENT_MODE                  Initial mode id, or none (flag: --mode)
+    MINIMAL_AGENT_CONTINUATION_PROMPT   Override the continuation-prompt prefix
                                         (default: " ")
-    MINIMAL_AGENT_SHOW_HIDDEN_CHARS=1   Show spaces/tabs/newlines as faint
-                                        glyphs
-    MINIMAL_AGENT_SKIP_QUOTA=1          Skip startup quota check
-    MINIMAL_AGENT_NO_PLUGIN_SYNC=1      Skip the first-run extended-plugins
-                                        clone
-    MINIMAL_AGENT_PLUGIN_SIBLINGS       Dev plugin checkout dirs
-                                        (colon-separated) (default:
-                                        ../minimal-agent-plugins next to the CLI
-                                        repo)
-    MINIMAL_AGENT_AUTO_ASK=0            Turn off automatic ASK mode in the REPL
-                                        (or config autoAsk: false)
-    MINIMAL_AGENT_AUTO_COMPACT=0        Turn off auto compact on a context
-                                        overflow
+    MINIMAL_AGENT_SHOW_HIDDEN_CHARS     Show spaces, tabs, and newlines as faint
+                                        glyphs (set to 1, flag:
+                                        --show-hidden-chars)
+    MINIMAL_AGENT_SKIP_QUOTA            Skip the startup quota check (set to 1,
+                                        flag: --skip-quota)
+    MINIMAL_AGENT_NO_PLUGIN_SYNC        Skip the first-run extended-plugins
+                                        clone (set to 1)
+    MINIMAL_AGENT_PLUGIN_SIBLINGS       Dev plugin checkout dirs,
+                                        colon-separated
+    MINIMAL_AGENT_AUTO_ASK              Turn off automatic ASK mode in the REPL
+                                        (set to 0)
+    MINIMAL_AGENT_AUTO_COMPACT          Turn off auto compact on a context
+                                        overflow (set to 0)
     MINIMAL_AGENT_DISABLE_PLUGINS       Comma-separated plugin ids to skip this
-                                        run (same as --disable-plugin)
+                                        run (flag: --disable-plugin)
     MINIMAL_AGENT_ENABLE_PLUGINS        Comma-separated plugin ids to force on
-                                        this run (same as --enable-plugin)
-    MINIMAL_AGENT_NO_AGENTS_MD=1        Skip AGENTS.md system-prompt injection
-                                        (same as --no-agents-md /
-                                        --disable-plugin agents-md)
-    MINIMAL_AGENT_PLUGINS_REPO          Git URL for the extended plugins repo
-                                        (fork/mirror)
-    MINIMAL_AGENT_GITHUB_TOKEN          Token to clone a private plugins repo
-                                        (else GITHUB_TOKEN / GH_TOKEN / gh)
-    MINIMAL_AGENT_NO_HISTORY=1          Disable prompt history (history plugin)
-    MINIMAL_AGENT_FILE_LOCK_DISABLED=1  Disable cooperative file locking
-                                        (file-lock plugin)
-    MINIMAL_AGENT_SUBAGENT_MODEL        Force a model for spawned workers (else
-                                        inherit your model)
-    MINIMAL_AGENT_SUBAGENT_AUTO_TIER=1  Let specialists pick a per-role model
-                                        (default off)
-    MINIMAL_AGENT_SYSTEM_*              Override system-prompt parts (see System
-                                        prompt section) (_INSTRUCTIONS,
-                                        _IDENTITY, _LOOP_SAFETY,
-                                        _TOOL_OUTPUT_CONVENTIONS,
-                                        _SESSION_CONTEXT, _PROMPT, also
-                                        MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE;
-                                        each also *_FILE for a path; empty =
-                                        omit)
+                                        this run (flag: --enable-plugin)
+    MINIMAL_AGENT_NO_AGENTS_MD          Skip AGENTS.md system-prompt injection
+                                        (set to 1, flag: --no-agents-md)
+    MINIMAL_AGENT_PLUGINS_REPO          Git URL of the extended plugins repo,
+                                        for a fork or mirror
+    MINIMAL_AGENT_GITHUB_TOKEN          Token to clone a private plugins repo,
+                                        else GITHUB_TOKEN, GH_TOKEN, gh
+    MINIMAL_AGENT_NO_HISTORY            Disable prompt history (set to 1)
+    MINIMAL_AGENT_FILE_LOCK_DISABLED    Disable cooperative file locking (set to
+                                        1)
+    MINIMAL_AGENT_SUBAGENT_MODEL        Force a model for spawned workers
+    MINIMAL_AGENT_SUBAGENT_AUTO_TIER    Let specialists pick a per-role model
+                                        (set to 1)
+    MINIMAL_AGENT_SYSTEM_*              Override system-prompt parts, see the
+                                        System prompt flags
 
-  Plugins (enable/disable precedence: CLI → env → config → manifest)
+  PLUGIN NOTES
+    Enable and disable precedence: CLI → env → config → manifest.
     List              minimal-agent plugins list
     One-shot disable  minimal-agent --disable-plugin web-search -p "…"
     Disable many      minimal-agent --disable-plugin web-search,memory
@@ -335,7 +246,9 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
     Disabled          interleave-thinking, security, minimal-agent-cloud (opt in
                       to use, see Opt in above)
 
-  Docs
+  LEARN MORE
+    Use minimal-agent help <command> for command help.
+    github.com/gastonmorixe/minimal-agent
     CHANGELOG.md                    CLI release notes, newest first
                                     (minimal-agent-cli repo)
     docs/tui/                       Terminal renderer architecture (compositor,
@@ -349,213 +262,163 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
 `;
 
 exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`] = `
-"
-  minimal-agent v<AGENT_VERSION>
-  A small, inspectable terminal agent harness.
-  github.com/gastonmorixe/minimal-agent
+"  minimal-agent v<AGENT_VERSION>
+    A small, inspectable terminal agent harness.
 
-  Start here
-    $ minimal-agent                             interactive REPL
-    $ minimal-agent "explain this codebase"     one prompt, then exit
-    $ echo "summarize stdin" | minimal-agent -  read a prompt from stdin
+  USAGE
+    minimal-agent [flags] [prompt]
+    minimal-agent <command> [args] [flags]
 
-  Command map
-    providers · providers models · providers models-live  discover models and providers
-    sessions · sessions dump · resume · usage             inspect or continue past work
-    provider <id> login · logout · auth-status            manage provider credentials
-    plugins · flags · spinners · help                     inspect the local installation
+  EXAMPLES
+    minimal-agent                          Start the interactive REPL
+    minimal-agent "explain this codebase"  Run one prompt, then exit
+    minimal-agent -                        Read the prompt from stdin
 
-  Every command also accepts --help. Flags win over a positional prompt.
+  COMMANDS
+    Discover
+      providers  List registered providers
+    History
+      sessions           List saved sessions
+      usage              Show token usage stats for a period
+      resume <sid>       Resume a saved session
+      resume-same <sid>  Resume in place, keeping the same session id
+    Auth
+      provider <id>  Act on one provider
+      login          Sign in to a provider
+      logout         Clear one provider's credentials
+      auth-status    Show login status, account, scopes, and expiry
+    Local
+      plugins   List installed plugins and their on or off state
+      flags     Show beta feature flags
+      spinners  Show available spinner presets
+      help      Show help for a command
 
-  Options
-    -m, --model <id>                         Select model (requires --provider, else MINIMAL_AGENT_MODEL, config model)
-    --provider <id>                          Select provider for --model (else MINIMAL_AGENT_PROVIDER, config provider)
-    --endpoint <url>                         Generic endpoint URL (use with --provider generic-endpoint, or
-                                             MINIMAL_AGENT_ENDPOINT)
-    --format, --surface <id>                 Generic endpoint surface (a registered wire surface, or
-                                             MINIMAL_AGENT_FORMAT)
-    --auth-type <type>                       Generic endpoint auth (api-key | bearer | none | custom-header, or
-                                             MINIMAL_AGENT_AUTH_TYPE)
-    --api-key <key>                          Generic endpoint key/token (or MINIMAL_AGENT_API_KEY)
-    --auth-header <name>                     Custom auth header name (for --auth-type custom-header, or
-                                             MINIMAL_AGENT_AUTH_HEADER)
-    --provider-model <id>                    Wire model id override (separate from local --model, or
-                                             MINIMAL_AGENT_PROVIDER_MODEL)
-    --effort-levels <levels>                 Generic endpoint effort ladder (comma-separated, e.g. "low,medium,high",
-                                             lets --effort pass through, or MINIMAL_AGENT_EFFORT_LEVELS)
-    -e, --effort <level>                     Reasoning effort: low, medium, high, xhigh, max (or MINIMAL_AGENT_EFFORT)
-    -F, --fast                               Fast-mode dispatch (speed:"fast", fast-capable models only, ~2.5x tok/s,
-                                             ~2x cost, or MINIMAL_AGENT_FAST=1)
-    --thinking-display <mode>                Force thinking display: summarized or omitted (or
-                                             MINIMAL_AGENT_THINKING_DISPLAY)
-    --cache-ttl <5m|1h>                      Prompt-cache breakpoint TTL (default: 5m, or MINIMAL_AGENT_CACHE_TTL,
-                                             config cacheTtl)
-    -f, --formatter <cmd>                    Pipe output through formatter (default: mdstream)
-    --formatter-args <args>                  Extra args appended to the formatter (e.g. "--table-fit", or
-                                             MINIMAL_AGENT_FORMATTER_ARGS)
-    -s, --spinner <preset>                   Pick a status spinner preset (see --list-spinners)
-    -p, --prompt <text>                      Non-interactive: send prompt, print, exit
-    --output-format <text|json|stream-json>  Non-interactive output (text is human output; json is buffered JSONL;
-                                             stream-json flushes JSONL events live, --json is an alias for
-                                             --output-format json, json, stream-json: stdout carries only JSON lines; a
-                                             stray write fails the run)
-    --diagnostics                            With --output-format json, also write diagnostics (each line is a session
-                                             log entry with ch "event" or "diag")
-    --output-schema <file>                   Constrain the final answer to a JSON Schema (run exits non-zero if the
-                                             answer is absent or non-conforming, enforces a SUBSET: type, required,
-                                             properties, additionalProperties, items, enum (deep-equal), accepted but
-                                             NOT enforced:
-                                             minimum/maxLength/pattern/anyOf/oneOf/allOf/not/$ref/format/const, don't
-                                             rely on them)
-    --mode <id|none>                         Initial mode (default: ask in non-interactive, plugin default otherwise)
-    --tools <names>                          Advertise only these tools (comma-separated allow-list, e.g. --tools
-                                             "WebSearch,Task", model only sees listed tools; checked before mode
-                                             permissions)
-    --no-tools                               Advertise no tools (pure Q&A) (empty tools array on the request; checked
-                                             before mode permissions)
-    --disable-plugin <id>                    Skip a plugin for this run (repeatable, comma-separated ok, see plugins
-                                             list)
-    --enable-plugin <id>                     Force-enable a plugin for this run (overrides config + manifest opt-out)
-    --no-agents-md, --no-agents              Skip AGENTS.md injection (alias for --disable-plugin agents-md, or
-                                             MINIMAL_AGENT_NO_AGENTS_MD=1)
-    --header / --no-header                   Force startup tree on/off (default: hidden in non-interactive)
-    --session-id <uuid>                      Pin this run's session id (else MINIMAL_AGENT_SESSION_ID, else random)
-    --host-mode <id>                         Hand the process to a plugin host mode (e.g. acp) (needs a loaded, enabled
-                                             plugin that declares that hostModes[] id, stdin/stdout carry the protocol,
-                                             logs go to stderr, every arg after the id goes to the host mode, cannot be
-                                             combined with --prompt, -p, or a stdin prompt)
-    -d, --debug                              Enable debug logging (or DEBUG=1, outside the REPL, also mirror diagnostics
-                                             to stderr)
-    -v, --verbose                            Don't truncate debug output (or VERBOSE=1)
-    --skip-quota                             Skip startup quota check (or MINIMAL_AGENT_SKIP_QUOTA=1)
-    --show-hidden-chars                      Reveal spaces/tabs/newlines as faint glyphs
-    --no-color                               Print this help with no color (help is also plain when NO_COLOR is set and
-                                             not empty, TERM=dumb, or output is not a TTY)
-    --credential-name <name>                 Select a stored credential by name (use when the provider has multiple
-                                             credentials (e.g. Work and Personal), or MINIMAL_AGENT_CREDENTIAL_NAME,
-                                             config credentialName, --resume reuses the session pin only for the same
-                                             provider)
-    --service-tier <tier>                    Provider service tier (auto, default, flex, scale, priority) (or
-                                             MINIMAL_AGENT_SERVICE_TIER)
-    --platform <os>                          Override platform for plugin/tool gating: macos, linux, windows, all (or
-                                             MINIMAL_AGENT_PLATFORM)
+  FLAGS
+    Model
+      -m, --model <id>           Select the model (env: MINIMAL_AGENT_MODEL)
+      --provider <id>            Select the provider for --model (env: MINIMAL_AGENT_PROVIDER)
+      -e, --effort <level>       Reasoning effort: low, medium, high, xhigh, max (env: MINIMAL_AGENT_EFFORT)
+      -F, --fast                 Fast-mode dispatch on fast-capable models (env: MINIMAL_AGENT_FAST)
+      --thinking-display <mode>  Force the thinking display mode (one of: summarized, omitted, env:
+                                 MINIMAL_AGENT_THINKING_DISPLAY)
+      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 5m, env: MINIMAL_AGENT_CACHE_TTL)
+      --service-tier <tier>      Provider service tier: auto, default, flex, scale, priority (env:
+                                 MINIMAL_AGENT_SERVICE_TIER)
+      --credential-name <name>   Select a stored credential by name (env: MINIMAL_AGENT_CREDENTIAL_NAME)
+    Generic endpoint
+      --endpoint <url>          Generic endpoint URL (env: MINIMAL_AGENT_ENDPOINT)
+      --format, --surface <id>  Generic endpoint wire surface (env: MINIMAL_AGENT_FORMAT)
+      --auth-type <type>        Generic endpoint auth type (one of: api-key, bearer, none, custom-header, env:
+                                MINIMAL_AGENT_AUTH_TYPE)
+      --api-key <key>           Generic endpoint key or token (env: MINIMAL_AGENT_API_KEY)
+      --auth-header <name>      Auth header name for --auth-type custom-header (env: MINIMAL_AGENT_AUTH_HEADER)
+      --provider-model <id>     Wire model id override (env: MINIMAL_AGENT_PROVIDER_MODEL)
+      --effort-levels <levels>  Generic endpoint effort ladder, comma-separated (env: MINIMAL_AGENT_EFFORT_LEVELS)
+    Output
+      -p, --prompt <text>                      Non-interactive: send the prompt, print, exit
+      --output-format <text|json|stream-json>  Non-interactive output format, --json is short for json (default: text)
+      --diagnostics                            With --output-format json, also write diagnostics
+      --output-schema <file>                   Constrain the final answer to a JSON Schema
+      -f, --formatter <cmd>                    Pipe output through a formatter command (default: mdstream)
+      --formatter-args <args>                  Extra formatter args, for example --table-fit (env:
+                                               MINIMAL_AGENT_FORMATTER_ARGS)
+      -s, --spinner <preset>                   Pick a status spinner preset, see spinners (env: MINIMAL_AGENT_SPINNER)
+      --header / --no-header                   Force the startup tree on or off (env: MINIMAL_AGENT_HEADER)
+      --no-color                               Print help with no color, as do NO_COLOR and TERM=dumb
+      --show-hidden-chars                      Show spaces, tabs, and newlines as faint glyphs (env:
+                                               MINIMAL_AGENT_SHOW_HIDDEN_CHARS)
+    Tools and modes
+      --mode <id|none>  Initial mode id, or none (env: MINIMAL_AGENT_MODE)
+      --tools <names>   Advertise only these tools, comma-separated
+      --no-tools        Advertise no tools, for pure Q&A
+    Plugins
+      --disable-plugin <id>        Skip a plugin for this run, repeatable (env: MINIMAL_AGENT_DISABLE_PLUGINS)
+      --enable-plugin <id>         Force-enable a plugin for this run, repeatable (env: MINIMAL_AGENT_ENABLE_PLUGINS)
+      --no-agents-md, --no-agents  Skip AGENTS.md injection, same as --disable-plugin agents-md (env:
+                                   MINIMAL_AGENT_NO_AGENTS_MD)
+      --platform <os>              Override the platform for plugin and tool gating (one of: macos, linux, windows, all,
+                                   env: MINIMAL_AGENT_PLATFORM)
+      --host-mode <id>             Hand the process to a plugin host mode, for example acp
+    Session
+      --session-id <uuid>  Pin the session id of this run (env: MINIMAL_AGENT_SESSION_ID)
+    System prompt (override or omit individual system-prompt parts)
+      --system-prompt <text>                   Replace the whole core-controllable system prompt (also
+                                               --system-prompt-file <path>, --no-system-prompt, env:
+                                               MINIMAL_AGENT_SYSTEM_PROMPT)
+      --system-identity <text>                 Replace the neutral identity block (also --system-identity-file <path>,
+                                               --no-system-identity, env: MINIMAL_AGENT_SYSTEM_IDENTITY)
+      --system-instructions <text>             Replace the base instructions block (also --system-instructions-file
+                                               <path>, --no-system-instructions, env: MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
+      --system-loop-safety <text>              Replace the loop-safety paragraph (also --system-loop-safety-file <path>,
+                                               --no-system-loop-safety, env: MINIMAL_AGENT_SYSTEM_LOOP_SAFETY)
+      --system-tool-output-conventions <text>  Replace the tool-output-conventions paragraph (also
+                                               --system-tool-output-conventions-file <path>,
+                                               --no-system-tool-output-conventions, env:
+                                               MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS)
+      --system-session-context <text>          Replace the session-context block of plugin prompts (also
+                                               --system-session-context-file <path>, --no-system-session-context, env:
+                                               MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT)
+      --provider-system-preamble <text>        Replace the provider preamble, needs --unsafe-system-prompt-overrides
+                                               (also --provider-system-preamble-file <path>,
+                                               --no-provider-system-preamble, env:
+                                               MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE)
+      --unsafe-system-prompt-overrides         Allow a provider preamble override or omission
+    Debug
+      -d, --debug    Enable debug logging (env: DEBUG)
+      -v, --verbose  Do not truncate debug output (env: VERBOSE)
+      --skip-quota   Skip the startup quota check (env: MINIMAL_AGENT_SKIP_QUOTA)
+    Help
+      -h, --help  Show help
 
-  System prompt (override or omit individual system-prompt parts)
-    --system-prompt <text>                   Replace the whole core-controllable system prompt (every override accepts
-                                             <flag>-file <path> or --no-<flag-name> to omit)
-    --system-identity <text>                 Replace the neutral identity block (or --system-identity-file <path>, or
-                                             --no-system-identity)
-    --system-instructions <text>             Replace the base instructions block (or --system-instructions-file <path>,
-                                             or --no-system-instructions)
-    --system-loop-safety <text>              Replace the loop-safety paragraph (or --system-loop-safety-file <path>, or
-                                             --no-system-loop-safety)
-    --system-tool-output-conventions <text>  Replace the tool-output-conventions paragraph (or
-                                             --system-tool-output-conventions-file <path>, or
-                                             --no-system-tool-output-conventions)
-    --system-session-context <text>          Replace the session-context block (plugin prompts) (or
-                                             --system-session-context-file <path>, or --no-system-session-context)
-    --provider-system-preamble <text>        Replace the provider-owned preamble (requires
-                                             --unsafe-system-prompt-overrides) (or --provider-system-preamble-file
-                                             <path>, or --no-provider-system-preamble)
-    --unsafe-system-prompt-overrides         Allow provider preamble replacement/omission (without this flag, provider
-                                             preamble overrides are rejected)
+  ENVIRONMENT
+    DEBUG                               Verbose request and response debug diagnostics (set to 1, flag: --debug)
+    MINIMAL_AGENT_LOG_STDERR            Mirror every diagnostic to stderr (set to 1)
+    MINIMAL_AGENT_TRANSPORT             Transport: http2 or fetch (default: http2)
+    MINIMAL_AGENT_NO_PLAINTEXT_HTTP1    Keep http:// on HTTP/2, no plaintext auto-route (set to 1)
+    MINIMAL_AGENT_ALLOW_FETCH_FALLBACK  Allow fetch fallback after HTTP/2 failure (set to 1)
+    MINIMAL_AGENT_NET_DBG               Mirror raw HTTP traffic to ~/.minimal-agent/net-dbg/ (set to 1)
+    CLAUDE_CODE_EXTRA_METADATA          JSON object merged into metadata.user_id
+    MINIMAL_AGENT_SPINNER               Spinner preset id (flag: --spinner)
+    MINIMAL_AGENT_EFFORT                Reasoning effort (flag: --effort)
+    MINIMAL_AGENT_FAST                  Opt into fast-mode dispatch (set to 1, flag: --fast)
+    MINIMAL_AGENT_THINKING_DISPLAY      Force the thinking display mode (flag: --thinking-display)
+    MINIMAL_AGENT_FORMATTER_ARGS        Extra formatter args, shell-style (flag: --formatter-args)
+    MINIMAL_AGENT_CONFIG                Override the config path (default: ~/.minimal-agent/config.jsonc)
+    MINIMAL_AGENT_MODEL                 Default model id (flag: --model)
+    MINIMAL_AGENT_PROVIDER              Default provider id (flag: --provider)
+    MINIMAL_AGENT_ENDPOINT              Generic endpoint URL (flag: --endpoint)
+    MINIMAL_AGENT_FORMAT                Generic endpoint surface id (flag: --format)
+    MINIMAL_AGENT_AUTH_TYPE             Generic endpoint auth type (flag: --auth-type)
+    MINIMAL_AGENT_API_KEY               Generic endpoint key or token (flag: --api-key)
+    MINIMAL_AGENT_AUTH_HEADER           Custom auth header name (flag: --auth-header)
+    MINIMAL_AGENT_PROVIDER_MODEL        Wire model id override (flag: --provider-model)
+    MINIMAL_AGENT_EFFORT_LEVELS         Generic endpoint effort ladder, comma-separated (flag: --effort-levels)
+    MINIMAL_AGENT_MEMORY_NAMESPACE      Namespace memory paths under namespaces/<ns>/
+    MINIMAL_AGENT_THEME                 UI theme: dark, light, or high-contrast
+    MINIMAL_AGENT_NO_LIVE_AREA          Disable the live-area REPL (set to 1)
+    MINIMAL_AGENT_HEADER                Force the startup tree: 0 or 1 (flag: --header)
+    MINIMAL_AGENT_MODE                  Initial mode id, or none (flag: --mode)
+    MINIMAL_AGENT_CONTINUATION_PROMPT   Override the continuation-prompt prefix (default: "  ")
+    MINIMAL_AGENT_SHOW_HIDDEN_CHARS     Show spaces, tabs, and newlines as faint glyphs (set to 1, flag:
+                                        --show-hidden-chars)
+    MINIMAL_AGENT_SKIP_QUOTA            Skip the startup quota check (set to 1, flag: --skip-quota)
+    MINIMAL_AGENT_NO_PLUGIN_SYNC        Skip the first-run extended-plugins clone (set to 1)
+    MINIMAL_AGENT_PLUGIN_SIBLINGS       Dev plugin checkout dirs, colon-separated
+    MINIMAL_AGENT_AUTO_ASK              Turn off automatic ASK mode in the REPL (set to 0)
+    MINIMAL_AGENT_AUTO_COMPACT          Turn off auto compact on a context overflow (set to 0)
+    MINIMAL_AGENT_DISABLE_PLUGINS       Comma-separated plugin ids to skip this run (flag: --disable-plugin)
+    MINIMAL_AGENT_ENABLE_PLUGINS        Comma-separated plugin ids to force on this run (flag: --enable-plugin)
+    MINIMAL_AGENT_NO_AGENTS_MD          Skip AGENTS.md system-prompt injection (set to 1, flag: --no-agents-md)
+    MINIMAL_AGENT_PLUGINS_REPO          Git URL of the extended plugins repo, for a fork or mirror
+    MINIMAL_AGENT_GITHUB_TOKEN          Token to clone a private plugins repo, else GITHUB_TOKEN, GH_TOKEN, gh
+    MINIMAL_AGENT_NO_HISTORY            Disable prompt history (set to 1)
+    MINIMAL_AGENT_FILE_LOCK_DISABLED    Disable cooperative file locking (set to 1)
+    MINIMAL_AGENT_SUBAGENT_MODEL        Force a model for spawned workers
+    MINIMAL_AGENT_SUBAGENT_AUTO_TIER    Let specialists pick a per-role model (set to 1)
+    MINIMAL_AGENT_SYSTEM_*              Override system-prompt parts, see the System prompt flags
 
-  Auth (provider-owned auth flows, flags remain legacy aliases)
-    provider <id> login [method]              Sign in to a provider (also: login [provider] [method], providers login
-                                              <id> [method])
-    provider <id> logout                      Clear one provider's credentials (also: logout [provider], providers
-                                              logout <id>)
-    auth-status [--table]                     Show login status, account, scopes, and expiry
-    auth-status <credential> refresh [--name <n>] [--provider <id>]
-                                              Refresh one stored OAuth credential
-    auth-status refresh-all [--parallel <n>]  Refresh all stored OAuth credentials (max 8)
-    auth-status plan [<credential>] [--all] [--table] [--parallel <n>]
-                                              Show plan, seat, role, and usage limits (spends no quota)
-    auth-status prune --dry-run|--force [--table] [--parallel <n>]
-                                              Delete stored credentials the server rejects (dry run lists only)
-    --auth-method <oauth|api-key>             Choose a login method
-    --email, --email-hint <address>           Pre-fill login email
-    --name <label>                            Label a credential during login (e.g. --name work-account)
-
-  Info (subcommands are preferred, flags and aliases stay supported)
-    providers [list]                   List registered providers (aliases: --list-providers, --providers)
-    providers models [<id>]            List registered models (offline, no network) (also: models [list], provider <id>
-                                       models, aliases: --list-models, --models)
-    providers models-live [<id>]       List live provider catalogs (network) (also: models-live [list], provider <id>
-                                       models-live, aliases: --list-models-live, --models-live)
-    --print-format <text|json|md|xml>  Output shape for providers models (default: text; aliases: tui/console/stdout; or
-                                       MINIMAL_AGENT_PRINT_FORMAT)
-    plugins [list]                     List installed plugins and effective on/off state (aliases: --list-plugins,
-                                       --plugins)
-    flags [list]                       Show beta feature flags (aliases: --list-flags, --flags)
-    spinners [list]                    Show available spinner presets (aliases: --list-spinners, --spinners)
-    sessions [list|query]              List saved sessions (fuzzy filter on date/sid/cwd; aliases: --sessions,
-                                       --session, --list-sessions)
-    sessions dump <sid|last>           Dump a full session history to stdout (alias: --dump <sid|last>; --dump-format
-                                       md|xml; --dump-paths)
-    usage [<period>]                   Token-usage stats (today|last-day|last-month|ytd|year|all; alias: --usage-stats)
-    resume <sid|last>                  Resume a saved session (also: sessions resume <sid>; aliases: -r, --resume,
-                                       reuses credential pin only when provider matches the session)
-    resume-same <sid|last>             Resume in place, keeping the same session id (also: sessions resume-same <sid>;
-                                       alias: --resume-same-sid)
-    help, -h, --help                   Show this help
-
-  Env
-    DEBUG=1                               Verbose request/response debug diagnostics (session log file, stderr with
-                                          MINIMAL_AGENT_LOG_STDERR=1)
-    MINIMAL_AGENT_LOG_STDERR=1            Mirror every diagnostic to stderr
-    MINIMAL_AGENT_TRANSPORT               Transport: http2 or fetch (default: http2; plaintext http:// auto-routes to
-                                          HTTP/1.1)
-    MINIMAL_AGENT_NO_PLAINTEXT_HTTP1=1    Keep http:// on HTTP/2 (disable the plaintext auto-route) (for an h2c-capable
-                                          local server)
-    MINIMAL_AGENT_ALLOW_FETCH_FALLBACK=1  Allow fetch fallback after HTTP/2 failure
-    MINIMAL_AGENT_NET_DBG=1               Mirror raw HTTP req/res to ~/.minimal-agent/net-dbg/
-    CLAUDE_CODE_EXTRA_METADATA            JSON object merged into metadata.user_id
-    MINIMAL_AGENT_SPINNER                 Spinner preset id (same values as --spinner)
-    MINIMAL_AGENT_EFFORT                  Reasoning effort (low | medium | high | xhigh | max)
-    MINIMAL_AGENT_FAST=1                  Opt into fast-mode dispatch (fast-capable models only)
-    MINIMAL_AGENT_THINKING_DISPLAY        Force thinking display (summarized | omitted)
-    MINIMAL_AGENT_FORMATTER_ARGS          Extra args for the formatter (shell-style, e.g. "--table-fit")
-    MINIMAL_AGENT_CONFIG                  Override config path (default: ~/.minimal-agent/config.jsonc)
-    MINIMAL_AGENT_MODEL                   Default model id (same as --model)
-    MINIMAL_AGENT_PROVIDER                Default provider id (same as --provider)
-    MINIMAL_AGENT_ENDPOINT                Generic endpoint URL (same as --endpoint)
-    MINIMAL_AGENT_FORMAT                  Generic endpoint surface id (same as --format / --surface)
-    MINIMAL_AGENT_AUTH_TYPE               Generic endpoint auth (api-key | bearer | none | custom-header, same as
-                                          --auth-type)
-    MINIMAL_AGENT_API_KEY                 Generic endpoint key/token (same as --api-key)
-    MINIMAL_AGENT_AUTH_HEADER             Custom auth header name (same as --auth-header)
-    MINIMAL_AGENT_PROVIDER_MODEL          Wire model id override (same as --provider-model)
-    MINIMAL_AGENT_EFFORT_LEVELS           Generic endpoint effort ladder (comma-separated, same as --effort-levels)
-    MINIMAL_AGENT_MEMORY_NAMESPACE        Namespace memory paths under namespaces/<ns>/ (memory plugin)
-    MINIMAL_AGENT_THEME                   UI theme (dark | light | high-contrast)
-    MINIMAL_AGENT_NO_LIVE_AREA=1          Disable live-area REPL (fall back to legacy raw input)
-    MINIMAL_AGENT_HEADER                  Force startup tree (0|1, default hidden in non-interactive)
-    MINIMAL_AGENT_MODE                    Initial mode id (or "none" to disable)
-    MINIMAL_AGENT_CONTINUATION_PROMPT     Override continuation-prompt prefix (default: "  ")
-    MINIMAL_AGENT_SHOW_HIDDEN_CHARS=1     Show spaces/tabs/newlines as faint glyphs
-    MINIMAL_AGENT_SKIP_QUOTA=1            Skip startup quota check
-    MINIMAL_AGENT_NO_PLUGIN_SYNC=1        Skip the first-run extended-plugins clone
-    MINIMAL_AGENT_PLUGIN_SIBLINGS         Dev plugin checkout dirs (colon-separated) (default: ../minimal-agent-plugins
-                                          next to the CLI repo)
-    MINIMAL_AGENT_AUTO_ASK=0              Turn off automatic ASK mode in the REPL (or config autoAsk: false)
-    MINIMAL_AGENT_AUTO_COMPACT=0          Turn off auto compact on a context overflow
-    MINIMAL_AGENT_DISABLE_PLUGINS         Comma-separated plugin ids to skip this run (same as --disable-plugin)
-    MINIMAL_AGENT_ENABLE_PLUGINS          Comma-separated plugin ids to force on this run (same as --enable-plugin)
-    MINIMAL_AGENT_NO_AGENTS_MD=1          Skip AGENTS.md system-prompt injection (same as --no-agents-md /
-                                          --disable-plugin agents-md)
-    MINIMAL_AGENT_PLUGINS_REPO            Git URL for the extended plugins repo (fork/mirror)
-    MINIMAL_AGENT_GITHUB_TOKEN            Token to clone a private plugins repo (else GITHUB_TOKEN / GH_TOKEN / gh)
-    MINIMAL_AGENT_NO_HISTORY=1            Disable prompt history (history plugin)
-    MINIMAL_AGENT_FILE_LOCK_DISABLED=1    Disable cooperative file locking (file-lock plugin)
-    MINIMAL_AGENT_SUBAGENT_MODEL          Force a model for spawned workers (else inherit your model)
-    MINIMAL_AGENT_SUBAGENT_AUTO_TIER=1    Let specialists pick a per-role model (default off)
-    MINIMAL_AGENT_SYSTEM_*                Override system-prompt parts (see System prompt section) (_INSTRUCTIONS,
-                                          _IDENTITY, _LOOP_SAFETY, _TOOL_OUTPUT_CONVENTIONS, _SESSION_CONTEXT, _PROMPT,
-                                          also MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE; each also *_FILE for a path;
-                                          empty = omit)
-
-  Plugins (enable/disable precedence: CLI → env → config → manifest)
+  PLUGIN NOTES
+    Enable and disable precedence: CLI → env → config → manifest.
     List              minimal-agent plugins list
     One-shot disable  minimal-agent --disable-plugin web-search -p "…"
     Disable many      minimal-agent --disable-plugin web-search,memory
@@ -567,7 +430,9 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
                       session-info, sub-agents, tasks, usage, web-search
     Disabled          interleave-thinking, security, minimal-agent-cloud (opt in to use, see Opt in above)
 
-  Docs
+  LEARN MORE
+    Use minimal-agent help <command> for command help.
+    github.com/gastonmorixe/minimal-agent
     CHANGELOG.md                    CLI release notes, newest first (minimal-agent-cli repo)
     docs/tui/                       Terminal renderer architecture (compositor, live area, editor)
     core docs/CHANGELOG.md          Core release notes (minimal-agent-core repo)

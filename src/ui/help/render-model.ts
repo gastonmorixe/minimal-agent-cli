@@ -1,9 +1,10 @@
 /**
- * Render any {@link HelpModel} in the spec 8.5 layout (SPEC-HELP 8.5, 8.6,
- * plan M-9b, 4.3).
+ * Render any {@link HelpModel}: root help (SPEC-HELP 8.4, plan M-8d) and
+ * command help (8.5, plan M-9b, 4.3), as in the 8.6 mock.
  *
  * Layout:
- *   - Header: the title at indent 2, the text paragraphs at indent 4.
+ *   - Header: the title at indent 2, the text paragraphs at indent 4. In
+ *     root help the version is dim.
  *   - Each other section: a blank line, the title at indent 2, the text at
  *     indent 4, the rows at indent 4. A group title sits at indent 4 with
  *     its rows at indent 6.
@@ -11,9 +12,6 @@
  * All wrapping, alignment, the long-token rule, and the SGR close come from
  * the M-7 primitives in `render.ts`. The model is plain text (R-3). Color is
  * added here from `style.ts`, only when `policy.color` is true.
- *
- * Root help still renders through `legacy-root.ts` until M-8d. This
- * renderer accepts a root model too, so M-8d can switch to it.
  *
  * @module ui/help/render-model
  */
@@ -79,12 +77,22 @@ function text(line: string, indent: number, hang: number, ctx: Ctx): string[] {
 function styleText(line: string, id: string, color: boolean): string {
   if (!color) return line
   if (id === "usage") return styleTerm(line)
-  if (id === "global-flags") return c.dim(line)
+  if (id === "global-flags" || id === "plugin-notes" || id === "learn-more") return c.dim(line)
   return line
 }
 
-function headerLines(section: HelpModelSection, ctx: Ctx): string[] {
-  const title = ctx.color ? c.bold(c.cyan(section.title)) : section.title
+/**
+ * The header title. Root help (`minimal-agent v0.1.0`): the program name
+ * bold cyan, the version dim. Command help: the whole path bold cyan.
+ */
+function styleHeaderTitle(title: string, kind: HelpModel["kind"]): string {
+  const at = title.lastIndexOf(" ")
+  if (kind !== "root" || at < 0) return c.bold(c.cyan(title))
+  return `${c.bold(c.cyan(title.slice(0, at)))} ${c.dim(title.slice(at + 1))}`
+}
+
+function headerLines(section: HelpModelSection, kind: HelpModel["kind"], ctx: Ctx): string[] {
+  const title = ctx.color ? styleHeaderTitle(section.title, kind) : section.title
   return [
     ...text(title, TITLE_INDENT, BODY_INDENT, ctx),
     ...(section.text ?? []).flatMap((line) => text(line, BODY_INDENT, BODY_INDENT, ctx)),
@@ -120,7 +128,8 @@ export function renderModel(model: HelpModel, policy: RenderModelPolicy = {}): s
   const ctx: Ctx = { width, color: policy.color === true }
   const out: string[] = []
   for (const section of model.sections) {
-    const lines = section.id === "header" ? headerLines(section, ctx) : sectionLines(section, ctx)
+    const lines =
+      section.id === "header" ? headerLines(section, model.kind, ctx) : sectionLines(section, ctx)
     if (lines.length === 0) continue
     if (out.length > 0) out.push("")
     out.push(...lines)

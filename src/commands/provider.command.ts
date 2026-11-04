@@ -29,13 +29,13 @@ export const PROVIDER_COMMAND: CommandSpec = {
       args: [{ name: "method", summary: "Login method, for example oauth or api-key" }],
       // cli-args.ts consumes only these two flags after `provider <id> login`.
       flags: [LOGIN_NAME_FLAG, AUTH_METHOD_FLAG],
-      description: ["also: login [provider] [method], providers login <id> [method]"],
+      description: ["Also: login [provider] [method], providers login <id> [method]."],
     },
     {
       name: "logout",
       summary: "Clear one provider's credentials",
       usage: ["provider <id> logout"],
-      description: ["also: logout [provider], providers logout <id>"],
+      description: ["Also: logout [provider], providers logout <id>."],
     },
     {
       name: "models",

@@ -12,6 +12,6 @@ export const FLAGS_COMMAND: CommandSpec = {
   group: "local",
   summary: "Show beta feature flags",
   usage: ["flags [list]"],
-  description: ["aliases: --list-flags, --flags"],
+  description: ["Aliases: --list-flags, --flags."],
   commands: [{ name: "list", summary: "Show beta feature flags", usage: ["flags list"] }],
 }

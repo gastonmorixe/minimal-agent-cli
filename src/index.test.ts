@@ -101,7 +101,7 @@ describe("the minimal-agent bin", () => {
     const result = await runBin(["--help"])
     expect(result.exitCode).toBe(0)
     const plain = result.stdout.replace(/\u001b\[[0-9;]*m/g, "")
-    expect(plain).toContain("Start here")
+    expect(plain).toContain("  USAGE\n")
     expect(plain).toContain("--host-mode")
     expect(plain).not.toContain("scaffold")
   })
