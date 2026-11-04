@@ -241,8 +241,14 @@ describe("global flags", () => {
       s.fileFlag,
       s.noFlag,
     ])
+    // Not core override keys: the unsafe gate and the SPEC-ONESHOT append flags.
+    const notOverrideKeys = new Set([
+      "unsafe-system-prompt-overrides",
+      "append-system-prompt",
+      "append-system-prompt-file",
+    ])
     const registry = reg.globalFlags
-      .filter((f) => f.group === "system-prompt" && f.name !== "unsafe-system-prompt-overrides")
+      .filter((f) => f.group === "system-prompt" && !notOverrideKeys.has(f.name))
       .map((f) => `--${f.name}`)
     expect([...registry].sort()).toEqual([...parser].sort())
   })
@@ -283,6 +289,8 @@ describe("env", () => {
       "MINIMAL_AGENT_PLATFORM",
       "MINIMAL_AGENT_SESSION_ID",
       "VERBOSE",
+      // SPEC-ONESHOT, hidden until wired. The env row comes with the wiring.
+      "MINIMAL_AGENT_TEMPERATURE",
     ])
     const envNames = new Set(reg.env.map((e) => e.name))
     const bad = allFlags(reg)
