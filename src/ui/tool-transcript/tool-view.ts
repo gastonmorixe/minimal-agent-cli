@@ -92,6 +92,50 @@ interface CallState {
   didStream: boolean
 }
 
+/**
+ * Tool names that render a caller-supplied unified diff. `DiffViewerShowDiff`
+ * is the model-facing name (ma-diff-view-plugin). `ShowDiff` and `show_diff`
+ * are the plugin manifest's canonical name and its alias, which a resumed
+ * session or a muscle-memory call can still carry, so all three get the same
+ * host treatment as Edit.
+ */
+const SHOW_DIFF_TOOLS: ReadonlySet<string> = new Set([
+  "DiffViewerShowDiff",
+  "ShowDiff",
+  "show_diff",
+])
+
+/** True when the tool carries a raw unified `patch` input instead of a `diff`. */
+function isShowDiffTool(toolName: string): boolean {
+  return SHOW_DIFF_TOOLS.has(toolName)
+}
+
+/**
+ * Read the file path out of a unified diff, so the host can pick a syntax
+ * language for a `ShowDiff` patch. The plugin sends only `patch` and `title`;
+ * the path lives on the patch's `+++ b/<path>` line, with `--- a/<path>` as
+ * the fallback (a deleted or binary-side file). A plain, prefix-free path is
+ * accepted too, because `diff -u` output is not always git-shaped.
+ */
+function diffPatchPath(patch: string): string | undefined {
+  let removed: string | undefined
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("+++ ")) return stripDiffPathPrefix(line.slice(4))
+    if (line.startsWith("--- ") && removed === undefined) {
+      removed = stripDiffPathPrefix(line.slice(4))
+    }
+  }
+  return removed
+}
+
+/** Strip the `a/`/`b/` git prefix and any tab-separated metadata from a header path. */
+function stripDiffPathPrefix(raw: string): string | undefined {
+  // `diff -u` appends a tab and a timestamp to each header path.
+  const path = raw.split("\t")[0]?.trim()
+  if (!path || path === "/dev/null") return undefined
+  return path.replace(/^[ab]\//, "")
+}
+
 /** The title line of an Edit/Write diff: Write shows the file, Edit shows none. */
 function diffTitle(
   toolName: string,
@@ -235,9 +279,21 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
     // The plain diff is the body when no color or highlight applies.
     if (diff && display === undefined) display = plainDiff(diff.patch, title)
 
+    // `DiffViewerShowDiff` sends no `file_path` and no `outcome.diff`: its patch
+    // arrives in the input and its flat ANSI display from the plugin. The patch
+    // header is the only path signal, so resolve the language from it and give
+    // the call the same highlight treatment Edit gets.
+    const showDiff = isShowDiffTool(tool.name)
+    const showDiffPatch = showDiff ? tool.input.patch : undefined
+    const patch = typeof showDiffPatch === "string" ? showDiffPatch : diff ? diff.patch : undefined
+    const diffTitleText =
+      showDiff && typeof tool.input.title === "string" ? tool.input.title : title
+    const languagePath =
+      filePath ?? (typeof showDiffPatch === "string" ? diffPatchPath(showDiffPatch) : undefined)
+
     // Highlight presentation only. Detection is O(path + first line). A
     // timeout or failure returns null, so the plain render stays.
-    const language = filePath ? resolveFileLanguage({ path: filePath, content }) : null
+    const language = languagePath ? resolveFileLanguage({ path: languagePath, content }) : null
     const highlighter = opts.codeHighlighter ?? null
     let previewContent = content
     let contentHasAnsi = false
@@ -262,6 +318,14 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
         }
       } else if ((tool.name === "Edit" || tool.name === "Write") && diff) {
         const highlighted = await highlightUnifiedDiff(diff.patch, language, highlighter, title)
+        if (highlighted !== null) {
+          display = highlighted
+          diffStyled = true
+        }
+      } else if (showDiff && patch !== undefined) {
+        // The plugin's flat `renderUnifiedDiff` display stays as the fallback:
+        // only a non-null highlight replaces it.
+        const highlighted = await highlightUnifiedDiff(patch, language, highlighter, diffTitleText)
         if (highlighted !== null) {
           display = highlighted
           diffStyled = true

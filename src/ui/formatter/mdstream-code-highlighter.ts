@@ -211,11 +211,14 @@ export class MdstreamCodeHighlighter implements CodeHighlighter {
       // permanently disable the sequential client.
       if (typeof response.ansi !== "string") return null
       // Native unified-diff output is embedded directly beside host-owned
-      // gutters. Reject a server response with an unterminated SGR line so a
-      // background wash cannot bleed into the next frame row. Raw highlighting
-      // remains compatible with v1 servers; this guard is specific to protocol
-      // v2 unified-diff mode and its advertised balanced-line contract.
-      if (mode === "unified-diff" && !hasBalancedAnsiLines(response.ansi)) return null
+      // gutters, so a background still set at the end of a row tints the next
+      // frame row's gutter glyph. See the guard contract above
+      // `lineHasNoBleedingBackground`: rows may leave a row-scoped wash open
+      // (the consumer closes it), but a row that opens a background without
+      // resetting anywhere, or an SGR this parser cannot walk, is rejected.
+      // Raw highlighting stays compatible with v1 servers; this guard is
+      // specific to protocol v2 unified-diff mode.
+      if (mode === "unified-diff" && !hasNoBleedingBackground(response.ansi)) return null
       return response.ansi
     } catch {
       this.disable()
@@ -369,17 +372,142 @@ function isHighlightResponse(value: HighlightResponse | null): value is Highligh
   )
 }
 
-function hasBalancedAnsiLines(value: string): boolean {
+/**
+ * True when no line leaves a background wash open in a way the caller cannot
+ * repair by closing the row at end of line.
+ *
+ * ACCEPT RULE (chosen deliberately): a line is accepted when it either CLOSES
+ * its background (SGR 0 or 49) or leaves it open while also carrying its own
+ * reset somewhere on the line. The second arm is the "caller can safely close
+ * it" case: real mdstream v0.3.6 bg-wash rows reset after the `+`/`-` marker
+ * and then leave the row background set to end of line
+ * (`\x1b[38;2;135;255;0m+\x1b[0m\x1b[48;2;135;255;0m\x1b[38;2;...`), and the
+ * rendering side appends an `SGR 49` at end of line so the wash still reaches
+ * the last glyph while the next frame row's gutter starts on the default
+ * background.
+ *
+ * What is rejected: a line that opens a background with no reset anywhere on
+ * it. Nothing bounds that wash, so appending a close could break a deliberate
+ * multi-line background span. Fail closed instead.
+ *
+ * This replaces the earlier rule that treated "background open, then a
+ * foreground escape" as safe. That accepted exactly the leaking shape: the next
+ * row's gutter is painted before any reset reaches the terminal. A foreground
+ * escape says nothing about the background, so it no longer influences this
+ * decision.
+ */
+function hasNoBleedingBackground(value: string): boolean {
   if (!value.includes("\x1b[")) return true
-  const lines = value.split(/(?<=\n)/)
-  return lines.every((line) => {
-    const content = line.endsWith("\r\n")
-      ? line.slice(0, -2)
-      : line.endsWith("\n")
-        ? line.slice(0, -1)
-        : line
-    return content.length === 0 || !content.includes("\x1b[") || content.endsWith("\x1b[0m")
+  return value.split("\n").every((line) => lineHasNoBleedingBackground(line))
+}
+
+/** SGR state one line leaves behind. */
+interface SgrLineState {
+  /** A background colour is still set at the end of the line. */
+  backgroundOpen: boolean
+  /** The line carries at least one reset (SGR 0 or background-only 49). */
+  sawReset: boolean
+}
+
+/**
+ * SGR parameter numbers in one sequence. Both `;` and `:` separate parameters,
+ * because terminals accept the colon sub-parameter form
+ * (`ESC[48:2::255:95:215m`) and a parser that ignores it silently misses a
+ * whole wash. An empty body means reset (`0`).
+ */
+function sgrParams(body: string): number[] {
+  if (body.length === 0) return [0]
+  return body.split(/[;:]/).map((part) => {
+    if (part.length === 0) return 0
+    const value = Number(part)
+    return Number.isFinite(value) ? value : 0
   })
+}
+
+/** Walk one SGR sequence, returning the state it leaves behind. */
+function applySgr(params: number[], state: SgrLineState): SgrLineState {
+  let backgroundOpen = state.backgroundOpen
+  let sawReset = state.sawReset
+  for (let index = 0; index < params.length; index++) {
+    const param = params[index]!
+    if (param === 0 || param === 49) {
+      backgroundOpen = false
+      sawReset = true
+      continue
+    }
+    if (param === 48) {
+      // 48;5;n or 48;2;r;g;b. A bare 48 with no mode is ignored by terminals,
+      // so it must not count as an open background.
+      const mode = params[index + 1]
+      if (mode === 2) {
+        index += 4
+        backgroundOpen = true
+      } else if (mode === 5) {
+        index += 2
+        backgroundOpen = true
+      }
+      continue
+    }
+    if (param === 38) {
+      const mode = params[index + 1]
+      index += mode === 2 ? 4 : mode === 5 ? 2 : 0
+      continue
+    }
+    if ((param >= 40 && param <= 47) || (param >= 100 && param <= 107)) {
+      backgroundOpen = true
+    }
+  }
+  return { backgroundOpen, sawReset }
+}
+
+/**
+ * Walk every CSI sequence on one line. Returns null when the line carries an
+ * escape this parser cannot account for: an unterminated `ESC[`, or an `SGR`
+ * whose body is not pure parameters.
+ */
+function scanSgr(line: string): SgrLineState | null {
+  let state: SgrLineState = { backgroundOpen: false, sawReset: false }
+  let index = line.indexOf("\x1b[")
+  while (index !== -1) {
+    // A CSI sequence ends on its final byte, 0x40..0x7E.
+    let cursor = index + 2
+    while (cursor < line.length) {
+      const code = line.charCodeAt(cursor)
+      if (code >= 0x40 && code <= 0x7e) break
+      cursor++
+    }
+    if (cursor >= line.length) return null
+    const final = line[cursor]!
+    const body = line.slice(index + 2, cursor)
+    if (final === "m") {
+      if (!/^[0-9;:]*$/.test(body)) return null
+      state = applySgr(sgrParams(body), state)
+    }
+    index = line.indexOf("\x1b[", cursor + 1)
+  }
+  return state
+}
+
+function lineHasNoBleedingBackground(line: string): boolean {
+  const content = line.endsWith("\r") ? line.slice(0, -1) : line
+  if (!content.includes("\x1b[")) return true
+  const state = scanSgr(content)
+  // Unparsable input is rejected outright. A wash set through a form this
+  // parser cannot tokenize would otherwise pass the guard invisibly.
+  if (state === null) return false
+  return !state.backgroundOpen || state.sawReset
+}
+
+/**
+ * True when a rendered line ends with a background still set, so the caller
+ * must close it with `SGR 49` before another row is drawn. Unparsable input
+ * reports true: appending a background-only reset is always harmless, while
+ * leaving a real wash open tints the next row's gutter.
+ */
+export function lineEndsWithOpenBackground(line: string): boolean {
+  const content = line.endsWith("\r") ? line.slice(0, -1) : line
+  if (!content.includes("\x1b[")) return false
+  return scanSgr(content)?.backgroundOpen ?? true
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
