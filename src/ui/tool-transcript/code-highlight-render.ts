@@ -1,12 +1,34 @@
 import { ANSI_CODES } from "../../terminal-kit/ansi.ts"
 import { PALETTE } from "../../terminal-kit/palette.ts"
 
-import type { CodeHighlighter, UnifiedDiffColors } from "../formatter/mdstream-code-highlighter.ts"
+import {
+  type CodeHighlighter,
+  lineEndsWithOpenBackground,
+  type UnifiedDiffColors,
+} from "../formatter/mdstream-code-highlighter.ts"
 import { c } from "../style/ansi.ts"
 
 const { BOLD, RESET } = ANSI_CODES
 
-/** Highlight a Read result while leaving its cat-n line-number column untouched. */
+/**
+ * Background-only reset (`SGR 49`). Clears the wash without touching the
+ * foreground, so a washed row can be closed at the end of its own line and the
+ * next transcript row's gutter starts on the terminal's default background.
+ */
+const BACKGROUND_RESET = "\x1b[49m"
+
+/**
+ * Highlight a Read result while leaving its cat-n line-number column untouched.
+ *
+ * Each Read row is also a `gutter + body` frame row, and the raw highlight mode
+ * carries NO bleeding-background guard (the guard in mdstream-code-highlighter.ts
+ * is gated on `mode === "unified-diff"`). A payload that ended on an open wash
+ * would therefore tint the next row's gutter. Real mdstream v0.3.6 raw output
+ * closes every row (measured CLEAN 8/8 by
+ * `research/2026-11-05-code-highlight-render/recheck-read-path.ts`), so this is
+ * latent, not a live bleed. The same end-of-line close the native diff path uses
+ * is applied here so the invariant does not depend on the highlighter's manners.
+ */
 export async function highlightReadBody(
   numberedBody: string,
   language: string,
@@ -22,7 +44,8 @@ export async function highlightReadBody(
   const highlighted = splitLogicalLines(ansi)
   if (highlighted.length !== parsed.length) return null
 
-  return highlighted.map((line, index) => `${c.dim(parsed[index]![1]!)}\t${line}`).join("\n")
+  const body = highlighted.map((line, index) => `${c.dim(parsed[index]![1]!)}\t${line}`).join("\n")
+  return closeOpenBackgrounds(body)
 }
 
 /**
@@ -45,7 +68,12 @@ export async function highlightUnifiedDiff(
         colors: palette.colors,
       })
     : null
-  if (native !== null) return withOptionalTitle(native, title)
+  if (native !== null) {
+    // Order matters: darken the wash FIRST, then close it. The close only
+    // inspects the end of each row and appends `SGR 49`, so running it last
+    // keeps the background-only reset the final byte on a washed row.
+    return withOptionalTitle(closeOpenBackgrounds(darkenNativeWash(native, palette.colors)), title)
+  }
 
   const lines = patch.split("\n")
   const oldPayload: string[] = []
@@ -75,31 +103,76 @@ export async function highlightUnifiedDiff(
   let newIndex = 0
   const out: string[] = []
   if (title) {
-    out.push(`${BOLD}${title}${RESET}`)
-    out.push(`\x1b[2m${"─".repeat(Math.min(title.length + 4, 64))}${RESET}`)
+    out.push(`${RESET}${BOLD}${title}${RESET}`)
+    out.push(`${RESET}\x1b[2m${"─".repeat(Math.min(title.length + 4, 64))}${RESET}`)
   }
+  // Every row is joined with "\n", and a newline does not reset SGR. A changed
+  // row drives its wash from after the marker reset to the end of the row, so
+  // trailing padding inherits it, and every other row starts with a full RESET
+  // so an open wash can never bleed into it.
   for (const line of lines) {
-    if (isFileHeader(line)) out.push(`${BOLD}${line}${RESET}`)
-    else if (line.startsWith("@@")) out.push(`${palette.hunk}${line}${RESET}`)
+    if (isFileHeader(line)) out.push(`${RESET}${BOLD}${line}${RESET}`)
+    else if (line.startsWith("@@")) out.push(`${RESET}${palette.hunk}${line}${RESET}`)
     else if (line.startsWith("-")) {
       const payload = reassertBackground(oldLines[oldIndex++] ?? "", palette.removalWash)
       out.push(
-        `${palette.removalWash}${palette.removal}-${RESET}${palette.removalWash}${payload}${RESET}`,
+        `${palette.removalWash}${palette.removal}-${RESET}${palette.removalWash}${payload}${BACKGROUND_RESET}`,
       )
     } else if (line.startsWith("+")) {
       const payload = reassertBackground(newLines[newIndex++] ?? "", palette.additionWash)
       out.push(
-        `${palette.additionWash}${palette.addition}+${RESET}${palette.additionWash}${payload}${RESET}`,
+        `${palette.additionWash}${palette.addition}+${RESET}${palette.additionWash}${payload}${BACKGROUND_RESET}`,
       )
     } else if (line.startsWith(" ")) {
       const payload = newLines[newIndex++] ?? ""
       oldIndex++
-      out.push(` ${payload}`)
+      out.push(closeRowBackground(`${RESET} ${payload}`))
     } else {
-      out.push(line)
+      out.push(closeRowBackground(`${RESET}${line}`))
     }
   }
+  // The host draws each transcript row as `gutter + body` (formatToolPreview),
+  // and it never resets before a gutter. A wash still ACTIVE at the END of a
+  // changed row therefore tints the next row's two gutter spaces plus its `│`
+  // or `╰` glyph. Measured with
+  // `bun run research/2026-11-05-code-highlight-render/probe-native.ts`:
+  // the `+const a = 2` row ends on a foreground colour with its background
+  // still set, and the `╰` closer below it inherits that wash. Gating a single
+  // close on the LAST row is not enough, because that patch's last row can be
+  // a context row, so every changed row is closed in its own branch above.
+  //
+  // The close is a BACKGROUND-ONLY reset (`SGR 49`), not a full reset. The wash
+  // must still run to the last glyph of the row (asserted by
+  // code-highlight-diff-wash.test.ts), while the background must be back to
+  // default before the caller prepends the next row's gutter.
   return out.join("\n")
+}
+
+/**
+ * Close a background that a FALLBACK row's highlighter payload leaves open at
+ * end of line.
+ *
+ * The context and pass-through branches only PREFIX their row with a full
+ * `RESET`. That reset reaches the terminal AFTER the caller has already painted
+ * the row's own gutter, so a payload ending on an open wash tints the `│`/`╰`
+ * of the row BELOW. The `-`/`+` branches close themselves with `BACKGROUND_RESET`
+ * for the same reason.
+ *
+ * CONDITIONAL close, not unconditional: `lineEndsWithOpenBackground` gates it, so
+ * a row that already ends closed keeps byte-identical output. That matters here
+ * because these branches also carry rows the highlighter never touched (patch
+ * rows the compositor passes through verbatim), and an appended `SGR 49` there
+ * would be a silent edit to bytes that are not ours to rewrite. An `SGR 49` on a
+ * row with no background is visually a no-op, so the two choices are equal on
+ * screen and the conditional one is smaller on the wire.
+ *
+ * Measured before this close with
+ * `bun run research/2026-11-05-code-highlight-render/recheck-fallback-ctx.ts`:
+ * a context row whose tokens end on an open `48;2` left the closer `╰` painted
+ * with that wash, and so did an empty `+` payload row.
+ */
+function closeRowBackground(row: string): string {
+  return lineEndsWithOpenBackground(row) ? `${row}${BACKGROUND_RESET}` : row
 }
 
 function splitLogicalLines(value: string): string[] {
@@ -116,9 +189,89 @@ function isFileHeader(line: string): boolean {
   return line.startsWith("---") || line.startsWith("+++")
 }
 
+/**
+ * Close a row-scoped background wash at END OF LINE, after the payload.
+ *
+ * mdstream's native bg-wash rows keep their background set to the end of the
+ * row on purpose, so trailing padding inherits the wash. A newline does not
+ * reset SGR, so that open wash would tint the next transcript row's gutter.
+ * Appending `SGR 49` here keeps the wash covering the last glyph AND returns
+ * the background to default before the caller prepends the next row's gutter.
+ *
+ * Rows that do not open a background (file headers, hunk headers) are left
+ * byte-identical.
+ */
+function closeOpenBackgrounds(body: string): string {
+  return body
+    .split("\n")
+    .map((line) => (lineEndsWithOpenBackground(line) ? `${line}${BACKGROUND_RESET}` : line))
+    .join("\n")
+}
+
+/** Truecolor background, `;` parameter form: `ESC[48;2;r;g;bm`. */
+const TRUE_COLOR_BACKGROUND = /\x1b\[48;2;(\d+);(\d+);(\d+)m/g
+/** Truecolor background, colon sub-parameter form: `ESC[48:2::r:g:bm`. */
+const TRUE_COLOR_BACKGROUND_COLON = /\x1b\[48:2::(\d+):(\d+):(\d+)m/g
+
+/**
+ * Replace mdstream's FULL-OPACITY row wash with the dark tint the local
+ * fallback already paints.
+ *
+ * mdstream's bg-wash mode reuses the raw accent colour as the row background,
+ * so a lime addition arrives as `38;2;135;255;0m+` for the marker (foreground,
+ * correct) followed by `48;2;135;255;0m` for the whole row (background,
+ * blinding). Measured with
+ * `bun run research/2026-11-05-code-highlight-render/probe-wash-colors.ts`:
+ * `#ff00af` and `#87ff00` at full opacity behind every glyph of the row.
+ *
+ * Two rules keep this narrow:
+ *
+ * 1. Only a background whose NUMERIC r/g/b triple equals one of the two accents
+ *    we hand mdstream (`colors.deleted`, `colors.inserted`) is rewritten. A
+ *    themed code background, or any future non-wash background, passes through
+ *    byte-identical.
+ * 2. The replacement tint is `darkenHex` applied to that accent, i.e. the exact
+ *    same `Math.floor(channel * 0.22)` math and therefore the exact same escape
+ *    the fallback builds in `resolveDiffPalette()`. The two paths converge by
+ *    construction instead of by two copies of a constant.
+ *
+ * Marker foregrounds are untouched: this only ever matches `48;2`, never `38;2`.
+ */
+function darkenNativeWash(body: string, colors: UnifiedDiffColors): string {
+  const tints = new Map<string, string>()
+  for (const accent of [colors.deleted, colors.inserted]) {
+    if (accent === undefined) continue
+    const triple = rgbTriple(accent)
+    const tinted = rgbTriple(darkenHex(accent, accent))
+    if (triple === null || tinted === null || triple === tinted) continue
+    tints.set(triple, tinted)
+  }
+  if (tints.size === 0) return body
+
+  const rewrite = (colon: boolean) => (whole: string, red: string, green: string, blue: string) => {
+    const tint = tints.get(`${Number(red)};${Number(green)};${Number(blue)}`)
+    if (tint === undefined) return whole
+    const [r, g, b] = tint.split(";")
+    return colon ? `\x1b[48:2::${r}:${g}:${b}m` : `\x1b[48;2;${r};${g};${b}m`
+  }
+
+  return body
+    .replace(TRUE_COLOR_BACKGROUND, rewrite(false))
+    .replace(TRUE_COLOR_BACKGROUND_COLON, rewrite(true))
+}
+
+/** `#rrggbb` to its `r;g;b` decimal triple, for numeric (not string) compare. */
+function rgbTriple(hex: string): string | null {
+  const match = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
+  if (!match) return null
+  return [match[1]!, match[2]!, match[3]!].map((part) => Number.parseInt(part, 16)).join(";")
+}
+
 function withOptionalTitle(body: string, title: string | undefined): string {
   if (!title) return body
-  return `${BOLD}${title}${RESET}\n\x1b[2m${"─".repeat(Math.min(title.length + 4, 64))}${RESET}\n${body}`
+  // Title rows start with a full RESET for the same reason the compositor
+  // fallback rows do: an unknown SGR state from the caller must not tint them.
+  return `${RESET}${BOLD}${title}${RESET}\n${RESET}\x1b[2m${"─".repeat(Math.min(title.length + 4, 64))}${RESET}\n${body}`
 }
 
 function resolveDiffPalette(): {
@@ -146,9 +299,11 @@ function resolveDiffPalette(): {
     hunk,
     removalWash: backgroundEscape(darkenHex(deleted, "#59163d")),
     additionWash: backgroundEscape(darkenHex(inserted, "#2f5900")),
-    // mdstream owns wash strength in bg-wash mode: it keeps these bright
-    // semantic colors on the +/- marker and derives the same 22% background
-    // tint used by the local compositor fallback.
+    // mdstream owns wash strength in bg-wash mode: it reuses the raw accent
+    // colour at FULL opacity as the row background, so #ff5fd7 arrives as
+    // `48;2;255;95;215` (measured with `mdstream --highlight-server`). It keeps
+    // these bright semantic colours on the +/- marker. The local compositor
+    // fallback below keeps its own darker tint instead.
     colors: { deleted, inserted },
   }
 }
