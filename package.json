@@ -45,7 +45,7 @@
     "@biomejs/biome": "2.5.15",
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
-    "@minimal-agent/config": "git+ssh://git@github.com/gastonmorixe/minimal-agent-config.git#fbf1bbc543f284e376fab55dcbf365a0bdb12a69",
+    "@minimal-agent/config": "git+ssh://git@github.com/gastonmorixe/minimal-agent-config.git#a63fa9e12ee321f5e144eae683e9df82b0b76a91",
     "bun-types": "^1.4.3",
     "eslint-plugin-jsdoc": "^63.3.3",
     "eslint-plugin-tsdoc": "^0.5.4",
