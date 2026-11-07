@@ -14,7 +14,7 @@
     "minimal-agent": "src/index.ts"
   },
   "engines": {
-    "bun": ">=1.4.2",
+    "bun": ">=1.4.4",
     "node": ">=22.18.0"
   },
   "dependencies": {
@@ -42,16 +42,16 @@
     "commitlint:last": "commitlint --last --verbose"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.15",
-    "@commitlint/cli": "^21.2.1",
-    "@commitlint/config-conventional": "^21.2.0",
-    "@minimal-agent/config": "git+ssh://git@github.com/gastonmorixe/minimal-agent-config.git#a63fa9e12ee321f5e144eae683e9df82b0b76a91",
-    "bun-types": "^1.4.3",
-    "eslint-plugin-jsdoc": "^63.3.3",
+    "@biomejs/biome": "2.6.6",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@minimal-agent/config": "git+ssh://git@github.com/gastonmorixe/minimal-agent-config.git#ee512bb0d8c47236acd0687badadd797a1ec8746",
+    "bun-types": "^1.4.4",
+    "eslint-plugin-jsdoc": "^65.4.5",
     "eslint-plugin-tsdoc": "^0.5.4",
     "husky": "^9.1.7",
-    "oxlint": "1.88.0",
-    "oxlint-tsgolint": "7.0.2004",
+    "oxlint": "1.92.0",
+    "oxlint-tsgolint": "7.0.2006",
     "typescript": "7.0.2"
   },
   "overrides": {
