@@ -40,6 +40,13 @@ bun run check
 
 The gate runs TypeScript, oxlint, Biome format/import checks, then Bun tests. Keep tests colocated as `src/**/*.test.ts`.
 
+The three config files extend `@minimal-agent/config`:
+
+- `biome.json` extends `@minimal-agent/config/biome` and keeps `$schema` and `files.includes`. It also keeps a local `assist` block, because this repo uses the default `organizeImports` groups while core and plugins use a custom order. Write that block in OBJECT form. The shorthand `"organizeImports": "on"` does not override the base groups.
+- `.oxlintrc.json` extends `./node_modules/@minimal-agent/config/oxlintrc.json` and keeps `categories`, `jsPlugins`, `overrides`, the jsdoc rules and `max-lines`. A bare package name in `extends` fails to parse.
+- `tsconfig.json` extends `@minimal-agent/config/tsconfig.json` and keeps `include` only.
+- `tsconfig.scripts.json` extends the local `tsconfig.json` for `scripts/compile.ts`.
+
 The product runs on Bun, but architecture checks currently execute TypeScript source under Node using built-in type stripping. Keep Node at 22.18.0 or newer, or set `NODE` to a compatible executable. The checker imports the explicitly unstable `typescript/unstable/ast` and `typescript/unstable/sync` surfaces, so TypeScript is exact-pinned to 7.0.2. Treat TypeScript or Node baseline updates as coordinated checker changes.
 
 ## Git and release posture
