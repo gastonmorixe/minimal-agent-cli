@@ -103,7 +103,7 @@ import {
 } from "./startup/entry-exit.ts"
 import { readEmbeddedPackageVersion } from "./startup/help.ts"
 import { withHostPorts } from "./startup/host-ports.ts"
-import { computePluginRoots, DEFAULT_PLUGINS_REPO } from "./startup/plugin-roots.ts"
+import * as roots from "./startup/plugin-roots.ts"
 import { resolveStartupProviderState, startProviderWarmups } from "./startup/provider-boot.ts"
 import {
   modelHidesReasoning,
@@ -322,16 +322,19 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   //   - silent (no spinner, no startup row) because the tree hasn't opened yet.
   //     A startup row is printed later, after the tree opens, if the clone
   //     actually ran.
+  //   - install mode only. In dev mode (a plugins checkout with packages next
+  //     to the CLI, or MINIMAL_AGENT_PLUGIN_SIBLINGS) the checkout is the only
+  //     first-party copy, so there is no clone and no user tier.
+  const pluginMode = roots.resolvePluginMode(providerEmbeddedDir, env)
   let pluginSyncResult: Awaited<ReturnType<typeof bootstrapUserPlugins>> | undefined
-  if (userDir && SHOW_HEADER) {
-    const pluginSyncEnabled =
-      env.MINIMAL_AGENT_NO_PLUGIN_SYNC === "1" ? false : (userConfig.pluginSync ?? true)
-    const pluginsRepo =
-      env.MINIMAL_AGENT_PLUGINS_REPO?.trim() || userConfig.pluginsRepo || DEFAULT_PLUGINS_REPO
+  if (userDir && SHOW_HEADER && pluginMode.kind === "install") {
     pluginSyncResult = await bootstrapUserPlugins({
       targetDir: join(userDir, "plugins"),
-      enabled: pluginSyncEnabled,
-      repoUrl: pluginsRepo,
+      enabled: env.MINIMAL_AGENT_NO_PLUGIN_SYNC === "1" ? false : (userConfig.pluginSync ?? true),
+      repoUrl:
+        env.MINIMAL_AGENT_PLUGINS_REPO?.trim() ||
+        userConfig.pluginsRepo ||
+        roots.DEFAULT_PLUGINS_REPO,
       // Silent: no spinner or startup row yet — the tree hasn't opened.
       showSpinner: false,
       // Core labels are plain (S41). The CLI styles the startup row label.
@@ -341,14 +344,14 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
 
   // Every plugin root, computed here (S40): core knows no default plugin
   // location. See `startup/plugin-roots.ts`.
-  const pluginRoots = computePluginRoots(providerEmbeddedDir, env, cwd, userDir)
+  const pluginRoots = roots.computePluginRoots(providerEmbeddedDir, env, cwd, userDir, pluginMode)
 
   // Provider plugins (provider.json) live in the plugins repo. On an
   // installed box they are git-cloned into `<userDir>/plugins` (just above).
   // Discover from the embedded roots (incl. the dev checkout) AND the user
-  // clone root, so a cloned provider is found. Earlier roots win on id
-  // collision. Without the user root a fresh install finds zero providers
-  // → `0 models available` and a fatal boot.
+  // clone root (install mode only), so a cloned provider is found. Without
+  // the user root a fresh install finds zero providers → `0 models
+  // available` and a fatal boot.
   await bootProviderDiscovery({ roots: providerRootsOf(pluginRoots) })
 
   // Dispatch one-shot subcommands (dump/sessions/usage/list-*/login/logout/
@@ -452,6 +455,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       diag.notice("plugin-sync", pluginSyncResult.detail ?? pluginSyncResult.label)
     }
   }
+  roots.reportPluginRoots(pluginMode, env, cwd, diag)
 
   // Resolve model/provider/auth once, up front. Everything that is
   // provider-specific (startup probe, quota) keys off this so a session
@@ -533,7 +537,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // Terminal viewport row (cols × rows) for the compositor / mdstream.
   printTerminalViewportRow(env, process.stdout)
 
-  // Load Plugins from ~/.agents/plugins and <cwd>/plugins.
+  // Load plugins from the roots in `pluginRoots` (see startup/plugin-roots.ts).
   // Core tool names must always win over plugin names.
   const coreToolNames = new Set(TOOL_DEFINITIONS.map((t) => t.name))
   // `userDir` (the per-user agent home) is resolved up front, before provider

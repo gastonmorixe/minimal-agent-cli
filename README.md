@@ -66,7 +66,9 @@ then, in order:
 1. **Signs you in.** OAuth via the manual-paste PKCE flow against the provider
    you chose. Credentials are written to `~/.minimal-agent/auth.jsonc`.
 2. **Fetches `mdstream`** (the Markdown renderer) into `~/.minimal-agent/bin/`.
-3. **Fetches the extended plugins** into `~/.minimal-agent/plugins/`.
+3. **Fetches the extended plugins** into `~/.minimal-agent/plugins/`. A
+   source checkout with a `minimal-agent-plugins/` dir next to it skips this
+   step (dev mode).
 
 Every step is best-effort and degrades cleanly: no network, no `git`, or a
 declined sign-in just means fewer features, never a crash. After the first run
@@ -286,6 +288,20 @@ The first-party plugins (providers, modes, tools, and UI extras) live in
 `~/.minimal-agent/plugins/` on the first interactive run. The clone is one-shot:
 once that directory has plugins it is never auto-pulled, so you stay in control.
 Update them yourself with `git -C ~/.minimal-agent/plugins pull`.
+
+The CLI reads 3 plugin roots. Precedence: project, then user, then embedded.
+
+- **Project:** `<cwd>/.agents/minimal-agent/plugins/`.
+- **User:** `~/.minimal-agent/plugins/`, the clone above (install mode only).
+- **Embedded:** `<cli>/plugins/`, plus the `../minimal-agent-plugins` checkout
+  next to the CLI, or the dirs in `MINIMAL_AGENT_PLUGIN_SIBLINGS`
+  (colon separated).
+
+Dev mode: when a checkout dir holds at least one plugin package (a subdir with
+`manifest.json` or `provider.json`), the user tier is empty and the CLI does
+not clone. The CLI does not read `~/.agents/plugins/` or
+`<cwd>/.agents/plugins/`. If one of them holds plugin packages, the CLI prints
+an "ignored legacy plugin root" warning and moves nothing.
 
 That repo also ships, among others: `Fetch` (JS-rendering web fetch),
 `Skill` ([Agent Skills][as] support), `Speak` (text-to-speech), background jobs,

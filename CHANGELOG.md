@@ -80,6 +80,17 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Changed
 
+- 2026-11-11: Plugin roots are now 3 tiers: project
+  (`<cwd>/.agents/minimal-agent/plugins`), user (`~/.minimal-agent/plugins`),
+  and embedded (`<cli>/plugins` plus the `../minimal-agent-plugins` checkout or
+  the `MINIMAL_AGENT_PLUGIN_SIBLINGS` dirs). Precedence: project, user,
+  embedded. The home tier `~/.agents/plugins` is removed, and the CLI no
+  longer reads `<cwd>/.agents/plugins`. If one of these old roots holds plugin
+  packages, the CLI prints an "ignored legacy plugin root" warning (scrollback
+  and file log) and moves nothing. When a checkout holds a plugin package (dev
+  mode), the user tier is empty and the CLI does not clone the plugins repo.
+  Install mode keeps the first-run clone (`pluginSync`,
+  `MINIMAL_AGENT_NO_PLUGIN_SYNC=1`).
 - 2026-11-04: root `--help` uses the new layout: USAGE, EXAMPLES,
   COMMANDS, FLAGS, ENVIRONMENT, PLUGIN NOTES, LEARN MORE. COMMANDS lists
   each top-level command with its summary, under its group. FLAGS lists
