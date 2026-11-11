@@ -96,19 +96,29 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       --tools <names>   Advertise only these tools, comma-separated
       --no-tools        Advertise no tools, for pure Q&A
     Plugins
-      --disable-plugin <id>        Skip a plugin for this run, repeatable (env:
-                                   MINIMAL_AGENT_DISABLE_PLUGINS)
-      --enable-plugin <id>         Force-enable a plugin for this run,
-                                   repeatable (env:
-                                   MINIMAL_AGENT_ENABLE_PLUGINS)
-      --no-agents-md, --no-agents  Skip AGENTS.md injection, same as
-                                   --disable-plugin agents-md (env:
-                                   MINIMAL_AGENT_NO_AGENTS_MD)
-      --platform <os>              Override the platform for plugin and tool
-                                   gating (one of: macos, linux, windows, all;
-                                   env: MINIMAL_AGENT_PLATFORM)
-      --host-mode <id>             Hand the process to a plugin host mode, for
-                                   example acp
+      --disable-plugin <id>         Skip a plugin for this run, repeatable (env:
+                                    MINIMAL_AGENT_DISABLE_PLUGINS)
+      --enable-plugin <id>          Force-enable a plugin for this run,
+                                    repeatable (env:
+                                    MINIMAL_AGENT_ENABLE_PLUGINS)
+      --no-agents-md, --no-agents   Skip AGENTS.md injection, same as
+                                    --disable-plugin agents-md (env:
+                                    MINIMAL_AGENT_NO_AGENTS_MD)
+      --dry-run                     Build the request, print it as JSON, do not
+                                    send it (same as --enable-plugin dry-run)
+                                    (env: MINIMAL_AGENT_DRY_RUN)
+      --no-plugin-prompts           Suppress all plugin prompt text (env:
+                                    MINIMAL_AGENT_PLUGIN_PROMPTS)
+      --plugin-prompts              Keep all plugin prompt text on, per id use
+                                    --plugin-prompts-for
+      --no-plugin-prompts-for <id>  Suppress the prompt text of these plugins
+                                    only
+      --plugin-prompts-for <id>     Keep the prompt text of these plugins on
+      --platform <os>               Override the platform for plugin and tool
+                                    gating (one of: macos, linux, windows, all;
+                                    env: MINIMAL_AGENT_PLATFORM)
+      --host-mode <id>              Hand the process to a plugin host mode, for
+                                    example acp
     Session
       --session-id <uuid>  Pin the session id of this run (env:
                            MINIMAL_AGENT_SESSION_ID)
@@ -222,6 +232,10 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
                                         this run (flag: --enable-plugin)
     MINIMAL_AGENT_NO_AGENTS_MD          Skip AGENTS.md system-prompt injection
                                         (set to 1; flag: --no-agents-md)
+    MINIMAL_AGENT_PLUGIN_PROMPTS        Suppress all plugin prompt text (set to
+                                        1; flag: --no-plugin-prompts)
+    MINIMAL_AGENT_DRY_RUN               Build the request, print it as JSON, do
+                                        not send it (set to 1)
     MINIMAL_AGENT_PLUGINS_REPO          Git URL of the extended plugins repo,
                                         for a fork or mirror
     MINIMAL_AGENT_GITHUB_TOKEN          Token to clone a private plugins repo,
@@ -346,13 +360,19 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       --tools <names>   Advertise only these tools, comma-separated
       --no-tools        Advertise no tools, for pure Q&A
     Plugins
-      --disable-plugin <id>        Skip a plugin for this run, repeatable (env: MINIMAL_AGENT_DISABLE_PLUGINS)
-      --enable-plugin <id>         Force-enable a plugin for this run, repeatable (env: MINIMAL_AGENT_ENABLE_PLUGINS)
-      --no-agents-md, --no-agents  Skip AGENTS.md injection, same as --disable-plugin agents-md (env:
-                                   MINIMAL_AGENT_NO_AGENTS_MD)
-      --platform <os>              Override the platform for plugin and tool gating (one of: macos, linux, windows, all;
-                                   env: MINIMAL_AGENT_PLATFORM)
-      --host-mode <id>             Hand the process to a plugin host mode, for example acp
+      --disable-plugin <id>         Skip a plugin for this run, repeatable (env: MINIMAL_AGENT_DISABLE_PLUGINS)
+      --enable-plugin <id>          Force-enable a plugin for this run, repeatable (env: MINIMAL_AGENT_ENABLE_PLUGINS)
+      --no-agents-md, --no-agents   Skip AGENTS.md injection, same as --disable-plugin agents-md (env:
+                                    MINIMAL_AGENT_NO_AGENTS_MD)
+      --dry-run                     Build the request, print it as JSON, do not send it (same as --enable-plugin
+                                    dry-run) (env: MINIMAL_AGENT_DRY_RUN)
+      --no-plugin-prompts           Suppress all plugin prompt text (env: MINIMAL_AGENT_PLUGIN_PROMPTS)
+      --plugin-prompts              Keep all plugin prompt text on, per id use --plugin-prompts-for
+      --no-plugin-prompts-for <id>  Suppress the prompt text of these plugins only
+      --plugin-prompts-for <id>     Keep the prompt text of these plugins on
+      --platform <os>               Override the platform for plugin and tool gating (one of: macos, linux, windows,
+                                    all; env: MINIMAL_AGENT_PLATFORM)
+      --host-mode <id>              Hand the process to a plugin host mode, for example acp
     Session
       --session-id <uuid>  Pin the session id of this run (env: MINIMAL_AGENT_SESSION_ID)
     System prompt (override or omit individual system-prompt parts)
@@ -423,6 +443,8 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
     MINIMAL_AGENT_DISABLE_PLUGINS       Comma-separated plugin ids to skip this run (flag: --disable-plugin)
     MINIMAL_AGENT_ENABLE_PLUGINS        Comma-separated plugin ids to force on this run (flag: --enable-plugin)
     MINIMAL_AGENT_NO_AGENTS_MD          Skip AGENTS.md system-prompt injection (set to 1; flag: --no-agents-md)
+    MINIMAL_AGENT_PLUGIN_PROMPTS        Suppress all plugin prompt text (set to 1; flag: --no-plugin-prompts)
+    MINIMAL_AGENT_DRY_RUN               Build the request, print it as JSON, do not send it (set to 1)
     MINIMAL_AGENT_PLUGINS_REPO          Git URL of the extended plugins repo, for a fork or mirror
     MINIMAL_AGENT_GITHUB_TOKEN          Token to clone a private plugins repo, else GITHUB_TOKEN, GH_TOKEN, gh
     MINIMAL_AGENT_NO_HISTORY            Disable prompt history (set to 1)

@@ -92,7 +92,22 @@ export interface CliOptions {
   readonly wantDiagnostics: boolean
   /** `--debug` (or `DEBUG=1`): mirror diagnostics to stderr outside the TUI (S38). */
   readonly debug: boolean
+  /** The `--output-schema` value: a file path, or inline JSON when it starts with `{` (R7). */
   readonly outputSchemaPath: string | undefined
+  /** `--strict`: ask the provider to enforce `--output-schema` (SPEC-ONESHOT R6). */
+  readonly strict: boolean
+  /** `--append-system-prompt <text>` (SPEC-ONESHOT R8). */
+  readonly appendSystemPrompt: string | undefined
+  /** `--append-system-prompt-file <path>` (SPEC-ONESHOT R8). Read later, at run setup. */
+  readonly appendSystemPromptFile: string | undefined
+  /** `--temperature <n>`, else `MINIMAL_AGENT_TEMPERATURE` (SPEC-ONESHOT R9). Finite. */
+  readonly temperature: number | undefined
+  /** `--schema-retries <n>`: 0 to 5, default 0 (SPEC-ONESHOT R12). */
+  readonly schemaRetries: number
+  /** `--bare`: only the plugins the run needs, no AGENTS.md (SPEC-ONESHOT R13). */
+  readonly bare: boolean
+  /** `--input-format`: `text` (default) or `open-responses` (SPEC-ONESHOT R15). */
+  readonly inputFormat: InputFormat
   readonly spinnerName: string | undefined
   readonly showHeader: boolean
   readonly effort: string | undefined
@@ -167,6 +182,60 @@ function readEffortFlag(args: readonly string[]): string | undefined {
     throw new CliFlagError(`--effort requires a level (low, medium, high, xhigh).${got}${hint}`)
   }
   return next
+}
+
+/**
+ * `--temperature <n>` (or `MINIMAL_AGENT_TEMPERATURE`): a finite number.
+ * The flag wins over the env value. Anything else is a usage error (exit 2).
+ * The model check (D4) happens in core per request, not here.
+ */
+export function parseTemperature(
+  input: { readonly source: string; readonly raw: string } | undefined,
+): number | undefined {
+  if (input === undefined) return undefined
+  const text = input.raw.trim()
+  const value = text === "" ? Number.NaN : Number(text)
+  if (!Number.isFinite(value)) {
+    throw new CliFlagError(
+      `${input.source} requires a finite number. Got ${JSON.stringify(input.raw)}.`,
+    )
+  }
+  return value
+}
+
+/** The largest `--schema-retries` value (SPEC-ONESHOT R12). */
+const MAX_SCHEMA_RETRIES = 5
+
+/**
+ * `--schema-retries <n>`: an integer from 0 to 5. Absent: 0. Anything else
+ * is a usage error (exit 2).
+ */
+export function parseSchemaRetries(raw: string | undefined): number {
+  if (raw === undefined) return 0
+  const text = raw.trim()
+  const value = /^\d+$/.test(text) ? Number(text) : Number.NaN
+  if (!Number.isInteger(value) || value > MAX_SCHEMA_RETRIES) {
+    throw new CliFlagError(
+      `--schema-retries requires an integer from 0 to ${MAX_SCHEMA_RETRIES}. Got ${JSON.stringify(raw)}.`,
+    )
+  }
+  return value
+}
+
+/** The `--input-format` values (SPEC-ONESHOT R15). */
+export type InputFormat = "text" | "open-responses"
+
+/**
+ * `--input-format <text|open-responses>`. Absent: `text`. Any other value
+ * (or a missing value) is a usage error (exit 2).
+ */
+export function parseInputFormat(args: readonly string[]): InputFormat {
+  const idx = args.indexOf("--input-format")
+  if (idx === -1) return "text"
+  const value = args[idx + 1]
+  if (value === "text" || value === "open-responses") return value
+  const got = value === undefined ? "" : ` Got ${JSON.stringify(value)}.`
+  throw new CliFlagError(`--input-format requires text or open-responses.${got}`)
 }
 
 /** The raw token after `flag` (a leading dash is allowed). */
@@ -255,7 +324,27 @@ export function parseCliOptions(
   })
   const wantDiagnostics = args.includes("--diagnostics")
   const debug = args.includes("--debug") || env.DEBUG === "1"
+  // A file path or inline JSON (R7). Inline JSON starts with `{`, so the
+  // `valueAfter` rule (no leading `-`) still holds.
   const outputSchemaPath = valueAfter(args, "--output-schema")
+  const strict = args.includes("--strict")
+  // Append text may start with `-` (a list item), so take the raw token.
+  const appendSystemPrompt = readFlagValue("--append-system-prompt")
+  const appendSystemPromptFile = readFlagValue("--append-system-prompt-file")
+  const temperature = parseTemperature(
+    args.includes("--temperature") || args.some((a) => a.startsWith("--temperature="))
+      ? { source: "--temperature", raw: readFlagValue("--temperature") ?? "" }
+      : env.MINIMAL_AGENT_TEMPERATURE !== undefined && env.MINIMAL_AGENT_TEMPERATURE !== ""
+        ? { source: "MINIMAL_AGENT_TEMPERATURE", raw: env.MINIMAL_AGENT_TEMPERATURE }
+        : undefined,
+  )
+  const schemaRetries = parseSchemaRetries(
+    args.includes("--schema-retries") || args.some((a) => a.startsWith("--schema-retries="))
+      ? (readFlagValue("--schema-retries") ?? "")
+      : undefined,
+  )
+  const bare = args.includes("--bare")
+  const inputFormat = parseInputFormat(args)
 
   const showHeader = resolveShowHeader({
     args: [...args],
@@ -365,6 +454,13 @@ export function parseCliOptions(
     wantDiagnostics,
     debug,
     outputSchemaPath,
+    strict,
+    appendSystemPrompt,
+    appendSystemPromptFile,
+    temperature,
+    schemaRetries,
+    bare,
+    inputFormat,
     spinnerName,
     showHeader,
     effort,

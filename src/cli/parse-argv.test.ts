@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from "bun:test"
 
-import { type CliToolFilter, parseCliOptions } from "./parse-argv.ts"
+import { CliFlagError, type CliToolFilter, parseCliOptions } from "./parse-argv.ts"
 
 const NO_ENV = {} as const
 const NO_CFG = {} as const
@@ -210,5 +210,98 @@ describe("parseCliOptions — --host-mode", () => {
     expect(
       parseCliOptions(["--host-mode", "--debug"], NO_CFG, NO_ENV, NOOP_FORMATTER).hostModeId,
     ).toBeUndefined()
+  })
+})
+
+describe("parseCliOptions — SPEC-ONESHOT one-shot flags", () => {
+  const parse = (args: string[], env: Record<string, string> = {}) =>
+    parseCliOptions(args, NO_CFG, env, NOOP_FORMATTER)
+
+  test("absent → defaults", () => {
+    const opts = parse([])
+    expect(opts.strict).toBe(false)
+    expect(opts.appendSystemPrompt).toBeUndefined()
+    expect(opts.appendSystemPromptFile).toBeUndefined()
+    expect(opts.temperature).toBeUndefined()
+  })
+
+  test("--strict → true", () => {
+    expect(parse(["--strict", "-p", "hi"]).strict).toBe(true)
+  })
+
+  test("--bare → true, absent → false (R13)", () => {
+    expect(parse(["--bare", "-p", "hi"]).bare).toBe(true)
+    expect(parse(["-p", "hi"]).bare).toBe(false)
+  })
+
+  test("--output-schema takes a path or inline JSON", () => {
+    expect(parse(["--output-schema", "s.json"]).outputSchemaPath).toBe("s.json")
+    expect(parse(["--output-schema", '{"type":"object"}']).outputSchemaPath).toBe(
+      '{"type":"object"}',
+    )
+  })
+
+  test("--append-system-prompt and -file read their values (space and = forms)", () => {
+    const opts = parse([
+      "--append-system-prompt",
+      "- be short",
+      "--append-system-prompt-file=extra.md",
+    ])
+    expect(opts.appendSystemPrompt).toBe("- be short")
+    expect(opts.appendSystemPromptFile).toBe("extra.md")
+  })
+
+  test("--temperature parses a finite number (space and = forms)", () => {
+    expect(parse(["--temperature", "0.2"]).temperature).toBe(0.2)
+    expect(parse(["--temperature=0"]).temperature).toBe(0)
+  })
+
+  test("--temperature that is not a finite number → CliFlagError (exit 2)", () => {
+    for (const bad of [["--temperature", "hot"], ["--temperature"], ["--temperature=Infinity"]]) {
+      expect(() => parse(bad)).toThrow(CliFlagError)
+    }
+    expect(() => parse(["--temperature", "x"])).toThrow(/--temperature requires a finite number/)
+  })
+
+  test("MINIMAL_AGENT_TEMPERATURE is the fallback, the flag wins", () => {
+    expect(parse([], { MINIMAL_AGENT_TEMPERATURE: "0.7" }).temperature).toBe(0.7)
+    expect(parse(["--temperature", "1"], { MINIMAL_AGENT_TEMPERATURE: "0.7" }).temperature).toBe(1)
+    expect(parse([], { MINIMAL_AGENT_TEMPERATURE: "" }).temperature).toBeUndefined()
+    expect(() => parse([], { MINIMAL_AGENT_TEMPERATURE: "warm" })).toThrow(
+      /MINIMAL_AGENT_TEMPERATURE requires a finite number/,
+    )
+  })
+
+  test("--schema-retries: absent is 0, 0..5 parse (space and = forms)", () => {
+    expect(parse([]).schemaRetries).toBe(0)
+    expect(parse(["--schema-retries", "0"]).schemaRetries).toBe(0)
+    expect(parse(["--schema-retries", "2"]).schemaRetries).toBe(2)
+    expect(parse(["--schema-retries=5"]).schemaRetries).toBe(5)
+  })
+
+  test("--schema-retries out of range or not an integer → CliFlagError (exit 2)", () => {
+    for (const bad of [
+      ["--schema-retries", "6"],
+      ["--schema-retries", "-1"],
+      ["--schema-retries", "1.5"],
+      ["--schema-retries", "x"],
+      ["--schema-retries"],
+      ["--schema-retries="],
+    ]) {
+      expect(() => parse(bad)).toThrow(CliFlagError)
+    }
+    expect(() => parse(["--schema-retries", "9"])).toThrow(
+      /--schema-retries requires an integer from 0 to 5/,
+    )
+  })
+})
+
+describe("parseCliOptions — --input-format (R15)", () => {
+  const parse = (args: string[]) => parseCliOptions(args, NO_CFG, NO_ENV, NOOP_FORMATTER)
+
+  test("default text, open-responses accepted, bad value exits 2", () => {
+    expect(parse([]).inputFormat).toBe("text")
+    expect(parse(["--input-format", "open-responses"]).inputFormat).toBe("open-responses")
+    expect(() => parse(["--input-format", "xml"])).toThrow(CliFlagError)
   })
 })

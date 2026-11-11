@@ -143,7 +143,7 @@ const GAINED_NO_VALUE: Readonly<Record<string, string>> = {
   // `none` flags.
   "--all": "auth-status plan: none",
   "--diagnostics": "global: none",
-  "--dry-run": "auth-status prune: none",
+  "--dry-run": "global and auth-status prune: none",
   "--dump-paths": "sessions dump: none",
   "--fast": "global: none",
   "--force": "auth-status prune: none",
@@ -188,6 +188,23 @@ const ONESHOT_NO_VALUE: Readonly<Record<string, string>> = {
   "--strict": "SPEC-ONESHOT, hidden until wired",
 }
 
+/**
+ * Intended additions: the plugin prompt-text suppression flags. New flags,
+ * not gap fixes, so they get their own record. Every one has unambiguous
+ * arity on purpose: the CLI takes a bare positional prompt, so an
+ * optional-value flag would swallow the prompt text.
+ */
+const PLUGIN_PROMPTS_WITH_VALUES: Readonly<Record<string, string>> = {
+  "--no-plugin-prompts-for": "plugin prompt text: required <id>, repeatable",
+  "--plugin-prompts-for": "plugin prompt text: required <id>, repeatable",
+}
+
+/** The boolean half of the plugin prompt-text suppression flags. */
+const PLUGIN_PROMPTS_NO_VALUE: Readonly<Record<string, string>> = {
+  "--no-plugin-prompts": "plugin prompt text: none",
+  "--plugin-prompts": "plugin prompt text: none",
+}
+
 /** Optional-value flags. Spec M-12: they stay in `FLAGS_NO_VALUE`. */
 const OPTIONAL_VALUE_FLAGS = [
   "--list-models",
@@ -201,25 +218,27 @@ const sorted = (items: Iterable<string>): string[] => [...items].sort()
 describe("V-18: derived arity tables equal the old hand tables plus the pinned gaps", () => {
   const derived = builtinArity()
 
-  test("FLAGS_WITH_VALUES: old set plus --parallel and the SPEC-ONESHOT flags", () => {
+  test("FLAGS_WITH_VALUES: old set plus --parallel and the pinned new flags", () => {
     expect(sorted(derived.flagsWithValues)).toEqual(
       sorted(
         new Set([
           ...OLD_FLAGS_WITH_VALUES,
           ...Object.keys(GAINED_WITH_VALUES),
           ...Object.keys(ONESHOT_WITH_VALUES),
+          ...Object.keys(PLUGIN_PROMPTS_WITH_VALUES),
         ]),
       ),
     )
   })
 
-  test("FLAGS_NO_VALUE: old set plus the pinned gaps and the SPEC-ONESHOT flags", () => {
+  test("FLAGS_NO_VALUE: old set plus the pinned gaps and the pinned new flags", () => {
     expect(sorted(derived.flagsNoValue)).toEqual(
       sorted(
         new Set([
           ...OLD_FLAGS_NO_VALUE,
           ...Object.keys(GAINED_NO_VALUE),
           ...Object.keys(ONESHOT_NO_VALUE),
+          ...Object.keys(PLUGIN_PROMPTS_NO_VALUE),
         ]),
       ),
     )

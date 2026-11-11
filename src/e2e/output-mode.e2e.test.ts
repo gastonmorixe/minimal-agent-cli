@@ -136,7 +136,8 @@ describe.skipIf(!HAVE_PROVIDER)("--json final-answer JSONL (e2e)", () => {
     // the full structured event stream (turn_started → item_started →
     // item_completed → turn_completed), not a single synthetic final-answer
     // line. The answer arrives as the `item_completed` (itemType text) event;
-    // the stream settles on `turn_completed`.
+    // the events settle on `turn_completed`, then the final `result` line
+    // (SPEC-ONESHOT R11) ends stdout.
     const { exitCode, stdout } = await runCli(["--json", "--prompt", "go"], "the answer")
     expect(exitCode).toBe(0)
     const events = stdout
@@ -147,6 +148,7 @@ describe.skipIf(!HAVE_PROVIDER)("--json final-answer JSONL (e2e)", () => {
     const answer = events.find((e) => e.type === "item_completed" && e.itemType === "text")
     expect(answer).toBeDefined()
     expect(answer.text).toContain("the answer")
-    expect(events[events.length - 1].type).toBe("turn_completed")
+    expect(events[events.length - 2].type).toBe("turn_completed")
+    expect(events[events.length - 1].type).toBe("result")
   })
 })

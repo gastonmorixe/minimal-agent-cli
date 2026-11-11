@@ -40,20 +40,30 @@
  * - `stream-json`: the same JSONL stream, but every event is flushed the
  *   instant it is emitted (and, from Phase 3, includes token-level
  *   `text_delta` / `thinking_delta` events).
+ * - `open-responses`: Open Responses output (SPEC-ONESHOT R16). SSE events
+ *   when the request asked to stream, else one `response` JSON object. See
+ *   `oneshot/or-output.ts`.
  */
-export type OutputFormat = "text" | "json" | "stream-json"
+export type OutputFormat = "text" | "json" | "stream-json" | "open-responses"
 
-/** The three valid `--output-format` values, for validation + help text. */
-export const OUTPUT_FORMATS: readonly OutputFormat[] = ["text", "json", "stream-json"] as const
+/** The valid `--output-format` values, for validation + help text. */
+export const OUTPUT_FORMATS: readonly OutputFormat[] = [
+  "text",
+  "json",
+  "stream-json",
+  "open-responses",
+] as const
 
 /**
- * Type guard: whether `value` is one of the three valid {@link OutputFormat}
+ * Type guard: whether `value` is one of the valid {@link OutputFormat}
  * strings. Used both by the resolver (to decide whether a `--output-format`
  * value participates in precedence) and by the entry point (to warn on a
  * malformed value before resolution swallows it).
  */
 export function isOutputFormat(value: string | undefined): value is OutputFormat {
-  return value === "text" || value === "json" || value === "stream-json"
+  return (
+    value === "text" || value === "json" || value === "stream-json" || value === "open-responses"
+  )
 }
 
 /**

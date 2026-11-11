@@ -85,14 +85,16 @@ describe.skipIf(!HAVE_PROVIDER)("G3: --output-format at CLI stdout", () => {
     // json`, which drives AgentCore and emits the FULL structured event stream
     // (…/ item_completed / turn_completed), not the pre-integration single
     // final-answer line. The answer is still present, now as an `item_completed`
-    // text event within the stream. The stream settles on `turn_completed`.
+    // text event within the stream. The events settle on `turn_completed`,
+    // then the final `result` line (SPEC-ONESHOT R11) ends stdout.
     const { exitCode, stdout } = await runCli(["--json", "--prompt", "go"], "the answer")
     expect(exitCode).toBe(0)
     const events = parseJsonl(stdout)
     const answer = events.find((e) => e.type === "item_completed" && e.itemType === "text")
     expect(answer).toBeDefined()
     expect(String(answer?.text)).toContain("the answer")
-    expect(events.at(-1)?.type).toBe("turn_completed")
+    expect(events.at(-2)?.type).toBe("turn_completed")
+    expect(events.at(-1)?.type).toBe("result")
   })
 
   it("g3c: --output-format stream-json <prompt> parses cleanly and exits 0", async () => {

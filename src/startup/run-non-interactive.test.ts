@@ -36,6 +36,7 @@ import type { ReplAgentLike } from "../repl.ts"
 import type { TestSendResult as StreamedResponse } from "../test-utils/transport-types.ts"
 
 import {
+  canArmRunOutputSchema,
   type RunNonInteractivePromptInput,
   runNonInteractivePrompt,
 } from "./run-non-interactive.ts"
@@ -184,9 +185,11 @@ describe("runNonInteractivePrompt — structured route fatal error", () => {
       .split("\n")
       .filter((l) => l.length > 0)
       .map((l) => JSON.parse(l))
-    // stream-json closes with run_finished. The error event comes just before it.
-    expect(eventPart(events.at(-1))).toEqual({ type: "run_finished", outcome: "failed" })
-    expect(eventPart(events.at(-2))).toEqual({
+    // stream-json closes with run_finished, then the final result line
+    // (SPEC-ONESHOT R11). The error event comes just before run_finished.
+    expect(events.at(-1)).toMatchObject({ type: "result", outcome: "failed" })
+    expect(eventPart(events.at(-2))).toEqual({ type: "run_finished", outcome: "failed" })
+    expect(eventPart(events.at(-3))).toEqual({
       type: "error",
       message: "needs login",
       code: "p.login",
@@ -264,7 +267,7 @@ describe("runNonInteractivePrompt — structured route fatal error", () => {
 })
 
 describe("runNonInteractivePrompt — run_finished closing line", () => {
-  it("stream-json success: the last line is run_finished completed, after turn_completed", async () => {
+  it("stream-json success: run_finished completed after turn_completed, then the result line", async () => {
     const out: string[] = []
     await runNonInteractivePrompt(
       baseInput({
@@ -274,8 +277,9 @@ describe("runNonInteractivePrompt — run_finished closing line", () => {
       }),
     )
     const events = parseLines(out) as Array<Record<string, unknown>>
-    expect(eventPart(events.at(-1))).toEqual({ type: "run_finished", outcome: "completed" })
-    expect(events.at(-2)?.type).toBe("turn_completed")
+    expect(events.at(-1)?.type).toBe("result")
+    expect(eventPart(events.at(-2))).toEqual({ type: "run_finished", outcome: "completed" })
+    expect(events.at(-3)?.type).toBe("turn_completed")
   })
 
   it("json success: no run_finished line (the json route stays on the frozen nine)", async () => {
@@ -289,7 +293,8 @@ describe("runNonInteractivePrompt — run_finished closing line", () => {
     )
     const events = parseLines(out) as Array<Record<string, unknown>>
     expect(events.some((e) => e.type === "run_finished")).toBe(false)
-    expect(events.at(-1)?.type).toBe("turn_completed")
+    expect(events.at(-1)?.type).toBe("result")
+    expect(events.at(-2)?.type).toBe("turn_completed")
   })
 })
 
@@ -324,6 +329,17 @@ describe("runNonInteractivePrompt — structured event-stream route", () => {
         stopReason: "end_turn",
         usage: { inputTokens: 1, outputTokens: 1 },
       },
+      // SPEC-ONESHOT R11: the final result line.
+      {
+        type: "result",
+        text: "hi",
+        usage: { inputTokens: 1, outputTokens: 1 },
+        stopReason: "end_turn",
+        outcome: "completed",
+        model: null,
+        provider: null,
+        durationMs: expect.any(Number),
+      },
     ])
   })
 
@@ -349,7 +365,8 @@ describe("runNonInteractivePrompt — structured event-stream route", () => {
       .filter((l) => l.length > 0)
       .map((l) => JSON.parse(l))
     expect(events[0]).toEqual({ type: "turn_started", turn: 1 })
-    expect(events.at(-1)?.type).toBe("turn_completed")
+    expect(events.at(-1)?.type).toBe("result")
+    expect(events.at(-2)?.type).toBe("turn_completed")
   })
 
   it("stream-json: routes to the event stream and flushes one write per event", async () => {
@@ -370,14 +387,15 @@ describe("runNonInteractivePrompt — structured event-stream route", () => {
     // One write per event (live flush), each a complete JSONL line. stream-json
     // includes the realtime text_delta, so a single-chunk "yo" turn produces:
     // turn_started, text_delta, item_started, item_completed, turn_completed,
-    // and the closing run_finished line.
-    expect(out.length).toBe(6)
+    // the closing run_finished line, and the final result line (R11).
+    expect(out.length).toBe(7)
     expect(out.every((l) => l.endsWith("\n"))).toBe(true)
     const events = out.map((l) => JSON.parse(l))
     expect(eventPart(events[0])).toEqual({ type: "turn_started", turn: 1 })
     expect(events.some((e) => e.type === "text_delta")).toBe(true)
-    expect(eventPart(events.at(-1))).toEqual({ type: "run_finished", outcome: "completed" })
-    expect(eventPart(events.at(-2))).toEqual({
+    expect(events.at(-1)?.type).toBe("result")
+    expect(eventPart(events.at(-2))).toEqual({ type: "run_finished", outcome: "completed" })
+    expect(eventPart(events.at(-3))).toEqual({
       type: "turn_completed",
       turn: 1,
       stopReason: "end_turn",
@@ -421,6 +439,7 @@ describe("runNonInteractivePrompt — structured event-stream route", () => {
       "item_started",
       "item_completed",
       "turn_completed",
+      "result",
     ])
   })
 
@@ -486,7 +505,9 @@ describe("runNonInteractivePrompt — structured event-stream route", () => {
     expect(toolResult?.id).toBe(toolStart?.id)
     expect(toolResult?.name).toBe("DoThing")
     expect(toolResult?.isError).toBe(false)
-    expect(events.at(-1)?.type).toBe("turn_completed")
+    expect(events.at(-2)?.type).toBe("turn_completed")
+    // The result text is the last model response only, not the tool round.
+    expect(events.at(-1)).toMatchObject({ type: "result", text: "done", stopReason: "end_turn" })
   })
 
   it("text: does NOT take the event route (factory never opened, legacy-path agent runs)", async () => {
@@ -533,7 +554,10 @@ describe("runNonInteractivePrompt — structured event-stream route", () => {
     expect(last.text).toContain("the answer")
   })
 
-  it("json + --output-schema: stays on the legacy buffered path (factory not opened)", async () => {
+  it("json + --output-schema on a core without the D1 setter: legacy buffered path", async () => {
+    // SPEC-ONESHOT R10: with the setter (local core) the event route runs.
+    // This test pins the fallback for the pinned core (risk K1).
+    if (canArmRunOutputSchema()) return
     let opened = 0
     const rec = recordingAgent(['{"answer":"ok"}'])
     const schema = {

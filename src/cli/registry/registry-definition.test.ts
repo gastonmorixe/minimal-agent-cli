@@ -36,6 +36,15 @@ const commands = allCommands()
 const label = (path: readonly string[]): string => (path.length === 0 ? "<root>" : path.join(" "))
 const globalSet = new Set<FlagSpec>(reg.globalFlags)
 
+/**
+ * Command-local flags that share a long form with a global flag on purpose
+ * (`<path> <--flag>`). The command reads its own flag, and the run path
+ * never sees that command. `auth-status prune --dry-run` lists credentials
+ * to delete. The global `--dry-run` builds a model request and does not
+ * send it. Keep this list short.
+ */
+const SHADOW_OK: ReadonlySet<string> = new Set(["auth-status prune --dry-run"])
+
 /** Values of `list` that occur more than once. */
 function duplicates(list: readonly string[]): string[] {
   const seen = new Set<string>()
@@ -165,9 +174,22 @@ describe("names", () => {
     for (const { node, path } of commands) {
       const own = (node.flags ?? []).filter((f) => !globalSet.has(f))
       const longs = [...reg.globalFlags, ...own].flatMap(longForms)
-      for (const d of duplicates(longs)) bad.push(`${label(path)}: ${d}`)
+      for (const d of duplicates(longs)) {
+        if (!SHADOW_OK.has(`${label(path)} ${d}`)) bad.push(`${label(path)}: ${d}`)
+      }
     }
     expect(bad).toEqual([])
+  })
+
+  test("each allowed shadow still exists (stale entries fail)", () => {
+    const seen = new Set<string>()
+    for (const { node, path } of commands) {
+      const own = (node.flags ?? []).filter((f) => !globalSet.has(f))
+      for (const d of duplicates([...reg.globalFlags, ...own].flatMap(longForms))) {
+        seen.add(`${label(path)} ${d}`)
+      }
+    }
+    expect([...SHADOW_OK].filter((k) => !seen.has(k))).toEqual([])
   })
 
   test("no short flag clash across the globals plus any one path", () => {
@@ -208,6 +230,7 @@ describe("global flags", () => {
       .filter(({ path }) => path.length > 0)
       .filter(({ longs }) => longs.some((l) => globalNames.has(l)))
       .map(({ spec, path }) => `${label(path)} --${spec.name}`)
+      .filter((key) => !SHADOW_OK.has(key))
     expect(bad).toEqual([])
   })
 
@@ -226,11 +249,11 @@ describe("global flags", () => {
     expect(blocks).toEqual(order)
   })
 
-  test("visible global flags match the root help rows (37 Options, 8 System prompt, help)", () => {
+  test("visible global flags match the root help rows (42 Options, 8 System prompt, help)", () => {
     const visible = reg.globalFlags.filter((f) => f.hidden !== true)
     const sp = visible.filter((f) => f.group === "system-prompt")
     const help = visible.filter((f) => f.group === "help")
-    expect(visible.length - sp.length - help.length).toBe(37)
+    expect(visible.length - sp.length - help.length).toBe(42)
     expect(sp.length).toBe(8)
     expect(help.map((f) => f.name)).toEqual(["help"])
   })
@@ -263,13 +286,13 @@ describe("global flags", () => {
 })
 
 describe("env", () => {
-  test("44 visible rows, as in root help", () => {
-    expect(reg.env.filter((e) => e.hidden !== true).length).toBe(44)
+  test("46 visible rows, as in root help", () => {
+    expect(reg.env.filter((e) => e.hidden !== true).length).toBe(46)
   })
 
-  test("16 visible rows carry a value hint (NAME=1 or NAME=0)", () => {
+  test("18 visible rows carry a value hint (NAME=1 or NAME=0)", () => {
     const set = reg.env.filter((e) => e.set !== undefined)
-    expect(set.length).toBe(16)
+    expect(set.length).toBe(18)
     expect(set.every((e) => e.set === "1" || e.set === "0")).toBe(true)
   })
 

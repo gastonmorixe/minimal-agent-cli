@@ -31,12 +31,14 @@ import {
 import type {
   HostModeContext,
   HostModelView,
+  HostOpenSessionOptions,
   HostRuntime,
   HostSession,
+  HostSystemPromptOption,
 } from "@minimal-agent/core/host-kit/host-mode"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import type { ModelInfoSnapshot } from "@minimal-agent/core/plugin-api/types/plugin"
-import type { AgentCore, TurnResult } from "@minimal-agent/core/sdk/agent-core"
+import { AgentCore, type TurnResult } from "@minimal-agent/core/sdk/agent-core"
 import type { PromptSource } from "../cli/extract-prompt.ts"
 import { applyTurnWillStart } from "../repl-editor-hooks.ts"
 
@@ -124,7 +126,7 @@ export async function runHostMode(input: RunHostModeInput): Promise<void> {
     return
   }
 
-  const runtime = buildHostRuntime(input, stderr)
+  const runtime = buildHostRuntime(input, stderr, detectHostRuntimeCapabilities())
   const ctx = installHostModeContext(input, runtime, stderr)
 
   let code: number
@@ -292,6 +294,61 @@ function installHostModeContext(
 }
 
 /**
+ * What the core in use can really apply for a host-mode client. Exposed as
+ * `ctx.runtime.capabilities`, so a host-mode plugin advertises a feature
+ * only when it works (ACP plugin: `sessionCapabilities.systemPrompt`, ext
+ * features `structuredOutput` and `sampling`). A plain object, declared
+ * here and not in core, like {@link OneShotSetters}: an older plugin
+ * ignores it, and a plugin on an older CLI sees no object (all false).
+ */
+export interface HostRuntimeCapabilities {
+  readonly systemPrompt: {
+    /** `openSession({systemPrompt: {mode: "append"}})` reaches the model request. */
+    readonly append: boolean
+    /** `openSession({systemPrompt: {mode: "override"}})` reaches the model request. */
+    readonly override: boolean
+  }
+  /** `HostSession.run({outputSchema})` reaches the model request. */
+  readonly outputSchema: boolean
+  /** `HostSession.run({temperature})` reaches the model request. */
+  readonly temperature: boolean
+}
+
+/**
+ * Feature detection on the REAL core in use (the pinned core in
+ * `node_modules`, or a local core through a tsconfig `paths` override).
+ * - `outputSchema` / `temperature`: the D1/D4 one-shot setters exist on
+ *   `AgentCore.prototype` (the same check `armSetter` makes per run).
+ * - `systemPrompt.append`: core's `openAgentCoreSession` reads the
+ *   `appendSystemPrompt` dep (M2). An older core copies named fields only
+ *   and drops it at run time, so the source of the function is the only
+ *   signal before a session exists: it has no export that M2 added.
+ * - `systemPrompt.override`: an `instructions` replace in
+ *   `systemPromptOverrides` reaches the instructions block on every core
+ *   this CLI supports, so it is always true.
+ * Never throws: a failed probe gives `false`.
+ */
+export function detectHostRuntimeCapabilities(): HostRuntimeCapabilities {
+  const proto = AgentCore.prototype as unknown as Partial<OneShotSetters>
+  let append = false
+  try {
+    append = Function.prototype.toString.call(openAgentCoreSession).includes("appendSystemPrompt")
+  } catch {
+    append = false
+  }
+  return {
+    systemPrompt: { append, override: true },
+    outputSchema: typeof proto.setNextRunOutputSchema === "function",
+    temperature: typeof proto.setNextRunTemperature === "function",
+  }
+}
+
+/** The {@link HostRuntime} plus {@link HostRuntimeCapabilities}. */
+export type HostRuntimeWithCapabilities = HostRuntime & {
+  readonly capabilities: HostRuntimeCapabilities
+}
+
+/**
  * Builds the {@link HostRuntime} the entry gets: one lazy session factory,
  * plus model/effort switching through context functions (never a
  * `Session`/`AgentCore` wrapper the plugin could reach around — see
@@ -300,7 +357,8 @@ function installHostModeContext(
 function buildHostRuntime(
   input: RunHostModeInput,
   stderr: Pick<NodeJS.WriteStream, "write">,
-): HostRuntime {
+  capabilities: HostRuntimeCapabilities,
+): HostRuntimeWithCapabilities {
   const { sessionDeps } = input
   let opened = false
   // Set once `openSession` builds the session; `getModel`/`setModel` read
@@ -309,7 +367,8 @@ function buildHostRuntime(
   let liveAgentCore: AgentCore | null = null
 
   return {
-    async openSession(): Promise<HostSession> {
+    capabilities,
+    async openSession(options?: HostOpenSessionOptions): Promise<HostSession> {
       if (opened) {
         throw new Error(
           "HostRuntime.openSession was already called once in this process " +
@@ -323,7 +382,7 @@ function buildHostRuntime(
       // over the protocol leaves ModelInfo on the old model.
       const session = await openAgentCoreSession({
         // S23/S28: status rows and plugin-bus telemetry, like the human path.
-        ...withHostPorts(sessionDeps),
+        ...withHostPorts(withSystemPromptOption(sessionDeps, options?.systemPrompt, stderr)),
         wireModelInfoSource: true,
         sessionId: input.sessionId,
       })
@@ -382,6 +441,40 @@ function buildHostRuntime(
 }
 
 /**
+ * Maps {@link HostOpenSessionOptions.systemPrompt} onto the session deps.
+ * - No option: the deps are returned unchanged (the same object).
+ * - `append`: sets `appendSystemPrompt` (core adds it after the instructions).
+ * - `override`: replaces ONLY the `instructions` part and keeps every other
+ *   override already in the deps. Never a `full` replace: that skips the
+ *   provider hook and drops provider-owned blocks such as the Anthropic
+ *   plan-OAuth billing block (see `src/host-public/host-mode.ts` in core).
+ *   When the deps already carry a `full` override (user config), `full`
+ *   wins and the `instructions` replace has no effect: write one warning
+ *   to `stderr`.
+ */
+export function withSystemPromptOption(
+  deps: BuildAgentCoreDeps,
+  systemPrompt?: HostSystemPromptOption,
+  stderr?: Pick<NodeJS.WriteStream, "write">,
+): BuildAgentCoreDeps {
+  if (!systemPrompt) return deps
+  if (systemPrompt.mode === "append") {
+    return { ...deps, appendSystemPrompt: systemPrompt.text }
+  }
+  const full = deps.systemPromptOverrides?.full
+  if (full !== undefined && full.kind !== "default") {
+    stderr?.write("[host-mode] warn: systemPrompt override ignored, a full override is active\n")
+  }
+  return {
+    ...deps,
+    systemPromptOverrides: {
+      ...deps.systemPromptOverrides,
+      instructions: { kind: "replace", text: systemPrompt.text },
+    },
+  }
+}
+
+/**
  * Builds {@link HostSession.run}: `Session.run`, with the `turn.willStart`
  * chain applied first, the same way `run-non-interactive.ts` applies it
  * (`applyTurnWillStart`). A hook can rewrite the prompt text. A halting
@@ -394,6 +487,16 @@ function buildHostRuntime(
  * To keep the "already running" and "closed" errors synchronous, this
  * wrapper checks both itself before it starts the chain.
  */
+/**
+ * D1/D4 one-shot setters on `AgentCore`. Declared here, not imported, so
+ * this file also runs against an older pinned core that lacks them: the
+ * caller feature-detects each one before it calls it.
+ */
+interface OneShotSetters {
+  setNextRunOutputSchema(schema: unknown): void
+  setNextRunTemperature(temperature: number | undefined): void
+}
+
 function hostSessionRun(
   session: Session,
   loader: PluginLoader,
@@ -401,6 +504,27 @@ function hostSessionRun(
   isClosed: () => boolean,
 ): HostSession["run"] {
   let busy = false
+  // One warning per session per unsupported option.
+  const warned = new Set<string>()
+  const armSetter = <K extends keyof OneShotSetters>(
+    core: Partial<OneShotSetters>,
+    name: K,
+    value: NonNullable<Parameters<OneShotSetters[K]>[0]>,
+    label: string,
+  ): boolean => {
+    const setter = core[name]
+    if (typeof setter !== "function") {
+      if (!warned.has(label)) {
+        warned.add(label)
+        stderr.write(
+          `[host-mode] warn: the core does not support per-run ${label}; running without it\n`,
+        )
+      }
+      return false
+    }
+    ;(setter as (v: unknown) => void).call(core, value)
+    return true
+  }
   return (text, options) => {
     if (isClosed()) throw new Error(`session ${session.id} is closed`)
     if (busy) throw new Error(`session ${session.id} already has a run in progress`)
@@ -417,7 +541,34 @@ function hostSessionRun(
         stderr.write(`${err.message}\n`)
         throw err
       }
-      const inner = session.run(turn.text, options)
+      // D1: `Session.run` does not forward `outputSchema`, so arm it on the
+      // core as a one-shot for the run that starts next. Core clears it
+      // when that run starts and restores the session value when it ends.
+      // D4: `temperature` takes the same one-shot path. Core checks the
+      // model's `acceptsTemperature` per request.
+      // Arm a setter only when the caller gave a value, and only when the
+      // core has it. An older pinned core lacks both setters: then warn
+      // once per session and run without the option. Never throw.
+      const { outputSchema, temperature, ...runOptions } = options
+      const core = session.agentCore() as Partial<OneShotSetters>
+      const armed: Array<keyof OneShotSetters> = []
+      if (outputSchema !== undefined) {
+        if (armSetter(core, "setNextRunOutputSchema", outputSchema, "outputSchema")) {
+          armed.push("setNextRunOutputSchema")
+        }
+      }
+      if (temperature !== undefined) {
+        if (armSetter(core, "setNextRunTemperature", temperature, "temperature")) {
+          armed.push("setNextRunTemperature")
+        }
+      }
+      let inner: ReturnType<Session["run"]>
+      try {
+        inner = session.run(turn.text, runOptions)
+      } catch (err) {
+        for (const name of armed) core[name]?.(undefined)
+        throw err
+      }
       // Attached before any caller reads the entries, so `busy` is clear
       // before the entry stream ends for the caller.
       inner.result.then(idle, idle)

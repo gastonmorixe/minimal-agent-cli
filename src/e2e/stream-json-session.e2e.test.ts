@@ -81,7 +81,7 @@ function parseLines(stdout: string): Array<Record<string, unknown>> {
 }
 
 describe.skipIf(!HAVE_PROVIDER)("stream-json session wiring at CLI stdout", () => {
-  it("fresh run: session_started first, envelope on every line, run_finished completed last", async () => {
+  it("fresh run: session_started first, envelope on every line, run_finished completed, then result last", async () => {
     const { exitCode, stdout } = await runCli([
       "--session-id",
       SID,
@@ -109,7 +109,9 @@ describe.skipIf(!HAVE_PROVIDER)("stream-json session wiring at CLI stdout", () =
       expect(typeof l.ts).toBe("number")
     })
 
-    expect(lines.at(-1)).toMatchObject({ type: "run_finished", outcome: "completed" })
+    expect(lines.at(-2)).toMatchObject({ type: "run_finished", outcome: "completed" })
+    // SPEC-ONESHOT R11: the final result line ends stdout.
+    expect(lines.at(-1)).toMatchObject({ type: "result", outcome: "completed" })
 
     const textDone = lines.filter(
       (l) =>

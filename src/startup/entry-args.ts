@@ -34,7 +34,7 @@ import { type CliUserConfig, loadCliUserConfig } from "../config/terminal-config
 import { parseFormatterCommand } from "../ui/formatter/formatter.ts"
 import { wantsJsonHelp } from "../ui/help/json.ts"
 import { setStartupTreeVisible } from "../ui/startup/tree.ts"
-
+import { dryRunEnableIds } from "./dry-run.ts"
 import {
   type HelpOutput,
   printHelp,
@@ -87,7 +87,7 @@ export interface PrepareEntrypointArgsInput {
  * The plugin catalog for help, read the way the loader reads plugins
  * (src/main.ts): the roots of `computePluginRoots` (the CLI dir, `env`,
  * `cwd`, the agent home), the config overrides, the env and CLI override
- * lists (with the `--no-agents-md` alias), and the effective platform. JSON
+ * lists (with the `--no-agents-md` and `--dry-run` aliases), and the effective platform. JSON
  * only, no plugin module import (R-18, R-22).
  */
 export function defaultHelpCatalog(
@@ -110,7 +110,7 @@ export function defaultHelpCatalog(
         ...collectFlagValues(rawArgv, "--disable-plugin"),
         ...(noAgentsMd ? ["agents-md"] : []),
       ],
-      enable: collectFlagValues(rawArgv, "--enable-plugin"),
+      enable: [...collectFlagValues(rawArgv, "--enable-plugin"), ...dryRunEnableIds(rawArgv, env)],
     },
     platform: resolveEffectivePlatform({
       cli: platformIdx === -1 ? undefined : rawArgv[platformIdx + 1],

@@ -62,6 +62,14 @@
  * session diagnostic. Without the flag, stdout matches the golden byte for
  * byte. The `stream-json` route ignores the flag (it has its own envelope).
  *
+ * **`--output-format open-responses` (SPEC-ONESHOT R16).** The same event
+ * route, with a different writer: {@link OrOutputWriter} turns the events
+ * into Open Responses SSE events (`orStream`) or one `response` object.
+ * stdout carries only that output (no event lines, no result line). A
+ * schema run is buffered: the final answer is written at the end. A failed
+ * schema check keeps the text, puts the message in `metadata.output_error`,
+ * and exits 1 after the output.
+ *
  * Split out of `src/index.ts` to keep the entry point under the `max-lines`
  * lint budget.
  *
@@ -73,18 +81,34 @@ import { fatalErrorFields } from "@minimal-agent/core/host/error-hint"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { PluginStream } from "@minimal-agent/core/host-kit/plugin-stream"
+import { AgentCore } from "@minimal-agent/core/sdk/agent-core"
 import {
+  type AgentEvent,
   LEGACY_EVENT_KINDS,
   STREAM_JSON_EVENT_KINDS,
   serializeEvent,
 } from "@minimal-agent/core/sdk/events"
 import { extractPromptFromArgs } from "../cli/extract-prompt.ts"
 import { type OutputFormat, resolveStdioMode, type StdioMode } from "../cli/output-format.ts"
+import { agentCoreOf, armOneShotRun, type OneShotRunOptions } from "../oneshot/arm-run.ts"
+import { correctivePrompt } from "../oneshot/json-schema-check.ts"
+import { type OrError, OrOutputWriter } from "../oneshot/or-output.ts"
+import {
+  accumulateResultEvent,
+  buildResultLine,
+  checkResultOutput,
+  createResultAccumulator,
+  type ResultAccumulator,
+  type ResultLine,
+  resultText,
+  type SchemaOutcome,
+} from "../oneshot/result-line.ts"
 import { enforceOutputSchema, PrintOutput, resolvePrintModeOptions } from "../print-output.ts"
 import type { ReplAgentLike } from "../repl.ts"
 import { applyTurnWillStart } from "../repl-editor-hooks.ts"
 import { Formatter } from "../ui/formatter/formatter.ts"
 
+import { DRY_RUN_DONE_MESSAGE, isDryRunHalt } from "./dry-run.ts"
 import { isHostModeRun } from "./resume-mode.ts"
 
 import {
@@ -215,6 +239,12 @@ export interface RunNonInteractivePromptInput {
   readonly outputFormat?: OutputFormat
   /** Parsed `--output-schema`, or undefined. */
   readonly outputSchema: object | undefined
+  /**
+   * One-shot values (`--temperature`, `--strict`, SPEC-ONESHOT R6/R9) armed
+   * on the core right before the prompt run, on both routes. A continued
+   * turn (S50) does not get them. A setter the core lacks is skipped.
+   */
+  readonly oneShotRunOptions?: OneShotRunOptions
   /** The active plugin loader when plugins loaded, else null. */
   readonly loader: PluginLoader | null
   /** Working directory for the plugin stream. */
@@ -262,20 +292,67 @@ export interface RunNonInteractivePromptInput {
    * a new turn, when `prompt` is not empty.
    */
   readonly continueTurn?: boolean
+  /**
+   * `--output-format open-responses`: the request had `stream: true`, so
+   * write SSE events. Else one `response` JSON object. Default false.
+   * The entry point sets it as `oneShotRunOptions.orStream` (or-input.ts
+   * `withAppend`, then `setupOneShot`). Either one set to true is enough.
+   */
+  readonly orStream?: boolean
+  /**
+   * `--dry-run`: the dry-run plugin halts the send (`LifecycleSendDeniedError`).
+   * That halt is the expected end, so the run exits 0 with one stderr line.
+   * Default false: the halt is a failure, as before.
+   */
+  readonly dryRun?: boolean
+}
+
+/**
+ * True when `err` is the expected send halt of a `--dry-run` run. Writes
+ * the done line to stderr in that case.
+ */
+function endsDryRun(input: RunNonInteractivePromptInput, err: unknown): boolean {
+  if (input.dryRun !== true || !isDryRunHalt(err)) return false
+  const stderr = input.stderr ?? ((chunk: string) => void process.stderr.write(chunk))
+  stderr(`${DRY_RUN_DONE_MESSAGE}\n`)
+  return true
+}
+
+/** The request asked for an SSE stream (`orStream` or `oneShotRunOptions.orStream`). */
+function wantsOrStream(input: RunNonInteractivePromptInput): boolean {
+  return input.orStream === true || input.oneShotRunOptions?.orStream === true
+}
+
+/**
+ * Whether the core in use can arm a one-shot `outputSchema` on a `Session`
+ * run (D1 setter, risk K1). The pinned core lacks it: then `--output-schema`
+ * with json / stream-json stays on the buffered legacy path, as before.
+ */
+export function canArmRunOutputSchema(): boolean {
+  const proto = AgentCore.prototype as unknown as { setNextRunOutputSchema?: unknown }
+  return typeof proto.setNextRunOutputSchema === "function"
 }
 
 /**
  * Whether this run should take the structured event-stream route: a
- * `json`/`stream-json` format, an injected session factory, and no
- * `--output-schema` (schema enforcement stays on the buffered legacy path so
- * its byte-for-byte exit semantics are preserved).
+ * `json`/`stream-json` format and an injected session factory. With
+ * `--output-schema` (R10) the event stream stays on when the core can arm
+ * the schema on the run. Else schema enforcement stays on the buffered
+ * legacy path.
  */
 function wantsEventStream(input: RunNonInteractivePromptInput): boolean {
   const fmt = input.outputFormat
+  if (fmt === "open-responses") return input.openEventStreamSession !== undefined
   if (fmt !== "json" && fmt !== "stream-json") return false
   if (input.openEventStreamSession === undefined) return false
-  if (input.outputSchema !== undefined) return false
+  if (input.outputSchema !== undefined && !canArmRunOutputSchema()) return false
   return true
+}
+
+/** Arm the `--output-schema` on the session core for its next run (D1). */
+function armRunOutputSchema(session: Session, schema: object): void {
+  const core = agentCoreOf(session) as { setNextRunOutputSchema?: (s: object) => void } | undefined
+  if (typeof core?.setNextRunOutputSchema === "function") core.setNextRunOutputSchema(schema)
 }
 
 /**
@@ -353,26 +430,152 @@ async function runGuardedEventStream(
   }
 
   const session = await openSession()
+  const startedAt = Date.now()
+  const acc = createResultAccumulator()
+  let runOk = true
+  // open-responses: the OR writer is the only stdout writer (no event lines).
+  const or = input.outputFormat === "open-responses" ? openOrWriter(input, session, write) : null
+  if (or !== null) or.begin()
 
   // A continued turn goes first. A new turn follows only when the
   // continued one did not pause or fail.
+  const out = {
+    write,
+    keep: or !== null ? EMPTY_KIND_SET : keep,
+    entryLines: entryLines && or === null,
+    isStreamJson,
+    emitDeltas: isStreamJson || (or !== null && wantsOrStream(input)),
+    acc,
+    ...(or !== null ? { onEvent: (event: AgentEvent) => or.event(event) } : {}),
+    isDryRunEnd: (err: unknown) => endsDryRun(input, err),
+  }
   const turns: Array<{ text: string; resume: boolean }> = []
   if (input.continueTurn) turns.push({ text: "", resume: true })
   if (input.prompt.length > 0) turns.push({ text: input.prompt, resume: false })
   for (const turn of turns) {
-    const ok = await runEventStreamTurn(session, turn, { write, keep, entryLines, isStreamJson })
+    if (!turn.resume && input.oneShotRunOptions !== undefined) {
+      armOneShotRun(agentCoreOf(session), input.oneShotRunOptions)
+    }
+    if (!turn.resume && input.outputSchema !== undefined) {
+      armRunOutputSchema(session, input.outputSchema)
+    }
+    const ok = await runEventStreamTurn(session, turn, out)
     if (!ok) {
+      runOk = false
       fail(1)
       break
     }
+  }
+  // R11: one final `result` line after run_finished, then the exit code.
+  // The schema check runs on a run that did not fail. A failed check
+  // writes `outputError` on the line, the diagnostics to stderr, exit 1.
+  const stderr = input.stderr ?? ((chunk: string) => void process.stderr.write(chunk))
+  let schema: SchemaOutcome | undefined =
+    runOk && input.outputSchema !== undefined
+      ? checkResultOutput(resultText(acc), input.outputSchema)
+      : undefined
+  // R12 --schema-retries: a failed check on a completed turn runs one more
+  // turn in the same session with a corrective user message. Each attempt
+  // streams its own events (new turn numbers). `acc` sums the usage, and
+  // its text is the text of the last attempt.
+  const maxRetries = input.oneShotRunOptions?.schemaRetries ?? 0
+  for (let used = 0; used < maxRetries; used++) {
+    if (schema === undefined || schema.ok || acc.outcome !== "completed") break
+    const outputSchema = input.outputSchema as object
+    if (input.oneShotRunOptions !== undefined) {
+      armOneShotRun(agentCoreOf(session), input.oneShotRunOptions)
+    }
+    armRunOutputSchema(session, outputSchema)
+    const text = correctivePrompt(schema.reason)
+    const ok = await runEventStreamTurn(session, { text, resume: false }, out)
+    if (!ok) {
+      schema = undefined
+      fail(1)
+      break
+    }
+    schema = checkResultOutput(resultText(acc), outputSchema)
+  }
+  const line = buildResultLine(acc, {
+    model: input.streamInfo?.model ?? null,
+    provider: input.streamInfo?.provider ?? null,
+    durationMs: Date.now() - startedAt,
+    ...(schema !== undefined ? { schema } : {}),
+  })
+  if (or !== null) or.end({ acc, ...(schema !== undefined ? { schema } : {}) })
+  else writeResultLine(line, { write, isStreamJson, sessionId: session.id })
+  if (schema !== undefined && !schema.ok) {
+    for (const d of schema.diagnostics) stderr(`${d}\n`)
+    fail(1)
   }
   // A dropped stray write means some code tried to put a non-protocol line
   // on stdout. Fail the run so the bug cannot pass unseen.
   const strays = guard.strays()
   if (strays > 0) {
-    const stderr = input.stderr ?? ((chunk: string) => void process.stderr.write(chunk))
     stderr(`error: the JSON route dropped ${strays} stray stdout write(s)\n`)
     fail(1)
+  }
+}
+
+/** No event kind is kept as a line (the open-responses route). */
+const EMPTY_KIND_SET: ReadonlySet<string> = new Set()
+
+/** The OR writer for one run of the open-responses route. */
+function openOrWriter(
+  input: RunNonInteractivePromptInput,
+  session: { readonly id: string },
+  write: (chunk: string) => void,
+): OrOutputWriter {
+  if (input.outputSchema !== undefined && !canArmRunOutputSchema()) {
+    const stderr = input.stderr ?? ((chunk: string) => void process.stderr.write(chunk))
+    stderr(
+      "[minimal-agent] warn: this core cannot send --output-schema to the model; the answer is only checked after the run\n",
+    )
+  }
+  const run = input.oneShotRunOptions
+  return new OrOutputWriter(
+    {
+      stream: wantsOrStream(input),
+      buffered: input.outputSchema !== undefined,
+      responseId: `resp_${session.id}`,
+      model: input.streamInfo?.model ?? "unknown",
+      ...(run?.temperature !== undefined ? { temperature: run.temperature } : {}),
+      ...(input.outputSchema !== undefined ? { outputSchema: input.outputSchema } : {}),
+      ...(run?.outputStrict === true ? { strict: true } : {}),
+    },
+    write,
+  )
+}
+
+/**
+ * Write a failed OR output for a failure outside the run (a blocked turn,
+ * no session factory). stdout gets only OR output.
+ */
+function writeOrFailure(input: RunNonInteractivePromptInput, error: OrError): void {
+  // The boot guard (if any) drops plain stdout writes, so use its writer.
+  const write =
+    input.stdout ?? activeGuard?.write ?? ((chunk: string) => void process.stdout.write(chunk))
+  const or = openOrWriter(input, { id: input.streamInfo?.sessionId ?? getSessionId() }, write)
+  or.begin()
+  or.end({ acc: createResultAccumulator(), failure: error })
+}
+
+/**
+ * Write the final `result` line. json: a plain JSONL line. stream-json: the
+ * shared writer adds the envelope and the next `seq`. The writer takes an
+ * event, and the result line is not an `AgentEvent` kind, so it is cast.
+ * `serializeStreamJsonLine` changes only `item_started` records.
+ */
+function writeResultLine(
+  line: ResultLine,
+  out: { write: (chunk: string) => void; isStreamJson: boolean; sessionId: string },
+): void {
+  if (out.isStreamJson) {
+    writeStreamJsonEvent(line as unknown as AgentEvent, {
+      sessionId: out.sessionId,
+      ts: Date.now(),
+    })
+  } else {
+    out.write(`${JSON.stringify(line)}\n`)
   }
 }
 
@@ -388,15 +591,27 @@ async function runEventStreamTurn(
     keep: ReadonlySet<string>
     entryLines: boolean
     isStreamJson: boolean
+    /** Ask the core for live text deltas (stream-json, open-responses stream). */
+    emitDeltas: boolean
+    /** Collects the values of the final `result` line (all event kinds). */
+    acc: ResultAccumulator
+    /** Sees every event (the open-responses writer). */
+    onEvent?: (event: AgentEvent) => void
+    /** True for the expected send halt of a `--dry-run` run (not a failure). */
+    isDryRunEnd?: (err: unknown) => boolean
   },
 ): Promise<boolean> {
-  const { write, keep, entryLines, isStreamJson } = out
+  const { write, keep, entryLines, isStreamJson, acc } = out
   try {
     const run = session.run(turn.text, {
-      emitDeltas: isStreamJson,
+      emitDeltas: out.emitDeltas,
       ...(turn.resume ? { resume: true } : {}),
     })
     for await (const entry of run) {
+      if (entry.ch === "event") {
+        accumulateResultEvent(acc, entry.data)
+        out.onEvent?.(entry.data)
+      }
       // Text chunks are carried by the event stream (item_completed); the
       // raw yield channel is not written to stdout in structured mode. The
       // session's own log is the COMPLETE trace (every AgentEvent kind, by
@@ -422,8 +637,20 @@ async function runEventStreamTurn(
     // The core already surfaced the fatal error on the stream as an `error`
     // event (with code/hint). Keep stdout a clean JSONL document (no stack
     // trace), but exit non-zero so scripts see the failure. An abort is not
-    // a failure of the run itself.
+    // a failure of the run itself. A `--dry-run` send halt is the expected
+    // end: the core error and run_finished lines stay, the exit code is 0.
+    if (out.isDryRunEnd?.(err) === true) return true
     return !fatalErrorFields(err)
+  }
+}
+
+/** Run a buffered retry turn to its end and return its text. */
+async function drainRun(gen: ReturnType<ReplAgentLike["run"]>): Promise<string> {
+  let text = ""
+  while (true) {
+    const { done, value } = await gen.next()
+    if (done) return text
+    text += value
   }
 }
 
@@ -458,6 +685,9 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
     process.stderr.write(`${TURN_BLOCKED_MESSAGE}\n`)
     // stream-json still ends stdout with error and run_finished failed lines.
     if (input.outputFormat === "stream-json") writeTurnBlocked(input)
+    if (input.outputFormat === "open-responses") {
+      writeOrFailure(input, { code: "turn.blocked", message: TURN_BLOCKED_MESSAGE })
+    }
     exit(1)
   }
   const prompt = turn.text
@@ -467,6 +697,15 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
   // JSONL event stream is the whole output.
   if (wantsEventStream(input)) {
     await runCoreEventStream({ ...input, prompt })
+    return
+  }
+  // open-responses needs the event route. Without a session factory, write
+  // a failed OR output (never human text on stdout).
+  if (input.outputFormat === "open-responses") {
+    const message = "--output-format open-responses needs the event-stream session"
+    process.stderr.write(`${message}\n`)
+    writeOrFailure(input, { code: "unsupported", message })
+    exit(1)
     return
   }
 
@@ -512,7 +751,14 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
   // the text of the last turn.
   const runs: Array<() => ReturnType<ReplAgentLike["run"]>> = []
   if (input.continueTurn) runs.push(() => agent.run("", { resume: true }))
-  if (prompt.length > 0) runs.push(() => agent.run(prompt))
+  if (prompt.length > 0) {
+    runs.push(() => {
+      if (input.oneShotRunOptions !== undefined) {
+        armOneShotRun(agentCoreOf(agent), input.oneShotRunOptions)
+      }
+      return agent.run(prompt)
+    })
+  }
   try {
     const emit = async (value: string): Promise<void> => {
       if (pluginStream) {
@@ -535,6 +781,11 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
       }
     }
     if (pluginStream) await pluginStream.end()
+  } catch (err) {
+    // `--dry-run`: the plugin halted the send on purpose. Exit 0, no `fatal:`.
+    // The `finally` below still closes the formatter.
+    if (!endsDryRun(input, err)) throw err
+    return
   } finally {
     if (formatter) await formatter.end()
   }
@@ -543,7 +794,18 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
   // matching the schema, else a diagnostic to stderr + exit 1. Runs BEFORE any
   // stdout write so a failing run never leaks a non-conforming answer.
   if (outputSchema !== undefined) {
-    const enforcement = enforceOutputSchema(finalText, outputSchema)
+    let enforcement = enforceOutputSchema(finalText, outputSchema)
+    // R12 --schema-retries: more turns in the same session with a corrective
+    // user message. The schema run is buffered, so no attempt reaches stdout.
+    // Only the answer of the last attempt is printed.
+    const maxRetries = input.oneShotRunOptions?.schemaRetries ?? 0
+    for (let used = 0; used < maxRetries && !enforcement.ok && prompt.length > 0; used++) {
+      if (input.oneShotRunOptions !== undefined) {
+        armOneShotRun(agentCoreOf(agent), input.oneShotRunOptions)
+      }
+      finalText = await drainRun(agent.run(correctivePrompt(enforcement.reason ?? "")))
+      enforcement = enforceOutputSchema(finalText, outputSchema)
+    }
     if (!enforcement.ok) {
       for (const line of enforcement.diagnostics) process.stderr.write(`${line}\n`)
       exit(1)
