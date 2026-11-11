@@ -1,0 +1,105 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`core text parity (S0.6 before snapshot) d15-87: auth: no provider selected 1`] = `"no provider selected for model "model-a". No provider credentials found. Run \`minimal-agent provider <id> login\` (e.g. \`minimal-agent provider example-provider login\`)."`;
+
+exports[`core text parity (S0.6 before snapshot) d15-103: auth: no credentials for provider (empty store) 1`] = `"no credentials for provider "acme" (model "model-a"). Run minimal-agent provider acme login. No provider credentials found. Run \`minimal-agent provider <id> login\` (e.g. \`minimal-agent provider example-provider login\`)."`;
+
+exports[`core text parity (S0.6 before snapshot) d15-120: auth: generic-endpoint bearer needs --api-key 1`] = `"generic-endpoint auth-type bearer requires --api-key"`;
+
+exports[`core text parity (S0.6 before snapshot) d15-126: auth: custom-header needs --api-key 1`] = `"generic-endpoint auth-type custom-header requires --api-key"`;
+
+exports[`core text parity (S0.6 before snapshot) d15-128: auth: custom-header needs --auth-header 1`] = `"generic-endpoint auth-type custom-header requires --auth-header"`;
+
+exports[`core text parity (S0.6 before snapshot) b25-oauth: startup tree auth row: oauth with account 1`] = `"oauth <dim>(account: abcdef12...)</dim>"`;
+
+exports[`core text parity (S0.6 before snapshot) b25-apikey: startup tree auth row: api-key 1`] = `"api-key"`;
+
+exports[`core text parity (S0.6 before snapshot) d32-model: context exceeded advice with a model 1`] = `"Context window exceeded for model-a. The failed user turn was rolled back. Run /compact (or enable auto-compact on exceeded), start a fresh session, or prune old history before retrying. Resuming the same oversized transcript will fail again."`;
+
+exports[`core text parity (S0.6 before snapshot) d32-nomodel: context exceeded advice without a model 1`] = `"Context window exceeded. The failed user turn was rolled back. Run /compact (or enable auto-compact on exceeded), start a fresh session, or prune old history before retrying. Resuming the same oversized transcript will fail again."`;
+
+exports[`core text parity (S0.6 before snapshot) d33-retry: auto-compact ok, then retry of the failed turn 1`] = `
+"{
+  "shouldRetry": true,
+  "retryText": "please continue the task",
+  "notices": [
+    "Auto-compacted context (local): 40 -> 6 messages.",
+    "Retrying the failed user turn once."
+  ]
+}"
+`;
+
+exports[`core text parity (S0.6 before snapshot) d33-failed: auto-compact failed 1`] = `
+"Auto-compact failed: summary call failed
+--
+Context window exceeded for model-a. The failed user turn was rolled back. Run /compact (or enable auto-compact on exceeded), start a fresh session, or prune old history before retrying. Resuming the same oversized transcript will fail again."
+`;
+
+exports[`core text parity (S0.6 before snapshot) d33-off: auto-compact unavailable: advice only 1`] = `"Context window exceeded for model-a. The failed user turn was rolled back. Run /compact (or enable auto-compact on exceeded), start a fresh session, or prune old history before retrying. Resuming the same oversized transcript will fail again."`;
+
+exports[`core text parity (S0.6 before snapshot) d31-unknown-arg: /compact unknown argument 1`] = `"✗ /compact: unknown argument "bogus" (want [mode] [tail=N] [focus="..."])"`;
+
+exports[`core text parity (S0.6 before snapshot) d31-dup-mode: /compact duplicate mode 1`] = `"✗ /compact: duplicate mode ("tail")"`;
+
+exports[`core text parity (S0.6 before snapshot) d31-unknown-mode: /compact unknown mode 1`] = `"✗ /compact: unknown mode "wide" (want remote|tail|local|fork)"`;
+
+exports[`core text parity (S0.6 before snapshot) d31-tail: /compact tail not an integer 1`] = `"✗ /compact: tail must be an integer >= 0 (got "x")"`;
+
+exports[`core text parity (S0.6 before snapshot) b13-refusal: notice: refusal with category and message 1`] = `"✗ [refusal] The provider's safety layer ended the response (policy) — blocked. The reply above (if any) is incomplete; rephrasing the request usually gets past a false positive."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-max-continuing: notice: max_tokens auto-continuing 1`] = `"· [max_tokens] Response hit the max_tokens ceiling; auto-continuing (1/3)."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-max-capped: notice: max_tokens capped 1`] = `"· [max_tokens] Response hit the max_tokens ceiling 3 times in a row; stopping. Consider narrowing the request or raising max_tokens."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-stream-salvaged: notice: stream interrupted, salvaged tool calls (plural) 1`] = `"· [stream] Provider closed the response without a terminal event after 2 complete tool calls; salvaged closed tools, discarded partials, and continuing from local state. Do not repeat those tool calls."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-stream-capped: notice: stream interrupted, capped 1`] = `"· [stream] Provider closed the response without a terminal event 3 times in a row mid-output; stopping. Partial output above is preserved."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-ask-denied: notice: ask denied 1`] = `"· [ask] No host can answer "Confirm" (preflight.x) in this run; denied the ask and sent the request unchanged."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-model-adopted: notice: model adopted with effort reset 1`] = `"· [model] Adopted model "model-b" (was "model-a") (effort reset from "high")."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-model-adopt-failed: notice: could not adopt model 1`] = `"· [model] Could not adopt model "model-z" (unknown); kept "model-a"."`;
+
+exports[`core text parity (S0.6 before snapshot) hint-error: error line with the provider hint 1`] = `
+"✗ request failed
+  hint: Run login again"
+`;
+
+exports[`core text parity (S0.6 before snapshot) f1-device: oauth device-code display lines 1`] = `
+"Open this page to sign in:
+  https://auth.example.test/device
+Enter this one-time code:
+  ABCD-1234
+Never share this code with anyone.
+--
+Waiting for sign-in to finish…
+--
+outcome: {"ok":true,"result":{"accessToken":"a","refreshToken":"r","expiresAt":0,"scopes":[],"credentialName":"Fake"}}"
+`;
+
+exports[`core text parity (S0.6 before snapshot) f1-browser: oauth browser lines and empty paste 1`] = `
+"Opening browser to sign in…
+--
+If the browser didn't open, visit:
+  https://auth.example.test/authorize?client_id=client-synthetic&response_type=code&redirect_uri=https%3A%2F%2Fauth.example.test%2Fcallback&scope=scope.a&code_challenge=3Ev4DHdHPRMPoN6GukAY_pi7IUAF5qWJHRK6kURvnoE&code_challenge_method=S256&state=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc
+--
+Invalid code. Please make sure the full code was copied. (no code pasted)
+--
+outcome: {"ok":false,"reason":"no code pasted"}"
+`;
+
+exports[`core text parity (S0.6 before snapshot) f1-state-mismatch: oauth state mismatch line 1`] = `
+"Opening browser to sign in…
+--
+If the browser didn't open, visit:
+  https://auth.example.test/authorize?client_id=client-synthetic&response_type=code&redirect_uri=https%3A%2F%2Fauth.example.test%2Fcallback&scope=scope.a&code_challenge=3Ev4DHdHPRMPoN6GukAY_pi7IUAF5qWJHRK6kURvnoE&code_challenge_method=S256&state=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc
+--
+State mismatch. Please paste the code from this login attempt only.
+--
+outcome: {"ok":false,"reason":"state mismatch — pasted code does not match this login attempt"}"
+`;
+
+exports[`core text parity (S0.6 before snapshot) d16-no-provider: oauth: no login provider registered 1`] = `"No OAuth login provider is registered."`;
+
+exports[`core text parity (S0.6 before snapshot) b24-unregistered: status model label for an unregistered id 1`] = `"vendor-model-1"`;
