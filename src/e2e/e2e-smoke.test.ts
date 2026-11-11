@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { TOOL_PRESENTATION } from "../plugins-ui/tool-presentation.ts"
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
 import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 
@@ -104,6 +105,20 @@ describe("CLI smoke", () => {
       // a moment later (`ASK ❯ `). See `src/index.ts` mode-row site.
       const stderrPlain = stderr.replace(/\u001b\[[0-9;]*m/g, "")
       expect(stderrPlain).toMatch(/mode\s+ASK/)
+      // The `tools` row shows the CLI icon of each tool (S41). Core tool
+      // definitions carry no icon (S29), so a bare-name row means the banner
+      // skipped the CLI presentation map.
+      const toolsRow = stderrPlain.split("\n").find((l) => /^\s*[│╰] tools\s/.test(l))
+      expect(toolsRow).toBeDefined()
+      const chunks = (toolsRow ?? "").replace(/^\s*[│╰] tools\s+/, "").split(" · ")
+      const decorated = chunks.filter((ch) => {
+        const name = ch.slice(ch.lastIndexOf(" ") + 1)
+        const icon = TOOL_PRESENTATION.get(name)?.icon
+        if (!icon) return false
+        expect(ch).toBe(`${icon} ${name}`)
+        return true
+      })
+      expect(decorated.length).toBeGreaterThan(0)
     },
   )
 

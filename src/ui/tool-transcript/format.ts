@@ -13,7 +13,6 @@ import {
   globPathFromInput,
   globPatternFromInput,
 } from "@minimal-agent/core/host/tool-input-aliases"
-import { truncHint } from "@minimal-agent/core/host/truncate-hint"
 import { countLines, type TruncationInfo } from "@minimal-agent/core/host/truncation"
 import {
   displayWidth,
@@ -26,6 +25,7 @@ import type { ToolUseBlock } from "@minimal-agent/core/sdk/messages"
 import type { Finding, FindingSeverity } from "@minimal-agent/core/sdk/tool-lifecycle"
 import { shouldSoftSplit, splitBashSegments } from "../../cli/bash-split.ts"
 import { c } from "../style/ansi.ts"
+import { truncHint } from "../style/truncate-hint.ts"
 
 // Colors a plain Edit/Write diff when no code highlighter runs (S41: core
 // emits the plain patch).

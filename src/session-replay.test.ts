@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test"
-import { ToolTimeTracker } from "@minimal-agent/core/host/tool-time"
 import type { Message } from "@minimal-agent/core/sdk/messages"
-
 import { buildResumeHeader, replayToScrollback, stringifyUserText } from "./session-replay.ts"
+import { ToolTimeTracker } from "./ui/tool-transcript/tool-time.ts"
 
 class CaptureSink {
   out = ""

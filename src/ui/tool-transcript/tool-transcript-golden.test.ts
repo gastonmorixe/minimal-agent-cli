@@ -13,15 +13,14 @@ import { afterAll, describe, expect, it } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ToolTimeTracker } from "@minimal-agent/core/host/tool-time"
 import { ToolFeedbackTracker } from "@minimal-agent/core/host-kit/feedback-tracker"
 import { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { ToolExecutorAdapter } from "@minimal-agent/core/host-kit/tool-executor-adapter"
 import type { LifecyclePort } from "@minimal-agent/core/sdk/lifecycle"
-
 import { TOOL_PRESENTATION } from "../../plugins-ui/tool-presentation.ts"
 import type { CodeHighlighter } from "../formatter/mdstream-code-highlighter.ts"
+import { ToolTimeTracker } from "./tool-time.ts"
 import { createReplToolView } from "./tool-view.ts"
 
 const GOLDEN_PATH = join(import.meta.dirname, "tool-transcript.golden.json")

@@ -20,11 +20,11 @@ import {
   type CacheTtlSource,
   resolveCacheTtl,
 } from "@minimal-agent/core/host/cache-ttl"
-import type { UserConfig } from "@minimal-agent/core/host/config"
 import { type EffortSource, resolveEffort } from "@minimal-agent/core/host/effort-resolution"
 import type { SystemPromptOverrides } from "@minimal-agent/core/host/system-prompt-overrides"
 import type { ToolNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
 
+import type { CliUserConfig } from "../config/terminal-config.ts"
 import { resolveShowHeader } from "./non-interactive-defaults.ts"
 import { type OutputFormat, resolveOutputFormat } from "./output-format.ts"
 import { type PrintFormat, parsePrintFormat } from "./print-format.ts"
@@ -188,7 +188,7 @@ function rawAfter(args: readonly string[], flag: string): string | undefined {
  */
 export function parseCliOptions(
   args: readonly string[],
-  userConfig: UserConfig,
+  userConfig: CliUserConfig,
   env: EnvLike,
   parseFormatter: FormatterParser,
   systemPromptOverrides: SystemPromptOverrides = {},

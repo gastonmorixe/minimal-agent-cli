@@ -6,11 +6,10 @@
  */
 
 import { describe, expect, it } from "bun:test"
-
-import { ToolTimeTracker } from "@minimal-agent/core/host/tool-time"
 import { ToolFeedbackTracker } from "@minimal-agent/core/host-kit/feedback-tracker"
 import { ToolExecutorAdapter } from "@minimal-agent/core/host-kit/tool-executor-adapter"
 import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { ToolTimeTracker } from "./tool-time.ts"
 
 import { createReplToolView } from "./tool-view.ts"
 

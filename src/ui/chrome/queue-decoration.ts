@@ -51,9 +51,9 @@
  * (byte-for-byte) so a turn that merely has a queue looks unchanged.
  */
 
-import { truncHint } from "@minimal-agent/core/host/truncate-hint"
 import { displayWidth, truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import { ANSI_CODES, bgRgb, ansiStyle as c } from "../../terminal-kit/ansi.ts"
+import { truncHint } from "../style/truncate-hint.ts"
 
 /**
  * Cap on item rows before eliding into a "... and N more" tail. Bumped

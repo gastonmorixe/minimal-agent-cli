@@ -15,7 +15,6 @@
  * @module ui/tool-transcript/tool-view
  */
 
-import type { ToolTimeTracker } from "@minimal-agent/core/host/tool-time"
 import type {
   ToolViewEvent,
   ToolViewOutcome,
@@ -23,7 +22,6 @@ import type {
 } from "@minimal-agent/core/host-kit/tool-executor-adapter"
 import { expandTabs } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { ToolUseBlock } from "@minimal-agent/core/sdk/messages"
-
 import {
   type CodeHighlighter,
   clampBodyWithHint,
@@ -45,6 +43,7 @@ import {
   TOOL_PREVIEW_LINES_DEFAULT,
   type ToolPresentation,
 } from "./format.ts"
+import type { ToolTimeTracker } from "./tool-time.ts"
 
 /**
  * The ESC character, built from its code point. The view only DETECTS it in

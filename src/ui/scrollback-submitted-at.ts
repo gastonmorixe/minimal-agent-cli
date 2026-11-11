@@ -20,10 +20,10 @@
  * @module scrollback-submitted-at
  */
 
-import type { SubmittedAtStyle } from "@minimal-agent/core/host/config"
+import type { SubmittedAtStyle } from "../config/terminal-config.ts"
 import { ansiStyle as c } from "../terminal-kit/ansi.ts"
 
-/** The config style type lives in core config (spec S26). */
+/** The config style type lives in the CLI terminal config (S41 follow-up). */
 export type { SubmittedAtStyle }
 
 /** Optional config shape for the submitted-at feature. */

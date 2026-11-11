@@ -24,7 +24,6 @@ import {
   takePendingCompact,
 } from "@minimal-agent/core/host/compact-contract"
 import { GLOBAL_STATUS_BUS } from "@minimal-agent/core/host/status-bus"
-import type { ToolTimeTracker } from "@minimal-agent/core/host/tool-time"
 import { loadBlobStoreConfig } from "@minimal-agent/core/host-kit/blob-store"
 import { type BuildAgentCoreDeps, toEffort } from "@minimal-agent/core/host-kit/build-agent-core"
 import { ToolFeedbackTracker } from "@minimal-agent/core/host-kit/feedback-tracker"
@@ -53,6 +52,7 @@ import { createPluginEventsPort, createStatusPort } from "./startup/host-ports.t
 import { TERMINAL_TOOL_ENV, terminalColumns } from "./terminal/terminal-tool-env.ts"
 import { type StepLive, TurnRenderPump } from "./turn-render-pump.ts"
 import type { CodeHighlighter } from "./ui/formatter/mdstream-code-highlighter.ts"
+import type { ToolTimeTracker } from "./ui/tool-transcript/tool-time.ts"
 import { createReplToolView } from "./ui/tool-transcript/tool-view.ts"
 
 type MaybePromise<T> = T | Promise<T>
