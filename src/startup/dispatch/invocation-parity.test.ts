@@ -15,13 +15,12 @@
 
 import { describe, expect, test } from "bun:test"
 
-import type { UserConfig } from "@minimal-agent/core/host/config"
-
 import { normalizeArgs } from "../../cli/cli-args.ts"
 import { type CommandName, planCommand } from "../../cli/command-plan.ts"
 import { parseCliOptions } from "../../cli/parse-argv.ts"
 import { builtinRegistry } from "../../cli/registry/index.ts"
 import { COMMAND_FORM_ORDER, resolveCommandRoute, wordFormIndex } from "../../cli/registry/route.ts"
+import type { CliUserConfig } from "../../config/terminal-config.ts"
 import { parseFormatterCommand } from "../../ui/formatter/formatter.ts"
 import { extractSubcommandInputs } from "../subcommand-inputs.ts"
 import { PARITY_ROWS } from "./invocation-parity.table.ts"
@@ -53,7 +52,7 @@ const INTENDED_CHANGES: ReadonlyMap<string, Selected> = new Map([
 
 function oldSelected(argv: readonly string[]): Selected {
   const args = normalizeArgs([...argv])
-  const opts = parseCliOptions(args, {} as UserConfig, {}, parseFormatterCommand)
+  const opts = parseCliOptions(args, {} as CliUserConfig, {}, parseFormatterCommand)
   const plan = planCommand({
     dumpArg: opts.dumpArg,
     wantListSessions: opts.wantListSessions,
@@ -129,7 +128,7 @@ describe("OLD planner gives the frozen rows (M-13a)", () => {
   for (const row of PARITY_ROWS) {
     test(JSON.stringify(row.argv), () => {
       const args = normalizeArgs([...row.argv])
-      const opts = parseCliOptions(args, {} as UserConfig, {}, parseFormatterCommand)
+      const opts = parseCliOptions(args, {} as CliUserConfig, {}, parseFormatterCommand)
       const { command } = planCommand({
         dumpArg: opts.dumpArg,
         wantListSessions: opts.wantListSessions,

@@ -10,13 +10,11 @@
  * @module commands/dump
  */
 
-import {
-  formatSessionArtifacts,
-  inspectSessionArtifacts,
-} from "@minimal-agent/core/host/session-artifacts"
+import { inspectSessionArtifacts } from "@minimal-agent/core/host/session-artifacts"
 import { resolveSessionTarget } from "@minimal-agent/core/host/session-index"
 import { createSessionsReadApi } from "@minimal-agent/core/host/sessions-read"
 import { writeStdoutSafely } from "../infra/safe-stdout.ts"
+import { formatSessionArtifacts } from "./session-artifacts-format.ts"
 
 export interface DumpCommandInput {
   target: string

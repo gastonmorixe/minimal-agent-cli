@@ -13,7 +13,6 @@
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { tryRecoverContextExceeded } from "@minimal-agent/core/host/context-exceeded-recovery"
 import { parseContextLengthExceededError } from "@minimal-agent/core/host/model-error"
-import { formatRestoredMessages } from "@minimal-agent/core/host/queue-restore"
 import { loadQueue, QueueStore } from "@minimal-agent/core/host/queue-store"
 import { GLOBAL_STATUS_BUS, StatusBus } from "@minimal-agent/core/host/status-bus"
 import { parseCommandLine } from "@minimal-agent/core/host-kit/command-registry"
@@ -31,6 +30,7 @@ import {
   startCompactFallback,
 } from "./commands/compact-submit.ts"
 import { dispatchCommandAndApply as dispatchCommandSubmit } from "./commands/dispatch-submit.ts"
+import { formatRestoredMessages } from "./editor/queue-restore.ts"
 import type { QueueKeyHandler } from "./editor/types.ts"
 import type {
   ReplAgentLike,
@@ -1477,11 +1477,3 @@ export async function runReplLiveArea(
     }
   }
 }
-
-/**
- * Detect "model: <id>" not_found_error responses from the Messages API.
- * Returns the offending model id, or null if the error is unrelated.
- *
- * Example payload (status 404):
- *   `API 404: {"type":"error","error":{"type":"not_found_error","message":"model: claude-haiku-4-7"},...}`
- */

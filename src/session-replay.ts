@@ -22,7 +22,6 @@
 
 import { isRuntimeAttachmentBlock } from "@minimal-agent/core/host/runtime-attachments"
 import type { CompactDisplayBoundary } from "@minimal-agent/core/host/session-restore"
-import type { ToolTimeTracker } from "@minimal-agent/core/host/tool-time"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { SessionRecord } from "@minimal-agent/core/host-kit/session-store"
 import type {
@@ -52,6 +51,7 @@ import {
   formatToolPreview,
   type ToolPresentation,
 } from "./ui/tool-transcript/format.ts"
+import type { ToolTimeTracker } from "./ui/tool-transcript/tool-time.ts"
 
 /**
  * Sink shape: anything with a `write(string)`. The live-area REPL passes

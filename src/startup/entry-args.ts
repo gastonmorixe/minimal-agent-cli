@@ -13,11 +13,7 @@
 import { dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import {
-  loadPluginEnabledOverrides,
-  loadUserConfig,
-  type UserConfig,
-} from "@minimal-agent/core/host/config"
+import { loadPluginEnabledOverrides } from "@minimal-agent/core/host/config"
 import { collectFlagValues } from "@minimal-agent/core/host/plugin-enable-resolution"
 import { resolveEffectivePlatform } from "@minimal-agent/core/host/plugin-platform-resolution"
 import { setSessionId } from "@minimal-agent/core/host/session-id"
@@ -34,6 +30,7 @@ import { findHostMode, readHelpCatalog, usableHostModeIds } from "../cli/registr
 import { type HelpRequest, resolveHelpRequest } from "../cli/registry/resolve.ts"
 import { suggest } from "../cli/registry/suggest.ts"
 import { resolveSystemPromptOverridesForStartup } from "../cli/system-prompt-override-resolution.ts"
+import { type CliUserConfig, loadCliUserConfig } from "../config/terminal-config.ts"
 import { parseFormatterCommand } from "../ui/formatter/formatter.ts"
 import { wantsJsonHelp } from "../ui/help/json.ts"
 import { setStartupTreeVisible } from "../ui/startup/tree.ts"
@@ -126,8 +123,8 @@ export function defaultHelpCatalog(
 export interface EntrypointArgs {
   /** Normalized long-form argv. */
   readonly args: string[]
-  /** Loaded user config. */
-  readonly userConfig: UserConfig
+  /** Loaded user config: core runtime keys plus the CLI terminal keys. */
+  readonly userConfig: CliUserConfig
   /** Fully resolved CLI/env/config options. */
   readonly opts: CliOptions
   /** Planned top-level command and capability profile. */
@@ -183,7 +180,7 @@ export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): Entryp
     input.env.MINIMAL_AGENT_SHOW_HIDDEN_CHARS = "1"
   }
 
-  const userConfig = loadUserConfig()
+  const userConfig = loadCliUserConfig()
   let systemPromptOverrides
   try {
     systemPromptOverrides = resolveSystemPromptOverridesForStartup({

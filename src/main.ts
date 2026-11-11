@@ -61,11 +61,9 @@ import {
   primeProviderSessionInfo,
   resolveProviderSessionInfo,
 } from "@minimal-agent/core/host/provider-session"
-import { formatQuotaWindows } from "@minimal-agent/core/host/quota-summary"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
 import { resolveSessionTarget } from "@minimal-agent/core/host/session-index"
 import { TOOL_DEFINITIONS } from "@minimal-agent/core/host/tool-catalog"
-import { ToolTimeTracker } from "@minimal-agent/core/host/tool-time"
 import {
   combineTurnDrains,
   instantiateTurnAttachments,
@@ -81,12 +79,12 @@ import { PluginLoader, providerRootsOf } from "@minimal-agent/core/host-kit/plug
 import { resolveAgentHome } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import type { Message } from "@minimal-agent/core/sdk/messages"
 import { parseSchemaFile } from "@minimal-agent/core/sdk/output-schema"
-import { applyToolNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
 import { extractPromptFromArgs } from "./cli/extract-prompt.ts"
 import { resolveInitialModeId } from "./cli/non-interactive-defaults.ts"
 import { registerCompactHostCommand } from "./commands/compact.ts"
 import { registerContinueHostCommand } from "./commands/continue.ts"
 import { InteractiveSession } from "./interactive-session.ts"
+import { closeStartupTreeWithLoadedTools } from "./plugins-ui/startup-tool-entries.ts"
 import { toolPresentationMap } from "./plugins-ui/tool-presentation.ts"
 import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
@@ -130,17 +128,13 @@ import {
 } from "./startup/startup-rows.ts"
 import type { StreamInfo } from "./startup/stream-json-writer.ts"
 import { isColdStart, maybeShowFirstRunWelcome } from "./ui/chrome/first-run.ts"
+import { formatQuotaWindows } from "./ui/chrome/quota-summary.ts"
 import { buildReadyBanner } from "./ui/chrome/ready-banner.ts"
 import { resolveFormatter } from "./ui/formatter/auto.ts"
 import { resolveSpinnerPreset } from "./ui/spinner/named-presets.ts"
-import {
-  closeStartupTree,
-  closeStartupTreeWithTools,
-  printStartupHeader,
-  printStartupRow,
-  startStartupRowSpinner,
-} from "./ui/startup/tree.ts"
+import { printStartupHeader, printStartupRow, startStartupRowSpinner } from "./ui/startup/tree.ts"
 import { c } from "./ui/style/ansi.ts"
+import { ToolTimeTracker } from "./ui/tool-transcript/tool-time.ts"
 import { formatFatalError } from "./ui/turn-error.ts"
 
 // ---------------------------------------------------------------------------
@@ -335,10 +329,6 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         env.MINIMAL_AGENT_PLUGINS_REPO?.trim() ||
         userConfig.pluginsRepo ||
         roots.DEFAULT_PLUGINS_REPO,
-      // Silent: no spinner or startup row yet — the tree hasn't opened.
-      showSpinner: false,
-      // Core labels are plain (S41). The CLI styles the startup row label.
-      styles: c,
     })
   }
 
@@ -959,14 +949,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     // bookkeeping is rehydrated here.
     if (modeManager) modeManager.primeLastAdvertised(lastAdvertisedModeFromHistory(initialMessages))
   }
-  // Startup tools row matches advertisement (same pure SDK policy helper as
-  // Agent / AgentCore request assembly — not ModeManager).
-  const bannerTools = applyToolNamePolicy(loadedTools, opts.cliToolFilter)
-  if (bannerTools.length > 0) {
-    closeStartupTreeWithTools(bannerTools)
-  } else {
-    closeStartupTree()
-  }
+  // The `tools` row: the advertised tools with their CLI icons (S41).
+  closeStartupTreeWithLoadedTools(loadedTools, opts.cliToolFilter)
 
   // Flush any diagnostics that fired during the banner draw. The
   // scrollback sink was put into buffering mode right after construction

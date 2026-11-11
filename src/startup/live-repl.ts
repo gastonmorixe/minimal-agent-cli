@@ -17,7 +17,6 @@
 
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { clipboardText } from "@minimal-agent/core/host/clipboard"
-import type { UserConfig } from "@minimal-agent/core/host/config"
 import { getGlobalEventBus } from "@minimal-agent/core/host/global-bus"
 import { mediaPasteInterceptor } from "@minimal-agent/core/host/paste-intercept"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
@@ -25,6 +24,7 @@ import { AutoAskController } from "@minimal-agent/core/host-kit/auto-ask"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import type { ResolvedLiveAreaSlot } from "@minimal-agent/core/plugin-api/types/plugin"
+import type { CliUserConfig } from "../config/terminal-config.ts"
 import type { ReplAgentLike, runRepl } from "../repl.ts"
 import type { Spinner } from "../ui/spinner/index.ts"
 import type { StatusSpinnerTheme } from "../ui/status/line-renderer.ts"
@@ -45,7 +45,7 @@ export interface LiveAreaReplOptions {
   /** Raw CLI args (read for `--show-hidden-chars`). */
   args: string[]
   /** The loaded user config (nerdGlyphCells, autoAsk). */
-  userConfig: UserConfig
+  userConfig: CliUserConfig
   /** The mode manager, or `null` when no plugin modes loaded. */
   modeManager: ModeManager | null
   /** True when any plugin contributed tools / prompt / modes. */
