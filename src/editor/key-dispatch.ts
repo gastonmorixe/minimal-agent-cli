@@ -925,7 +925,9 @@ export class EditorKeyDispatcher {
         buf.newline()
         return "changed"
       }
-      // bare Enter via kitty
+      // bare Enter via kitty. Same hook order as the byte path: an overlay
+      // (slash menu, prompts, mentions, ask-user) gets first crack at Enter.
+      if (host.dispatchKeyHook("Enter")) return "changed"
       if (buf.isBlank()) {
         buf.clear()
         return "changed"
@@ -938,6 +940,8 @@ export class EditorKeyDispatcher {
     }
 
     if (code === 9 && !shift && !alt && !ctrl) {
+      // Same as the byte path: overlays complete on Tab (kitty `\x1b[9u`).
+      if (host.dispatchKeyHook("Tab")) return "changed"
       buf.insert("\t")
       return "changed"
     }
@@ -1009,17 +1013,36 @@ export class EditorKeyDispatcher {
       }
     }
 
-    if (text && !ctrl) {
-      buf.insert(text)
-      return "changed"
-    }
+    if (text && !ctrl) return this.insertTyped(text)
 
     if (!shift && !alt && !ctrl && isPrintableCodePoint(code)) {
-      buf.insert(String.fromCodePoint(code))
-      return "changed"
+      return this.insertTyped(String.fromCodePoint(code))
     }
 
     return "ignore"
+  }
+
+  /**
+   * Insert text typed as a CSI-u key. Mirrors the byte path: while a modal
+   * overlay owns the input line, each char goes to the `editor.key` hook and
+   * the hidden buffer stays as is. Else the text is inserted, and each `/` or
+   * `$` is dispatched after its insert so the slash menu can open.
+   */
+  private insertTyped(text: string): "changed" {
+    const { host } = this
+    if (host.isOverlayOwned()) {
+      for (const ch of text) host.dispatchKeyHook(ch)
+      return "changed"
+    }
+    if (!text.includes("/") && !text.includes("$")) {
+      host.buf.insert(text)
+      return "changed"
+    }
+    for (const ch of text) {
+      host.buf.insert(ch)
+      if (ch === "/" || ch === "$") host.dispatchKeyHook(ch)
+    }
+    return "changed"
   }
 
   private consumeBracketedPaste(): "wait" | boolean {
