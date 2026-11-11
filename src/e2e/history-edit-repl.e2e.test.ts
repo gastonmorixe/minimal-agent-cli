@@ -107,8 +107,7 @@ describe("history edit live-area command bridge", () => {
       bus,
       sessionId: sid,
       embeddedDir: root,
-      homeDir: root,
-      roots: { project: [join(root, ".agents", "plugins")] },
+      roots: { project: [join(root, ".agents", "minimal-agent", "plugins")] },
       hostOptions: { sessionsDir: sessions },
       logger: () => {},
     })

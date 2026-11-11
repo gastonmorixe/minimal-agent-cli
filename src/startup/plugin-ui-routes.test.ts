@@ -28,7 +28,7 @@ mkdirSync(TMP_ROOT, { recursive: true })
 const DIR = mkdtempSync(join(TMP_ROOT, "plugin-ui-routes-"))
 const HOME_DIR = join(DIR, "home")
 const PROJECT = join(DIR, "project")
-const PLUGIN = join(PROJECT, ".agents", "plugins", "ui-probe")
+const PLUGIN = join(PROJECT, ".agents", "minimal-agent", "plugins", "ui-probe")
 const MARK = join(DIR, "ui-imported.txt")
 const CHILD = join(import.meta.dir, "fixtures", "resume-kill-child.ts")
 

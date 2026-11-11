@@ -13,8 +13,8 @@
  *   2. Blank / whitespace-only injected text is ignored (no turn).
  *   3. A malformed payload (no `text`) is ignored without throwing.
  *
- * The loader's three discovery roots are pointed at an empty temp dir so
- * the user's real `~/.agents/plugins` never loads — the test stays
+ * The loader's discovery roots are pointed at an empty temp dir so no
+ * real plugin of the user loads. The test stays
  * deterministic and side-effect-free apart from the per-sid `<sid>.queue`
  * file, which `afterEach` unlinks.
  *
@@ -95,8 +95,7 @@ async function emptyLoader(bus: EventBus, sid: string): Promise<PluginLoader> {
     bus,
     sessionId: sid,
     embeddedDir: root,
-    homeDir: root,
-    roots: { project: [join(root, ".agents", "plugins")] },
+    roots: { project: [join(root, ".agents", "minimal-agent", "plugins")] },
     logger: () => {},
   })
 }

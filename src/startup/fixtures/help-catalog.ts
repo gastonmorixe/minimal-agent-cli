@@ -34,7 +34,7 @@ export function fixtureHelpCatalog(
   overrides: Pick<HelpCatalogInput, "cli" | "env" | "config"> = {},
 ): CatalogCliEntry[] {
   return readHelpCatalog({
-    roots: { embedded: [HELP_FIXTURE_ROOT], user: [], home: [], project: [] },
+    roots: { embedded: [HELP_FIXTURE_ROOT], user: [], project: [] },
     platform: "all",
     ...overrides,
   })
