@@ -26,7 +26,9 @@
  * `--fast`, `--json`, `--diagnostics`, `--dump-paths`, `--table`,
  * `--dry-run`, `--force`, `--all` and the optional `--usage` were in
  * neither set (no scan change: the scan never takes a `--` token as a
- * prompt).
+ * prompt). `--dry-run` was then only the `auth-status prune` flag. It is
+ * now also a global flag (below, group plugins). The prune command still
+ * reads its own `--dry-run`.
  *
  * @module cli/registry/global-flags
  */
@@ -485,6 +487,66 @@ const PLUGINS_FLAGS: readonly FlagSpec[] = [
     value: "none",
     env: "MINIMAL_AGENT_NO_AGENTS_MD",
     summary: "Skip AGENTS.md injection, same as --disable-plugin agents-md",
+    group: "plugins",
+    global: true,
+  },
+  {
+    name: "dry-run",
+    type: "boolean",
+    value: "none",
+    env: "MINIMAL_AGENT_DRY_RUN",
+    summary:
+      "Build the request, print it as JSON, do not send it (same as --enable-plugin dry-run)",
+    group: "plugins",
+    global: true,
+  },
+  // Plugin prompt-TEXT suppression. Every flag here has UNAMBIGUOUS arity:
+  // the CLI takes a bare positional prompt, so an optional-value flag would
+  // swallow the prompt text.
+  {
+    name: "no-plugin-prompts",
+    type: "boolean",
+    value: "none",
+    // The env name sits on THIS flag because its `1`/`true` means the same
+    // thing (`resolvePluginPromptSuppression` in core reads it that way).
+    // `0`/`false` is the `--plugin-prompts` side.
+    env: "MINIMAL_AGENT_PLUGIN_PROMPTS",
+    summary: "Suppress all plugin prompt text",
+    description: [
+      "A suppressed plugin still loads and still advertises its tools.",
+      "Only its prompt text is dropped. Env 1 or true does the same.",
+    ],
+    group: "plugins",
+    global: true,
+  },
+  {
+    name: "plugin-prompts",
+    type: "boolean",
+    value: "none",
+    summary: "Keep all plugin prompt text on, per id use --plugin-prompts-for",
+    description: ["Same as env 0 or false. A config suppress list still applies."],
+    group: "plugins",
+    global: true,
+  },
+  {
+    name: "no-plugin-prompts-for",
+    type: "string",
+    value: "required",
+    valueName: "id",
+    multiple: true,
+    summary: "Suppress the prompt text of these plugins only",
+    description: ["Repeatable. A comma-separated list is also accepted."],
+    group: "plugins",
+    global: true,
+  },
+  {
+    name: "plugin-prompts-for",
+    type: "string",
+    value: "required",
+    valueName: "id",
+    multiple: true,
+    summary: "Keep the prompt text of these plugins on",
+    description: ["Repeatable. A keep wins over --no-plugin-prompts for the same id."],
     group: "plugins",
     global: true,
   },

@@ -7,8 +7,9 @@
  * 4 MB lost 5 of 5 runs). So the route sets `process.exitCode` and returns.
  * This test spawns a child that runs the real route with the real
  * `process.stdout` and the real exit path, then reads its stdout slowly.
- * Every line must parse, the last line must be `run_finished` with outcome
- * `waiting`, and the child must end by itself with code 1.
+ * Every line must parse, the last two lines must be `run_finished` and the
+ * final `result` line (R11), both with outcome `waiting`, and the child must
+ * end by itself with code 1.
  *
  * Limit: the child calls `runNonInteractivePrompt` directly. It does not go
  * through `src/index.ts`. The CLI test transport always completes, so a
@@ -58,7 +59,7 @@ async function runChild(bytes: number): Promise<{ exitCode: number; stdout: stri
 describe("stream-json tail on the exit(1) waiting path", () => {
   for (const bytes of [70_000, 1_000_000, 4_000_000]) {
     it(
-      `${bytes} bytes of text, slow reader: last line is run_finished waiting, every run`,
+      `${bytes} bytes of text, slow reader: run_finished waiting, then the result line last, every run`,
       async () => {
         let lost = 0
         for (let i = 0; i < RUNS; i++) {
@@ -66,12 +67,16 @@ describe("stream-json tail on the exit(1) waiting path", () => {
           expect(exitCode).toBe(1)
           const lines = stdout.split("\n").filter((l) => l.length > 0)
           let last: Record<string, unknown> | undefined
+          let prev: Record<string, unknown> | undefined
           try {
             last = JSON.parse(lines.at(-1) ?? "") as Record<string, unknown>
+            prev = JSON.parse(lines.at(-2) ?? "") as Record<string, unknown>
           } catch {
             last = undefined
           }
-          if (last?.type !== "run_finished" || last.outcome !== "waiting") lost++
+          // SPEC-ONESHOT R11: the final result line comes after run_finished.
+          if (last?.type !== "result" || last.outcome !== "waiting") lost++
+          else if (prev?.type !== "run_finished" || prev.outcome !== "waiting") lost++
         }
         expect(lost).toBe(0)
       },

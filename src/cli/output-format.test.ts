@@ -32,8 +32,15 @@ describe("isOutputFormat", () => {
     expect(isOutputFormat(undefined)).toBe(false)
   })
 
-  it("exposes exactly the three formats in OUTPUT_FORMATS", () => {
-    expect([...OUTPUT_FORMATS]).toEqual(["text", "json", "stream-json"])
+  it("accepts open-responses (SPEC-ONESHOT R16)", () => {
+    expect(isOutputFormat("open-responses")).toBe(true)
+    expect(resolveOutputFormat({ outputFormatFlag: "open-responses", jsonFlag: true })).toBe(
+      "open-responses",
+    )
+  })
+
+  it("exposes exactly the four formats in OUTPUT_FORMATS", () => {
+    expect([...OUTPUT_FORMATS]).toEqual(["text", "json", "stream-json", "open-responses"])
   })
 })
 

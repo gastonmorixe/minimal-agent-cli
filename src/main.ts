@@ -78,18 +78,22 @@ import { lastAdvertisedModeFromHistory, ModeManager } from "@minimal-agent/core/
 import { PluginLoader, providerRootsOf } from "@minimal-agent/core/host-kit/plugin-loader"
 import { resolveAgentHome } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import type { Message } from "@minimal-agent/core/sdk/messages"
-import { parseSchemaFile } from "@minimal-agent/core/sdk/output-schema"
 import { extractPromptFromArgs } from "./cli/extract-prompt.ts"
 import { resolveInitialModeId } from "./cli/non-interactive-defaults.ts"
+import { resolvePluginPromptsForBoot } from "./cli/plugin-prompts-resolution.ts"
 import { registerCompactHostCommand } from "./commands/compact.ts"
 import { registerContinueHostCommand } from "./commands/continue.ts"
 import { InteractiveSession } from "./interactive-session.ts"
+import { bareDisableIds } from "./oneshot/bare.ts"
+import { setupOneShot } from "./oneshot/oneshot-options.ts"
+import { prepareOrInput } from "./oneshot/or-input.ts"
 import { closeStartupTreeWithLoadedTools } from "./plugins-ui/startup-tool-entries.ts"
 import { toolPresentationMap } from "./plugins-ui/tool-presentation.ts"
 import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
 import { buildResumeHeader, replayToScrollback } from "./session-replay.ts"
 import { attachStartupDiagnosticSinks } from "./startup/diagnostic-sinks.ts"
+import { dryRunEnableIds, startDryRun } from "./startup/dry-run.ts"
 import { type EntrypointStderr, prepareEntrypointArgs } from "./startup/entry-args.ts"
 import {
   currentExitCode,
@@ -228,8 +232,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // `startup/entry-args.ts`. It leans on the pure `cli/*` parsers and keeps
   // this file a thin composition root. See that module for the precedence
   // rules.
+  // R15: `--input-format open-responses` reads the request on stdin, maps it to flags.
+  const orInput = await prepareOrInput(io)
   const entry = prepareEntrypointArgs({
-    rawArgv: [...io.argv],
+    rawArgv: [...orInput.argv],
     env,
     cwd,
     exit,
@@ -275,6 +281,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   failure.args = args
   failure.outputFormat = outputFormat
   failure.outputSchemaPath = outputSchemaPath
+
+  // `--dry-run` preflight, before any network step (see startup/dry-run.ts).
+  const dryRun = startDryRun({ args, env, io, exit, outputFormat, commandPlan, orInput })
 
   // Publish the resolved agent home into the environment BEFORE anything else,
   // so every plugin (and subprocess) inherits an authoritative, relocation-
@@ -639,6 +648,11 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     args.includes("--no-agents-md") ||
     args.includes("--no-agents") ||
     env.MINIMAL_AGENT_NO_AGENTS_MD === "1"
+  // `--bare` (SPEC-ONESHOT R13): disable every manifest plugin except those
+  // that own a `--tools` tool, the `--host-mode` id, or an `--enable-plugin`
+  // id. Always skip AGENTS.md. Provider plugins were already registered by
+  // bootProviderDiscovery above, so they stay. Rule: src/oneshot/bare.ts.
+  const bareOff = bareDisableIds(opts, pluginRoots, args, env)
   const pluginOverrides = resolvePluginEnabledOverrides({
     config: configPluginOverrides,
     env: {
@@ -649,10 +663,14 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       disable: [
         ...collectFlagValues(args, "--disable-plugin"),
         ...(noAgentsMd ? ["agents-md"] : []),
+        ...bareOff,
       ],
-      enable: collectFlagValues(args, "--enable-plugin"),
+      // `--dry-run` = `--enable-plugin dry-run`. A disable still wins.
+      enable: [...collectFlagValues(args, "--enable-plugin"), ...dryRunEnableIds(args, env)],
     },
   })
+  // Plugin prompt-TEXT suppression. Must precede getPromptBlocksAsync below.
+  const pluginPromptSuppression = resolvePluginPromptsForBoot(args, env, diag.warn)
   // Late-bound getter for the agent's LIVE model id. The loader loads before
   // the Agent is constructed, and the model can change mid-session (/model,
   // preflight switch) or differ on resume, so the ModelInfo tool must read the
@@ -661,6 +679,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   let getLiveProviderId: () => string | undefined = () => selectedProviderId
   // Only the REPL loads plugin `ui` modules and the terminal env (S35).
   const replRoute = isReplRun(extractPromptFromArgs(args), commandPlan.command)
+  // `dryRun.checked` fails closed: with `--dry-run` and no loaded dry-run
+  // plugin the request would go out for real, so it exits 1 before any
+  // model call. Else it returns the loader unchanged.
   const loader = await PluginLoader.load({
     // Every root comes from the CLI (S40), incl. the dev plugins checkout.
     roots: pluginRoots,
@@ -683,10 +704,14 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     enabledPluginIds: pluginOverrides.forceEnabled,
     // Effective platform for `platforms` whitelist gating (CLI/env/detected).
     effectivePlatform: resolvedPlatform.platform,
+    // Per-plugin prompt-TEXT suppression. A suppressed plugin still loads and
+    // still advertises its tools; only its prompt text is dropped. Resolved
+    // above, so it is fixed before `getPromptBlocksAsync()` memoizes.
+    pluginPrompts: pluginPromptSuppression,
     // Core reads no process stream (S44). The terminal host gives plugin
     // handlers its own streams (`ctx.stdin`, `ctx.stdout`, `ctx.stderr`).
     handlerStdio: { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr },
-  })
+  }).then(dryRun.checked)
   // Expose the loader's event bus to deep emit-points (notably
   // `client.ts`, which broadcasts `quota.headersReceived` after every
   // successful API response — see src/global-bus.ts for the rationale).
@@ -721,6 +746,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   const promptBlocks = await loader.getPromptBlocksAsync()
   const loadedTools = loader.getExtraTools()
   const loadedModes = loader.getModes()
+  // Both getters already drop a suppressed plugin's text (the loader filters
+  // by `pluginPrompts` in `buildBlock` and in `getPromptBlocksAsync`), so
+  // `hasPromptBlock` stays false when every plugin prompt text is suppressed.
+  // The quiet "plugins loaded" row below then does not claim prompt text.
   const hasPromptBlock =
     loader.getPromptBlock() !== null ||
     (promptBlocks.afterInstructions != null && promptBlocks.afterInstructions.length > 0)
@@ -743,7 +772,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // construction (search this file for `hasPlugins`). Independently of
   // how we choose to render the startup tree, those callers want one
   // bool: "did anything plugin-shaped get loaded".
-  const hasPlugins = loadedTools.length > 0 || hasPromptBlock || loadedModes.length > 0
+  // `--dry-run` forces it on: the hook-only dry-run plugin alone (`--bare`)
+  // gives no tool, prompt, or mode, so the loader and its send halt would
+  // not reach the session, and the request would go out for real.
+  const hasPlugins = loadedTools.length > 0 || hasPromptBlock || loadedModes.length > 0 || dryRun.on
   // Show what the plugin layer actually contributes — names of callable
   // tools rather than an aggregate `3 tool(s)`. The active mode (if any)
   // gets its own row below at the `printStartupRow("mode", …)` site, so
@@ -1048,22 +1080,14 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // replayed tool to the first live tool.
   const toolTimeTracker = new ToolTimeTracker()
 
-  // --output-schema FILE (Phase 4): read + parse the JSON Schema so the agent
-  // can constrain its final structured answer. parseSchemaFile folds a
-  // malformed-JSON / non-object file into a thrown error we surface cleanly
-  // and exit 1 (a script passing a broken schema should fail loudly, not
-  // silently run unconstrained).
-  let outputSchema: object | undefined
-  if (outputSchemaPath !== undefined) {
-    try {
-      const raw = readFileSync(outputSchemaPath, "utf8")
-      outputSchema = parseSchemaFile(raw)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`--output-schema: ${msg}\n`)
-      exit(1)
-    }
-  }
+  // One-shot options (SPEC-ONESHOT R6-R9). --output-schema is a FILE (a bad
+  // or broken file exits 1, as before) or inline JSON (`{...}`, bad JSON
+  // exits 2). --strict, --append-system-prompt(-file), and --temperature go
+  // to core only when the core in use has the feature (risk K1, pinned
+  // core): else one stderr warn line, and the run goes on without it.
+  const oneShot = setupOneShot(orInput.withAppend(opts), (p) => readFileSync(p, "utf8"), exit)
+  const outputSchema = oneShot.outputSchema
+  const appendDeps = oneShot.appendDeps
 
   // mdstream's syntax/theme dump costs ~20ms cold. Spawn its persistent raw-
   // code server during startup and overlap warmup with session construction so
@@ -1085,6 +1109,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     ...(credentialName ? { credentialName } : {}),
     effort,
     ...(outputSchema !== undefined ? { outputSchema } : {}),
+    ...appendDeps,
     ...(speed ? { speed } : {}),
     serviceTier,
     thinkingDisplay,
@@ -1212,7 +1237,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // Non-interactive mode: send prompt, print response, exit. The output
   // routing (formatter, --json / human / --output-schema, plugin stream,
   // schema gate) lives in `host/startup/run-non-interactive.ts`.
-  const prompt = await extractPrompt()
+  const prompt = orInput.prompt ?? (await extractPrompt())
   if (prompt) {
     try {
       await runNonInteractivePrompt({
@@ -1224,6 +1249,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         outputFormat,
         diagnostics: opts.wantDiagnostics,
         outputSchema,
+        // --temperature / --strict: armed on the core for the prompt run only.
+        oneShotRunOptions: oneShot.runOptions,
+        dryRun: dryRun.on, // the dry-run send halt ends the run with exit 0
         loader: hasPlugins ? loader : null,
         cwd: cwd,
         // Values for the stream-json session_started first line.
@@ -1262,6 +1290,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
               turnAttachments: turnAttachmentSeam.producers,
               codeHighlighter,
               systemPromptOverrides: opts.systemPromptOverrides,
+              ...appendDeps,
             }),
           ),
       })

@@ -180,6 +180,24 @@ class RunPortState {
 }
 
 /**
+ * The contributor list with the host append text (`appendSystemPrompt`,
+ * SPEC-ONESHOT R8) after the plugin contributor. Same rule as core's
+ * `openAgentCoreSession` (M2): blank or missing text adds nothing, and the
+ * text lands after the instructions block. Read structurally, so this also
+ * builds against a pinned core whose deps type has no such field (the
+ * caller only sets it when that core supports it).
+ */
+export function withAppendContributor<C extends object>(
+  base: C,
+  deps: object,
+): Array<C | { afterInstructionsBlocks: () => Array<{ type: "text"; text: string }> }> {
+  const text = (deps as { appendSystemPrompt?: unknown }).appendSystemPrompt
+  const trimmed = typeof text === "string" ? text.trim() : ""
+  if (trimmed === "") return [base]
+  return [base, { afterInstructionsBlocks: () => [{ type: "text", text: trimmed }] }]
+}
+
+/**
  * Build the `Session` behind one {@link InteractiveSession}: the same
  * host collaborators `buildAgentCore` wires (plugin-loaded tool registry,
  * mode manager, session persistence, lifecycle hooks, media resolver),
@@ -274,7 +292,7 @@ async function openInteractiveSession(
     ...(toolFilter ? { toolFilter } : {}),
     toolExecutor,
     ...(sessionPersistence ? { sessionPersistence } : {}),
-    promptContributors: [promptContributor],
+    promptContributors: withAppendContributor(promptContributor, deps),
     ...(modeProvider ? { modeProvider } : {}),
     mediaResolver,
     lifecycle,

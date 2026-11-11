@@ -221,7 +221,10 @@ describe("CLI routes over createRuntime / Session", () => {
         stdout: (chunk) => chunks.push(chunk),
       }),
     )
-    const events = parseLines(chunks)
+    const lines = parseLines(chunks)
+    // SPEC-ONESHOT R11: one final result line after the legacy event kinds.
+    expect(lines.at(-1)).toMatchObject({ type: "result", text: ANSWER, outcome: "completed" })
+    const events = lines.slice(0, -1)
     expect(events.every((e) => LEGACY_EVENT_KINDS.includes(e.type as never))).toBeTrue()
     expect(events.at(0)?.type).toBe("turn_started")
     expect(events.at(-1)?.type).toBe("turn_completed")
@@ -229,7 +232,7 @@ describe("CLI routes over createRuntime / Session", () => {
     expectOneSessionRun()
   })
 
-  it("--output-format stream-json: session_started first, run_finished completed last", async () => {
+  it("--output-format stream-json: session_started first, run_finished completed, then result last", async () => {
     const agent = await InteractiveSession.create(sessionDeps())
     const chunks: string[] = []
     await runNonInteractivePrompt(
@@ -243,7 +246,8 @@ describe("CLI routes over createRuntime / Session", () => {
     )
     const events = parseLines(chunks)
     expect(events.at(0)?.type).toBe("session_started")
-    expect(events.at(-1)).toMatchObject({ type: "run_finished", outcome: "completed" })
+    expect(events.at(-2)).toMatchObject({ type: "run_finished", outcome: "completed" })
+    expect(events.at(-1)).toMatchObject({ type: "result", outcome: "completed", text: ANSWER })
     expect(events.map((e) => e.seq)).toEqual(events.map((_, i) => i))
     expect(events.every((e) => e.sessionId === SESSION_ID)).toBeTrue()
     expect(events.filter((e) => e.type === "text_delta").map((e) => e.text)).toEqual(["po", "ng"])

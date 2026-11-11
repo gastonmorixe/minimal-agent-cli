@@ -85,6 +85,17 @@ function neverAgent(): ReplAgentLike {
   } as unknown as ReplAgentLike
 }
 
+/**
+ * Drop the final `result` line (SPEC-ONESHOT R11) and check it is there.
+ * The event lines before it must still equal the golden.
+ */
+function eventsOnly(stdout: string): string {
+  const lines = stdout.split("\n").filter((l) => l.length > 0)
+  const last = JSON.parse(lines.at(-1) ?? "{}") as Record<string, unknown>
+  expect(last.type).toBe("result")
+  return `${lines.slice(0, -1).join("\n")}\n`
+}
+
 interface RunCapture {
   readonly stdout: string
   readonly stderr: string
@@ -142,7 +153,7 @@ async function runJson(
 describe("S38: json route stdout guard", () => {
   it("json stdout equals the events-jsonl golden byte for byte", async () => {
     const run = await runJson(() => openSession())
-    expect(run.stdout).toBe(GOLDEN)
+    expect(eventsOnly(run.stdout)).toBe(GOLDEN)
     expect(run.exitCodes).toEqual([])
     expect(run.stderr).toBe("")
   })
@@ -154,7 +165,7 @@ describe("S38: json route stdout guard", () => {
       }),
     )
     // The JSON event lines still pass the guard.
-    expect(run.stdout).toBe(GOLDEN)
+    expect(eventsOnly(run.stdout)).toBe(GOLDEN)
     expect(run.stdout).not.toContain("a human line")
     expect(run.exitCodes).toEqual([1])
     expect(run.stderr).toContain("dropped 1 stray stdout write")
@@ -167,7 +178,7 @@ describe("S38: json route stdout guard", () => {
         console.log("a human line")
       }),
     )
-    expect(run.stdout).toBe(GOLDEN)
+    expect(eventsOnly(run.stdout)).toBe(GOLDEN)
     expect(run.exitCodes).toEqual([1])
   })
 
@@ -206,7 +217,7 @@ describe("S38: json route stdout guard", () => {
       guard.restore()
       process.stdout.write = original
     }
-    expect(stdout).toBe(GOLDEN)
+    expect(eventsOnly(stdout)).toBe(GOLDEN)
   })
 })
 
@@ -216,7 +227,7 @@ describe("S39: --diagnostics on the json route", () => {
 
   it("writes only lines with a ch field, with both event and diag lines", async () => {
     const run = await runJson(withDiag, { diagnostics: true })
-    const lines = run.stdout
+    const lines = eventsOnly(run.stdout)
       .split("\n")
       .filter((l) => l.length > 0)
       .map((l) => JSON.parse(l) as Record<string, unknown>)
@@ -234,7 +245,7 @@ describe("S39: --diagnostics on the json route", () => {
 
   it("without the flag, stdout still equals the golden when diagnostics fire", async () => {
     const run = await runJson(withDiag)
-    expect(run.stdout).toBe(GOLDEN)
+    expect(eventsOnly(run.stdout)).toBe(GOLDEN)
   })
 })
 

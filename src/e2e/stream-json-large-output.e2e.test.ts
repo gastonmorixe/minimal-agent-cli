@@ -106,6 +106,8 @@ type RunReport = {
   stdoutBytes: number
   badLines: number
   lastType: string | null
+  /** Type of the line before the last one. */
+  prevType: string | null
   deltaChars: number
   completedChars: number
 }
@@ -113,6 +115,7 @@ type RunReport = {
 function measure(exitCode: number, stdout: string): RunReport {
   let badLines = 0
   let lastType: string | null = null
+  let prevType: string | null = null
   let deltaChars = 0
   let completedChars = 0
   for (const line of stdout.split("\n")) {
@@ -122,16 +125,26 @@ function measure(exitCode: number, stdout: string): RunReport {
       obj = JSON.parse(line) as Record<string, unknown>
     } catch {
       badLines++
+      prevType = lastType
       lastType = "<unparsable>"
       continue
     }
+    prevType = lastType
     lastType = typeof obj.type === "string" ? obj.type : null
     if (obj.type === "text_delta" && typeof obj.text === "string") deltaChars += obj.text.length
     if (obj.type === "item_completed" && obj.itemType === "text" && typeof obj.text === "string") {
       completedChars += obj.text.length
     }
   }
-  return { exitCode, stdoutBytes: stdout.length, badLines, lastType, deltaChars, completedChars }
+  return {
+    exitCode,
+    stdoutBytes: stdout.length,
+    badLines,
+    lastType,
+    prevType,
+    deltaChars,
+    completedChars,
+  }
 }
 
 const CASES: Array<{ name: string; payload: string }> = [
@@ -145,7 +158,7 @@ const CASES: Array<{ name: string; payload: string }> = [
 describe.skipIf(!HAVE_PROVIDER)("stream-json large output on a slow reader", () => {
   for (const c of CASES) {
     it(
-      `${c.name}: every line JSON, run_finished last, full text, ${RUNS} runs`,
+      `${c.name}: every line JSON, run_finished then result last, full text, ${RUNS} runs`,
       async () => {
         const reports: RunReport[] = []
         for (let i = 0; i < RUNS; i++) {
@@ -155,7 +168,8 @@ describe.skipIf(!HAVE_PROVIDER)("stream-json large output on a slow reader", () 
         const lossy = reports.filter(
           (r) =>
             r.badLines > 0 ||
-            r.lastType !== "run_finished" ||
+            r.prevType !== "run_finished" ||
+            r.lastType !== "result" ||
             r.deltaChars !== c.payload.length ||
             r.completedChars !== c.payload.length,
         )
@@ -164,7 +178,9 @@ describe.skipIf(!HAVE_PROVIDER)("stream-json large output on a slow reader", () 
         for (const r of reports) {
           expect(r.exitCode).toBe(0)
           expect(r.badLines).toBe(0)
-          expect(r.lastType).toBe("run_finished")
+          // SPEC-ONESHOT R11: the final result line follows run_finished.
+          expect(r.prevType).toBe("run_finished")
+          expect(r.lastType).toBe("result")
           expect(r.deltaChars).toBe(c.payload.length)
           expect(r.completedChars).toBe(c.payload.length)
         }

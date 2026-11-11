@@ -211,6 +211,28 @@ const VISIBLE_ENV: readonly BuiltinEnvSpec[] = [
     description: ["Same as --disable-plugin agents-md."],
   },
   {
+    name: "MINIMAL_AGENT_PLUGIN_PROMPTS",
+    set: "1",
+    flag: "no-plugin-prompts",
+    // Direction follows the resolver in core
+    // (`resolvePluginPromptSuppression`): `1`/`true` suppresses every plugin
+    // prompt text, `0`/`false` suppresses nothing.
+    summary: "Suppress all plugin prompt text",
+    description: [
+      "0 or false turns every plugin prompt text back on.",
+      "A suppressed plugin still loads and keeps its tools.",
+    ],
+  },
+  {
+    name: "MINIMAL_AGENT_DRY_RUN",
+    set: "1",
+    // No `flag:` pointer on purpose. Command help matches env rows by flag
+    // name, and `auth-status prune` has its own `--dry-run`. A pointer would
+    // list this variable in prune help, where it does nothing.
+    summary: "Build the request, print it as JSON, do not send it",
+    description: ["Same as --dry-run and --enable-plugin dry-run."],
+  },
+  {
     name: "MINIMAL_AGENT_PLUGINS_REPO",
     summary: "Git URL of the extended plugins repo, for a fork or mirror",
   },

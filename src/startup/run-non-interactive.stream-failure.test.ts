@@ -296,7 +296,9 @@ describe("runNonInteractivePrompt: stream-json failure lines", () => {
     writeStreamJsonFailure(err, { sessionId: "sid-f", streamInfo: STREAM_INFO })
     const lines = parseLines(out) as Array<Record<string, unknown>>
     expect(lines.length).toBe(before)
-    expect(eventPart(lines.at(-1))).toEqual({ type: "run_finished", outcome: "failed" })
+    // SPEC-ONESHOT R11: the final result line follows run_finished.
+    expect(lines.at(-1)).toMatchObject({ type: "result", outcome: "failed" })
+    expect(eventPart(lines.at(-2))).toEqual({ type: "run_finished", outcome: "failed" })
     expect(lines.map((l) => l.seq)).toEqual(lines.map((_, i) => i))
   })
 })
