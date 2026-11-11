@@ -27,6 +27,7 @@ import type { ResolvedLiveAreaSlot } from "@minimal-agent/core/plugin-api/types/
 import type { CliUserConfig } from "../config/terminal-config.ts"
 import type { ReplAgentLike, runRepl } from "../repl.ts"
 import type { Spinner } from "../ui/spinner/index.ts"
+import { attachLiveAreaRequestDump } from "../ui/status/debug-dump-live.ts"
 import type { StatusSpinnerTheme } from "../ui/status/line-renderer.ts"
 import { c } from "../ui/style/ansi.ts"
 
@@ -251,6 +252,15 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
   // live area.
   interceptor.install()
 
+  // `--debug`: paint the transport's request dump above the live area. No
+  // other TUI sink renders Debug (the footer skips it, scrollback drops
+  // anything above Warning, and the stderr mirror is off in interactive mode
+  // because a raw fd 2 write tears the live area). Pre-split, the transport
+  // printed the dump itself and the interceptor turned it into scrollback;
+  // this restores that through the compositor.
+  const wantsDump = args.includes("--debug") || process.env.DEBUG === "1"
+  const dumpHandle = wantsDump ? attachLiveAreaRequestDump(compositor) : null
+
   try {
     await repl(agent, {
       formatterCmd,
@@ -271,6 +281,9 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
       liveAreaSlots,
     })
   } finally {
+    // Drain a dump still in flight (turn aborted mid-request) before the
+    // compositor inside runReplLiveArea goes away.
+    dumpHandle?.dispose()
     interceptor.uninstall()
     process.stdout.off("resize", onResize)
   }
