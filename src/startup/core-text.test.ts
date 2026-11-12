@@ -8,6 +8,7 @@ import {
 } from "@minimal-agent/core/errors"
 
 import {
+  contextNoticeText,
   errorText,
   isNoCredentials,
   renderCoreError,
@@ -71,5 +72,35 @@ describe("core-text", () => {
     expect(isNoCredentials(e)).toBe(true)
     expect(isNoCredentials(new Error("x", { cause: e }))).toBe(true)
     expect(isNoCredentials(new Error("x"))).toBe(false)
+  })
+
+  test("recovery notices keep the old bytes", () => {
+    expect(
+      contextNoticeText({
+        kind: "auto_compacted",
+        compactKind: "remote",
+        messagesBefore: 40,
+        messagesAfter: 3,
+      }),
+    ).toBe("Auto-compacted context (remote): 40 -> 3 messages.")
+    expect(contextNoticeText({ kind: "retrying_failed_turn" })).toBe(
+      "Retrying the failed user turn once.",
+    )
+    expect(contextNoticeText({ kind: "auto_compact_failed", cause: { message: "boom" } })).toBe(
+      "Auto-compact failed: boom",
+    )
+  })
+
+  test("auto-compact failed with a CoreError cause renders through errorText", () => {
+    const e = new UnhandledAuthTypeError("weird")
+    expect(contextNoticeText({ kind: "auto_compact_failed", cause: e.toJSON() })).toBe(
+      `Auto-compact failed: ${errorText(e)}`,
+    )
+    expect(
+      contextNoticeText({
+        kind: "auto_compact_failed",
+        cause: { kind: "SomeUnknownError", fields: {} },
+      }),
+    ).toBe("Auto-compact failed: SomeUnknownError")
   })
 })
