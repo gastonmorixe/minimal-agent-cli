@@ -571,4 +571,30 @@ describe("empty message events (S14.2 step 0b)", () => {
     const plain = strip(renderBlock(typed("zz.sb.reg", { k: "v" })))
     expect(plain.split("\n")[1]).toBe("  ╰ registry says v")
   })
+
+  const withData = (source: string): LogEvent =>
+    event({
+      source,
+      message: "",
+      structuredData: { a: 1 },
+      diagnostic: { source, level: "warn", attrs: { k: "v" } },
+    } as Partial<LogEvent>)
+
+  it("(f8) attrs and structuredData, no renderer: the fallback row is hidden on purpose", () => {
+    // Pinned on purpose: the structuredData rows are the data and the attrs
+    // are derived from them, so printing the fallback too would repeat them.
+    const plain = strip(renderBlock(withData("zz.sb.f8")))
+    const rows = plain.split("\n")
+    expect(rows).toHaveLength(2)
+    expect(rows[1]).toBe("  ╰ a: 1")
+    expect(plain).not.toContain("k=v")
+  })
+
+  it("(f8b) attrs and structuredData, registered renderer: registry row, then data row", () => {
+    registerDiagnosticText("zz.sb.f8b", (a) => `registry says ${String(a.k)}`)
+    const rows = strip(renderBlock(withData("zz.sb.f8b"))).split("\n")
+    expect(rows).toHaveLength(3)
+    expect(rows[1]).toBe("  │ registry says v")
+    expect(rows[2]).toBe("  ╰ a: 1")
+  })
 })

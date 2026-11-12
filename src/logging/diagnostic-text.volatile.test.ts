@@ -135,12 +135,26 @@ describe("look-alike and unlisted names", () => {
   }
 
   test("(known limit) an unlisted volatile key keeps repeats apart", () => {
-    // Known limit of the name list, not a promise. `latency` is volatile in
-    // nature but not in the deny set, so two repeats get different keys and
-    // do not collapse. The fix is to add the name to the deny set.
+    // Known limit of the name rule, not a promise, and it cuts both ways.
+    // (a) This test: a volatile key that is not on the list (for example
+    // latency, next-attempt, retry-after) keeps repeats apart, so they do
+    // not collapse. The fix is to add the name to the list.
+    // (b) The next test: a name on the list can drop a real discriminator.
     expect(isVolatileDiagnosticKey("latency")).toBe(false)
     const a = typed("zz.limit", { curve: "x", latency: 10 })
     const b = typed("zz.limit", { curve: "x", latency: 99 })
     expect(diagnosticKey(a)).not.toBe(diagnosticKey(b))
+  })
+
+  test("(known limit) a listed name can drop a real discriminator", () => {
+    // Known limit of the name rule, not a promise. Names such as size, count,
+    // or a name ending in -ms, -bytes, -seconds, -at are treated as volatile.
+    // A key that names a real stable limit (max-bytes) or a retry-after-ms
+    // that differs per cause is dropped too. Two different diagnostics that
+    // differ only in such a key COLLAPSE.
+    expect(isVolatileDiagnosticKey("size")).toBe(true)
+    const a = typed("zz.limit.size", { size: 1 })
+    const b = typed("zz.limit.size", { size: 2 })
+    expect(diagnosticKey(a)).toBe(diagnosticKey(b))
   })
 })
