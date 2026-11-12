@@ -270,7 +270,7 @@ export async function runLoginCommand(opts: LoginCommandOptions = {}): Promise<n
   try {
     method = resolveLoginMethod(opts)
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
+    const msg = errorText(err)
     writeCommandRows(renderLoginFailure(msg), output)
     return 1
   }

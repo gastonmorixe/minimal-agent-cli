@@ -28,6 +28,7 @@
 
 import type { AgentEvent, StatusEvent } from "@minimal-agent/core/sdk/events"
 import { serializeEvent } from "@minimal-agent/core/sdk/events"
+import { errorEventText } from "./startup/core-text.ts"
 import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 
 // ---------------------------------------------------------------------------
@@ -172,7 +173,8 @@ export function renderHumanProgressLine(event: AgentEvent): string {
       return `${marker} ${turnNoticePlainText(event.notice)}`
     }
     case "error":
-      return event.hint ? `✗ ${event.message}\n  hint: ${event.hint}` : `✗ ${event.message}`
+      const text = errorEventText(event)
+      return event.hint ? `✗ ${text}\n  hint: ${event.hint}` : `✗ ${text}`
     case "status":
       return renderStatusLine(event)
     case "ask_user":
