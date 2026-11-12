@@ -336,8 +336,9 @@ async function buildTo(
 ): Promise<void> {
   // Embedded plugin slot: no-op while plugins.bundle.json lists nothing.
   bundlePlugins({
-    listFile: join(CLI_DIR, "plugins.bundle.json"),
-    pluginsRepo: resolve(CLI_DIR, "..", "minimal-agent-plugins"),
+    listFile: process.env.MA_BUNDLE_LIST_FILE ?? join(CLI_DIR, "plugins.bundle.json"),
+    pluginsRepo:
+      process.env.MA_BUNDLE_PLUGINS_REPO ?? resolve(CLI_DIR, "..", "minimal-agent-plugins"),
     destDir: join(CLI_DIR, "plugins"),
   })
   const before = new Set(bunBuildLeftovers())
