@@ -43,13 +43,13 @@ import type { Message } from "@minimal-agent/core/sdk/messages"
 import type { InputQueuePort } from "@minimal-agent/core/sdk/ports"
 import type { PreflightIssue } from "@minimal-agent/core/sdk/provider"
 import { toolFilterFromNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
-import { formatTurnNoticePlain } from "@minimal-agent/core/sdk/turn-notice"
 import { inputCaptureStack } from "./input/input-capture-stack.ts"
 import { retryBoundaryText } from "./logging/retry-boundary-text.ts"
 import { TOOL_PRESENTATION } from "./plugins-ui/tool-presentation.ts"
 import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
 import { createPluginEventsPort, createStatusPort } from "./startup/host-ports.ts"
+import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 import { TERMINAL_TOOL_ENV, terminalColumns } from "./terminal/terminal-tool-env.ts"
 import { type StepLive, TurnRenderPump } from "./turn-render-pump.ts"
 import type { CodeHighlighter } from "./ui/formatter/mdstream-code-highlighter.ts"
@@ -473,7 +473,7 @@ export class InteractiveSession implements ReplAgentLike {
         else if (event.type === "retry-boundary") pump.text(retryBoundaryText(event))
         else if (onEvent) pump.step((live) => onEvent(event, live))
         else if (event.type === "notice") {
-          this.transcript.write(`\n  ${formatTurnNoticePlain(event.notice)}`)
+          this.transcript.write(`\n  ${turnNoticePlainText(event.notice)}`)
         }
       },
       { channels: ["event"] },

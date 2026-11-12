@@ -37,6 +37,7 @@ import { runLogoutCommand } from "../commands/logout.ts"
 import { runSessionsCommand } from "../commands/sessions.ts"
 import { runUsageCommand } from "../commands/usage.ts"
 import { c } from "../ui/style/ansi.ts"
+import { failureText } from "./core-text.ts"
 import { compiledPluginsRoot, computePluginRoots } from "./plugin-roots.ts"
 
 /** Everything the subcommand dispatcher needs from the entry point. */
@@ -85,7 +86,7 @@ export async function runStartupSubcommand(ctx: SubcommandContext): Promise<bool
           process.exit(1)
         }
         console.error(
-          `  ${c.boldRed("error")} could not dump session ${ctx.dumpArg}: ${err instanceof Error ? err.message : String(err)}`,
+          `  ${c.boldRed("error")} ${failureText(`could not dump session ${ctx.dumpArg}`, err)}`,
         )
         process.exit(1)
       }

@@ -47,6 +47,7 @@
 
 import type { AgentEvent } from "@minimal-agent/core/sdk/events"
 import { retryBoundaryText } from "../logging/retry-boundary-text.ts"
+import { errorEventText } from "../startup/core-text.ts"
 import type { ResultAccumulator, SchemaOutcome } from "./result-line.ts"
 import { resultText } from "./result-line.ts"
 
@@ -304,7 +305,7 @@ export class OrOutputWriter {
         this.newBlock = true
         break
       case "error":
-        this.lastError = { code: event.code ?? "agent_error", message: event.message }
+        this.lastError = { code: event.code ?? "agent_error", message: errorEventText(event) }
         break
       default:
         break

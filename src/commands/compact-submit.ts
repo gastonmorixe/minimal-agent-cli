@@ -18,6 +18,7 @@ import {
   parseCompactArgs,
 } from "@minimal-agent/core/host/compact-contract"
 import type { CommandNoticeBlock } from "@minimal-agent/core/plugin-api/types/plugin"
+import { errorText } from "../startup/core-text.ts"
 import { renderCommandNoticeBlock } from "../ui/command-notice.ts"
 
 import { buildCompactNoticeBlock } from "./compact.ts"
@@ -118,7 +119,7 @@ export function startCompactFallback(argv: string, deps: CompactFallbackDeps): v
       )
     } catch (e) {
       await endQuietly(stream)
-      deps.writeNoticeLines([`✗ compact failed: ${e instanceof Error ? e.message : String(e)}`])
+      deps.writeNoticeLines([`✗ compact failed: ${errorText(e)}`])
     }
   })()
 }

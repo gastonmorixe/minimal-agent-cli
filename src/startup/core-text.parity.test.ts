@@ -25,6 +25,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { join } from "node:path"
 
+import {
+  InvalidAuthorizationCodeError,
+  NoProviderCredentialsError,
+  SignInTimeoutError,
+  TokenExchangeError,
+} from "@minimal-agent/core/errors"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { parseCompactArgs } from "@minimal-agent/core/host/compact-contract"
 import { tryRecoverContextExceeded } from "@minimal-agent/core/host/context-exceeded-recovery"
@@ -36,8 +42,17 @@ import {
   resolveDefaultOAuthLoginProvider,
   runOAuthLogin,
 } from "@minimal-agent/core/host/oauth-login"
-import { resolveStartupAuth, startupAuthLabel } from "@minimal-agent/core/host/provider-auth"
-import { formatTurnNoticePlain, type TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
+import { describeStartupAuth, resolveStartupAuth } from "@minimal-agent/core/host/provider-auth"
+import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
+import {
+  contextExceededAdviceText,
+  contextNoticeText,
+  errorText,
+  loginEventText,
+  loginFailureText,
+  startupAuthText,
+} from "./core-text.ts"
+import { turnNoticePlainText } from "./turn-notice-text.ts"
 
 type OAuthProvider = NonNullable<LoginDeps["provider"]>
 
@@ -76,7 +91,7 @@ async function rejection(fn: () => Promise<unknown>): Promise<string> {
   try {
     await fn()
   } catch (e) {
-    return e instanceof Error ? e.message : String(e)
+    return errorText(e)
   }
   throw new Error("expected a rejection")
 }
@@ -91,7 +106,7 @@ function compactLine(argv: string): string {
 /** What print-mode writes for a notice event (`src/print-mode.ts` notice case). */
 function printNotice(notice: TurnNotice): string {
   const marker = notice.severity === "error" ? "✗" : "·"
-  return `${marker} ${formatTurnNoticePlain(notice)}`
+  return `${marker} ${turnNoticePlainText(notice)}`
 }
 
 /** Fixed bytes so PKCE state and verifier are the same on every run. */
@@ -138,7 +153,7 @@ async function loginLines(
   const lines: string[] = []
   const outcome = await runOAuthLogin({
     provider,
-    display: (m) => lines.push(m),
+    onLoginEvent: (ev) => lines.push(loginEventText(ev)),
     readPaste: async () => paste,
     randomBytes: FIXED_BYTES,
     maxAttempts,
@@ -149,7 +164,10 @@ async function loginLines(
       } as unknown as NonNullable<LoginDeps["install"]>["store"],
     },
   })
-  return [...lines, `outcome: ${JSON.stringify(outcome)}`].join("\n--\n")
+  return [
+    ...lines,
+    `outcome: ${JSON.stringify(outcome.ok ? outcome : { ...outcome, reason: loginFailureText(outcome.reason) })}`,
+  ].join("\n--\n")
 }
 
 const fakeAgent = (
@@ -219,9 +237,11 @@ const FIXTURES: readonly Fixture[] = [
     "startup tree auth row: oauth with account",
     "core src/auth/provider-auth.ts:158-170",
     () =>
-      startupAuthLabel(
-        { type: "oauth", token: "t", accountUuid: "abcdef1234567890" } as AuthResult,
-        undefined,
+      startupAuthText(
+        describeStartupAuth(
+          { type: "oauth", token: "t", accountUuid: "abcdef1234567890" } as AuthResult,
+          undefined,
+        ),
         (s) => `<dim>${s}</dim>`,
       ),
   ],
@@ -229,20 +249,23 @@ const FIXTURES: readonly Fixture[] = [
     "b25-apikey",
     "startup tree auth row: api-key",
     "core src/auth/provider-auth.ts:158-170",
-    () => startupAuthLabel({ type: "api-key", token: "t" } as AuthResult, undefined),
+    () =>
+      startupAuthText(
+        describeStartupAuth({ type: "api-key", token: "t" } as AuthResult, undefined),
+      ),
   ],
   // Context window and compact (d31, d32, d33)
   [
     "d32-model",
     "context exceeded advice with a model",
     "core src/llm/model-error.ts:73-80",
-    () => contextLengthExceededAdvice("model-a"),
+    () => contextExceededAdviceText(contextLengthExceededAdvice("model-a")),
   ],
   [
     "d32-nomodel",
     "context exceeded advice without a model",
     "core src/llm/model-error.ts:73-80",
-    () => contextLengthExceededAdvice(undefined),
+    () => contextExceededAdviceText(contextLengthExceededAdvice(undefined)),
   ],
   [
     "d33-retry",
@@ -253,7 +276,7 @@ const FIXTURES: readonly Fixture[] = [
         fakeAgent(async () => ({ kind: "local", messagesBefore: 40, messagesAfter: 6 }), true),
         "context_length_exceeded",
       )
-      return JSON.stringify({ ...r }, null, 2)
+      return JSON.stringify({ ...r, notices: r.notices.map(contextNoticeText) }, null, 2)
     },
   ],
   [
@@ -267,7 +290,21 @@ const FIXTURES: readonly Fixture[] = [
         }, true),
         "maximum context length",
       )
-      return r.notices.join("\n--\n")
+      return r.notices.map(contextNoticeText).join("\n--\n")
+    },
+  ],
+  [
+    "d33-failed-core-error",
+    "auto-compact failed with a CoreError cause",
+    "core src/agent/context-exceeded-recovery.ts:132",
+    async () => {
+      const r = await tryRecoverContextExceeded(
+        fakeAgent(async () => {
+          throw new NoProviderCredentialsError("anthropic", "model-a", [])
+        }, true),
+        "maximum context length",
+      )
+      return r.notices.map(contextNoticeText).join("\n--\n")
     },
   ],
   [
@@ -276,7 +313,7 @@ const FIXTURES: readonly Fixture[] = [
     "core src/agent/context-exceeded-recovery.ts:80-87",
     async () => {
       const r = await tryRecoverContextExceeded(fakeAgent(null, false), "context_length_exceeded")
-      return r.notices.join("\n--\n")
+      return r.notices.map(contextNoticeText).join("\n--\n")
     },
   ],
   [
@@ -375,6 +412,97 @@ const FIXTURES: readonly Fixture[] = [
         reason: "unknown",
       }),
   ],
+  [
+    "b13-max-salvaged",
+    "notice: max_tokens salvaged mid tool-call",
+    "core src/agent/turn-notice.ts:218-219",
+    () => printNotice({ kind: "max_tokens_salvaged", severity: "warn" }),
+  ],
+  [
+    "b13-stream-continuing",
+    "notice: stream interrupted, continuing",
+    "core src/agent/turn-notice.ts:233-234",
+    () =>
+      printNotice({ kind: "stream_interrupted_continuing", severity: "warn", attempt: 2, cap: 3 }),
+  ],
+  [
+    "b13-stream-salvaged-one",
+    "notice: stream interrupted, salvaged 1 tool call (singular)",
+    "core src/agent/turn-notice.ts:229-231",
+    () =>
+      printNotice({ kind: "stream_interrupted_salvaged", severity: "warn", completedToolCalls: 1 }),
+  ],
+  [
+    "b13-reflection-plural",
+    "notice: reflection ack, plural, with reason",
+    "core src/agent/turn-notice.ts:224-227",
+    () =>
+      printNotice({
+        kind: "reflection_ack",
+        severity: "info",
+        silenceFor: 3,
+        reason: "long run",
+        fromToolFallback: false,
+      }),
+  ],
+  [
+    "b13-reflection-singular",
+    "notice: reflection ack, singular, no reason",
+    "core src/agent/turn-notice.ts:224-227",
+    () =>
+      printNotice({
+        kind: "reflection_ack",
+        severity: "info",
+        silenceFor: 1,
+        reason: "",
+        fromToolFallback: false,
+      }),
+  ],
+  [
+    "b13-reflection-tool",
+    "notice: reflection ack, tool fallback, with reason",
+    "core src/agent/turn-notice.ts:224-227",
+    () =>
+      printNotice({
+        kind: "reflection_ack",
+        severity: "info",
+        silenceFor: 2,
+        reason: "focus",
+        fromToolFallback: true,
+      }),
+  ],
+  [
+    "b13-content-filter",
+    "notice: content filter with category and message",
+    "core src/agent/turn-notice.ts:211-216",
+    () =>
+      printNotice({
+        kind: "content_filter",
+        severity: "error",
+        category: "hate",
+        message: "flagged",
+      }),
+  ],
+  [
+    "b13-refusal-bare",
+    "notice: refusal with null category and message",
+    "core src/agent/turn-notice.ts:211-216",
+    () => printNotice({ kind: "refusal", severity: "error", category: null, message: null }),
+  ],
+  [
+    "b13-model-adopted-plain",
+    "notice: model adopted, effort not reset",
+    "core src/agent/turn-notice.ts:239-242",
+    () =>
+      printNotice({
+        kind: "model_adopted",
+        severity: "info",
+        from: "model-a",
+        to: "model-b",
+        effortReset: false,
+        effortFrom: null,
+      }),
+  ],
   // Error event with hint (print-mode error case over core fatalErrorFields)
   [
     "hint-error",
@@ -414,10 +542,28 @@ const FIXTURES: readonly Fixture[] = [
       try {
         resolveDefaultOAuthLoginProvider()
       } catch (e) {
-        return e instanceof Error ? e.message : String(e)
+        return errorText(e)
       }
       throw new Error("expected a throw")
     },
+  ],
+  [
+    "oauth-timeout",
+    "oauth: sign-in timed out",
+    "core src/auth/oauth-login.ts:52,105",
+    () => errorText(new SignInTimeoutError()),
+  ],
+  [
+    "oauth-invalid-code",
+    "oauth: token endpoint 401",
+    "core src/auth/oauth-login.ts:326",
+    () => errorText(new InvalidAuthorizationCodeError()),
+  ],
+  [
+    "oauth-token-exchange",
+    "oauth: token exchange failed with status and body",
+    "core src/auth/oauth-login.ts:328",
+    () => errorText(new TokenExchangeError(503, "service unavailable")),
   ],
   [
     "b24-unregistered",
