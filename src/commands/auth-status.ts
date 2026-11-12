@@ -19,6 +19,7 @@ import {
 } from "@minimal-agent/core/host/auth-strategies"
 import { findProviderPlugin } from "@minimal-agent/core/host/provider-plugin"
 import type { ProviderAuth } from "@minimal-agent/core/sdk/provider"
+import { errorText } from "../startup/core-text.ts"
 import {
   type AccountPlanInfo,
   type AuthPlanRowView,
@@ -321,7 +322,7 @@ function invalidGrantHint(err: unknown, providerId: string, credentialName?: str
 }
 
 function shortReason(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err)
+  const msg = errorText(err)
   const first = msg.split("\n")[0] ?? msg
   return first.length > 80 ? `${first.slice(0, 77)}...` : first
 }

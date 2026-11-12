@@ -41,7 +41,7 @@ import type {
   StatusController,
 } from "./repl.ts"
 import { applyTurnWillStart, registerEditorPluginHooks } from "./repl-editor-hooks.ts"
-import { contextNoticeText } from "./startup/core-text.ts"
+import { contextNoticeText, errorText } from "./startup/core-text.ts"
 import { turnEventRenderer } from "./turn-event-render.ts"
 import type { StepLive } from "./turn-render-pump.ts"
 import { printGoodbye } from "./ui/chrome/goodbye-banner.ts"
@@ -1416,7 +1416,7 @@ export async function runReplLiveArea(
         const restored = formatRestoredMessages([text, ...queuedTexts])
         if (typeof editor.setBuffer === "function") editor.setBuffer(restored)
       } else if (turnError) {
-        const msg = turnError instanceof Error ? turnError.message : String(turnError)
+        const msg = errorText(turnError)
         // The provider hint (duck-typed `hint` on the error) rides its own
         // dim line under the error line.
         compositor.writeStream(formatTurnError(turnError))

@@ -205,7 +205,7 @@ export async function main(options: MainOptions = {}): Promise<number> {
   } catch (err) {
     if (exitRequested) throw err
     const wrote = writeStreamFailure(failure, err)
-    console.error(formatFatalError(err instanceof Error ? err : new Error(String(err))))
+    console.error(formatFatalError(err))
     return endFailedRun(wrote, exit)
   } finally {
     await defaultNetworkClient.close()

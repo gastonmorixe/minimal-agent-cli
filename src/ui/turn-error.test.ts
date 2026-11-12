@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test"
 
+import { NoProviderCredentialsError } from "@minimal-agent/core/errors"
 import { ProviderError } from "@minimal-agent/core/plugin-api/llm/errors"
 import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
+import { errorText } from "../startup/core-text.ts"
 import { errorCode, errorHint, formatFatalError, formatTurnError } from "./turn-error.ts"
 
 describe("errorHint / errorCode", () => {
@@ -63,5 +65,23 @@ describe("formatFatalError", () => {
     const err = new ProviderError("free tier blocked", "zen", { hint: "log in first" })
     expect(stripAnsi(formatFatalError(err))).toBe("fatal: free tier blocked\n  log in first")
     expect(formatFatalError(new Error("bad"))).toBe("fatal: bad")
+  })
+})
+
+describe("CoreError text", () => {
+  const core = new NoProviderCredentialsError("acme", "model-a", [])
+
+  it("formatTurnError shows the CLI text of a CoreError", () => {
+    expect(core.message).toBe("")
+    expect(stripAnsi(formatTurnError(core))).toBe(`\n  error ${errorText(core)}\n`)
+  })
+
+  it("formatFatalError shows the CLI text of a CoreError", () => {
+    expect(formatFatalError(core)).toBe(`fatal: ${errorText(core)}`)
+  })
+
+  it("keeps the bytes of a plain Error", () => {
+    expect(formatFatalError(new Error("plain"))).toBe("fatal: plain")
+    expect(stripAnsi(formatTurnError(new Error("plain")))).toBe("\n  error plain\n")
   })
 })

@@ -41,6 +41,7 @@ import type { ModelInfoSnapshot } from "@minimal-agent/core/plugin-api/types/plu
 import { AgentCore, type TurnResult } from "@minimal-agent/core/sdk/agent-core"
 import type { PromptSource } from "../cli/extract-prompt.ts"
 import { applyTurnWillStart } from "../repl-editor-hooks.ts"
+import { errorText } from "./core-text.ts"
 
 import { withHostPorts } from "./host-ports.ts"
 import { turnBlockedError } from "./run-non-interactive.ts"
@@ -134,7 +135,7 @@ export async function runHostMode(input: RunHostModeInput): Promise<void> {
     code = await mode.handler(ctx)
   } catch (e) {
     stderr.write(
-      `[host-mode:${input.hostModeId}] ${e instanceof Error ? (e.stack ?? e.message) : String(e)}\n`,
+      `[host-mode:${input.hostModeId}] ${e instanceof Error ? (e.stack ?? errorText(e)) : String(e)}\n`,
     )
     code = 1
   } finally {

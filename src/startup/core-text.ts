@@ -116,6 +116,22 @@ export function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
+/**
+ * Text of an error event or a `failed` stop cause. Core sends `error` (kind and
+ * fields) for a CoreError and an empty `message`. A known kind gets its CLI
+ * text. Any other event gives its `message`.
+ */
+export function errorEventText(ev: {
+  readonly message: string
+  readonly error?: { readonly kind: string; readonly fields: Readonly<Record<string, unknown>> }
+}): string {
+  if (ev.error !== undefined) {
+    const text = renderCoreError({ kind: ev.error.kind, fields: ev.error.fields } as CoreErrorJson)
+    if (text !== undefined) return text
+  }
+  return ev.message
+}
+
 /** True when `err` (or its cause) is a `NoProviderCredentialsError`. */
 export function isNoCredentials(err: unknown): boolean {
   const kind = (e: unknown): unknown =>

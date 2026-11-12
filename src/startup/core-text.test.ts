@@ -13,6 +13,7 @@ import {
 
 import {
   contextNoticeText,
+  errorEventText,
   errorText,
   isNoCredentials,
   renderCoreError,
@@ -123,5 +124,19 @@ describe("core-text", () => {
         cause: { kind: "SomeUnknownError", fields: {} },
       }),
     ).toBe("Auto-compact failed: SomeUnknownError")
+  })
+})
+
+describe("errorEventText", () => {
+  const core = new NoProviderCredentialsError("acme", "model-a", [])
+
+  test("renders event.error when present", () => {
+    expect(errorEventText({ message: "", error: core.toJSON() })).toBe(errorText(core))
+    expect(errorEventText({ message: "", error: core.toJSON() })).not.toBe("")
+  })
+
+  test("keeps event.message for plain events", () => {
+    expect(errorEventText({ message: "boom" })).toBe("boom")
+    expect(errorEventText({ message: "boom", error: { kind: "Unknown", fields: {} } })).toBe("boom")
   })
 })
