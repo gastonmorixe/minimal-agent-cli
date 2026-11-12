@@ -28,7 +28,8 @@ export function registerDiagnosticText(source: string, render: DiagnosticRendere
   registry.set(source, render)
 }
 
-function fallback(source: string, attrs: DiagnosticAttrs): string {
+/** Generic render `source: k=v` (sorted keys) for a source with no renderer. */
+export function fallback(source: string, attrs: DiagnosticAttrs): string {
   const pairs = Object.keys(attrs)
     .sort()
     .map((k) => `${k}=${String(attrs[k])}`)
