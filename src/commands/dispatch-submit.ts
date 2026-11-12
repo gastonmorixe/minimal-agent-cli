@@ -13,6 +13,7 @@
 import type { CommandDispatchOptions } from "@minimal-agent/core/host-kit/command-registry"
 import { parseCommandLine } from "@minimal-agent/core/host-kit/command-registry"
 import type { CommandResult } from "@minimal-agent/core/plugin-api/types/plugin"
+import { errorText } from "../startup/core-text.ts"
 import { renderCommandNoticeBlock } from "../ui/command-notice.ts"
 
 import {
@@ -75,7 +76,7 @@ export async function dispatchCommandAndApply(
         : {}),
     })
   } catch (e) {
-    deps.writeNoticeLines([`✗ command failed: ${e instanceof Error ? e.message : String(e)}`])
+    deps.writeNoticeLines([`✗ command failed: ${errorText(e)}`])
     return
   } finally {
     await endQuietly(compactStream)

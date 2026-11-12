@@ -42,6 +42,7 @@ import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
 import type { QueueKeyHandler } from "./editor/types.ts"
 import { RawInput } from "./input/input.ts"
 import { runReplLiveArea } from "./repl-live-area.ts"
+import { contextNoticeText, errorText } from "./startup/core-text.ts"
 import { turnEventRenderer } from "./turn-event-render.ts"
 import type { StepLive } from "./turn-render-pump.ts"
 import { Formatter } from "./ui/formatter/formatter.ts"
@@ -529,9 +530,7 @@ export async function runRepl(
             `  ${c.boldGreen("ok")} compact (${stats.kind}): ${stats.messagesBefore} → ${stats.messagesAfter} messages\n`,
           )
         } catch (e) {
-          errOutput.write(
-            `  ${c.boldRed("error")} compact failed: ${e instanceof Error ? e.message : String(e)}\n`,
-          )
+          errOutput.write(`  ${c.boldRed("error")} compact failed: ${errorText(e)}\n`)
         }
         continue
       }
@@ -724,7 +723,7 @@ export async function runRepl(
       }
 
       if (turnError) {
-        const msg = turnError instanceof Error ? turnError.message : String(turnError)
+        const msg = errorText(turnError)
         statusRenderer?.suspend()
         errOutput.write(formatTurnError(turnError))
 
@@ -734,7 +733,7 @@ export async function runRepl(
         if (parseContextLengthExceededError(msg)) {
           const recovery = await tryRecoverContextExceeded(agent, msg)
           for (const line of recovery.notices) {
-            errOutput.write(`  ${c.boldYellow("!")} ${c.yellow(line)}\n`)
+            errOutput.write(`  ${c.boldYellow("!")} ${c.yellow(contextNoticeText(line))}\n`)
           }
           if (recovery.shouldRetry && recovery.retryText) {
             recovered = true
@@ -752,7 +751,7 @@ export async function runRepl(
                 }
               }
             } catch (retryErr) {
-              const rmsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
+              const rmsg = errorText(retryErr)
               errOutput.write(`\n  ${c.boldRed("error")} retry after compact failed: ${rmsg}\n`)
               if (agent.rollbackPendingTurn) agent.rollbackPendingTurn()
             }
@@ -777,7 +776,7 @@ export async function runRepl(
             models = await lister(opts.auth)
           } catch (listErr) {
             errOutput.write(
-              `  ${c.boldRed("error")} could not list models: ${listErr instanceof Error ? listErr.message : String(listErr)}\n`,
+              `  ${c.boldRed("error")} could not list models: ${errorText(listErr)}\n`,
             )
           }
           const current = agent.getModel?.() ?? modelErr
@@ -790,7 +789,7 @@ export async function runRepl(
               errOutput.write(`  ${c.boldGreen("ok")} model set to ${c.cyan(picked)}\n`)
             } catch (setErr) {
               errOutput.write(
-                `  ${c.boldRed("error")} could not switch to ${c.cyan(picked)}: ${setErr instanceof Error ? setErr.message : String(setErr)}\n`,
+                `  ${c.boldRed("error")} could not switch to ${c.cyan(picked)}: ${errorText(setErr)}\n`,
               )
             }
           } else if (models) {

@@ -31,6 +31,7 @@ import {
   type CommandNoticeBlock,
   type ResolvedCommand,
 } from "@minimal-agent/core/plugin-api/types/plugin"
+import { errorText } from "../startup/core-text.ts"
 
 /** Minimal agent surface the host command needs. */
 export interface CompactAgentLike {
@@ -105,7 +106,7 @@ export function createCompactHostCommand(agent: CompactAgentLike): ResolvedComma
       } catch (e) {
         return {
           kind: "error",
-          message: `compact failed: ${e instanceof Error ? e.message : String(e)}`,
+          message: `compact failed: ${errorText(e)}`,
         }
       } finally {
         try {

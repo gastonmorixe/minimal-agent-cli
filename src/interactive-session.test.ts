@@ -23,12 +23,12 @@ import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
 import type { Message } from "@minimal-agent/core/sdk/messages"
-import { formatTurnNoticePlain } from "@minimal-agent/core/sdk/turn-notice"
 import {
   InteractiveSession,
   type ReflectionCheckpointContext,
   TranscriptRouter,
 } from "./interactive-session.ts"
+import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 import type {
   TestSendParams as SendOptions,
   TestSendResult as StreamedResponse,
@@ -291,7 +291,7 @@ describe("InteractiveSession", () => {
     expect(line).toContain("auto-continuing (1/")
     // The same plain text core gives every text host.
     expect(line?.slice(3)).toBe(
-      formatTurnNoticePlain({
+      turnNoticePlainText({
         kind: "max_tokens_continuing",
         severity: "warn",
         attempt: 1,
