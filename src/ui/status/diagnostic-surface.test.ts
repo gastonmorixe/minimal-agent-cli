@@ -415,4 +415,15 @@ describe("empty message events (S14.2 step 0b)", () => {
     const last = sink.calls[sink.calls.length - 1] ?? []
     expect(last.map(strip)).toEqual(["⚠ zz.ds.reg: registry says v"])
   })
+
+  it("(f7) no renderer, empty message: icon and source only, no empty tail", () => {
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    // No diagnostic field and no message: diagnosticText is "", so the
+    // msg === "" branch prints the icon and the source, nothing after.
+    surface.onEvent(event({ source: "zz.ds.nor", message: "" }))
+    const last = sink.calls[sink.calls.length - 1] ?? []
+    expect(last.map(strip)).toEqual(["⚠ zz.ds.nor"])
+  })
 })
