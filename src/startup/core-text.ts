@@ -14,6 +14,7 @@ import {
   HOST_OWNER_ID,
   type StoredProviderFact,
 } from "@minimal-agent/core/errors"
+import type { LoginEvent, LoginFailureCode } from "@minimal-agent/core/host/oauth-login"
 
 /** Hint for a store with no credentials. */
 const NO_CREDENTIALS_HINT =
@@ -108,4 +109,36 @@ export function isNoCredentials(err: unknown): boolean {
     kind(err) === "NoProviderCredentialsError" ||
     kind((err as { cause?: unknown } | null)?.cause) === "NoProviderCredentialsError"
   )
+}
+
+/** Old reason text of a login failure code. */
+export function loginFailureText(code: LoginFailureCode): string {
+  switch (code) {
+    case "no-paste":
+      return "no paste received"
+    case "empty-code":
+      return "no code pasted"
+    case "unparseable-code":
+      return "could not parse pasted code"
+    default:
+      return "state mismatch — pasted code does not match this login attempt"
+  }
+}
+
+/** Old text of one login event (one message, as the old `display` got it). */
+export function loginEventText(ev: LoginEvent): string {
+  switch (ev.kind) {
+    case "device-code":
+      return `Open this page to sign in:\n  ${ev.verificationUrl}\nEnter this one-time code:\n  ${ev.userCode}\nNever share this code with anyone.`
+    case "device-waiting":
+      return `Waiting for sign-in to finish…`
+    case "browser-opening":
+      return `Opening browser to sign in…`
+    case "browser-fallback":
+      return `If the browser didn't open, visit:\n  ${ev.authUrl}`
+    case "invalid-code":
+      return `Invalid code. Please make sure the full code was copied. (${loginFailureText(ev.reason)})`
+    default:
+      return `State mismatch. Please paste the code from this login attempt only.`
+  }
 }

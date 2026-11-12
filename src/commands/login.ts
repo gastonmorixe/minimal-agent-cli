@@ -35,6 +35,7 @@ import {
   canonicalProviderId,
   type OAuthLoginProvider,
 } from "@minimal-agent/core/host/provider-plugin"
+import { loginEventText, loginFailureText } from "../startup/core-text.ts"
 import {
   renderApiKeyLoginSuccess,
   renderLoginBanner,
@@ -237,7 +238,7 @@ export async function readLine(
 
 /**
  * Print the auth URL with a click-friendly format and the rest of the
- * instructions. We separate `display(...)` calls in `runOAuthLogin` from
+ * instructions. We separate `onLoginEvent(...)` calls in `runOAuthLogin` from
  * "what the user actually reads" because the orchestrator's view of
  * "displayed" is one-line-per-call, but the CLI wants a nicer multi-line
  * layout (URL on its own indented line, etc.).
@@ -324,12 +325,9 @@ export async function runLoginCommand(opts: LoginCommandOptions = {}): Promise<n
       maxAttempts: opts.maxAttempts,
       credentialName: opts.credentialName,
       openUrl: openBrowser,
-      display: (msg) => {
-        // The orchestrator emits "Opening browser…", "If the browser
-        // didn't open, visit:\n  URL", and any "Invalid code" /
-        // "State mismatch" follow-ups. Indent + faint-pipe to match the
-        // startup tree's visual style.
-        writeCommandRows(renderLoginDisplayMessage(msg), output)
+      onLoginEvent: (ev) => {
+        // Indent + faint-pipe to match the startup tree's visual style.
+        writeCommandRows(renderLoginDisplayMessage(loginEventText(ev)), output)
       },
       readPaste: async () =>
         readLine(
@@ -352,7 +350,7 @@ export async function runLoginCommand(opts: LoginCommandOptions = {}): Promise<n
   }
 
   if (!outcome.ok) {
-    writeCommandRows(renderLoginFailure(outcome.reason), output)
+    writeCommandRows(renderLoginFailure(loginFailureText(outcome.reason)), output)
     return 1
   }
   writeCommandRows(renderOAuthLoginSuccess(outcome.result), output)
