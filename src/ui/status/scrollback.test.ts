@@ -483,3 +483,33 @@ describe("ScrollbackDiagnosticSink — startup-banner buffering", () => {
     expect(strip(w.calls[2]!)).toMatch(/\(×3/)
   })
 })
+
+describe("ScrollbackDiagnosticSink: call-site parity (S14.2 step 0)", () => {
+  it("key still uses severity, source and message: same text dedupes, other text does not", () => {
+    const w = makeWriter()
+    const sink = new ScrollbackDiagnosticSink({
+      write: w.write,
+      now: () => T0,
+      dedupRepaintMinMs: 0,
+    })
+    sink.onEvent(event({ message: "alpha" }))
+    sink.onEvent(event({ message: "alpha" }))
+    sink.onEvent(event({ message: "beta" }))
+    expect(w.calls).toHaveLength(3)
+    expect(strip(w.calls[1])).toBe(`  ⚠ warn  api.stream-error (×2 · last ${localTs(T0)})\n`)
+    expect(strip(w.calls[2])).toBe(`  ⚠ warn  api.stream-error · ${localTs(T0)}\n  ╰ beta\n`)
+  })
+
+  it("renderBlock splits the message on newlines, one gutter arm per line", () => {
+    const out = strip(renderBlock(event({ message: "l1\nl2\nl3", structuredData: { k: "v" } })))
+    expect(out).toBe(
+      [
+        `  ⚠ warn  api.stream-error · ${localTs(T0)}`,
+        "  │ l1",
+        "  │ l2",
+        "  │ l3",
+        "  ╰ k: v",
+      ].join("\n"),
+    )
+  })
+})

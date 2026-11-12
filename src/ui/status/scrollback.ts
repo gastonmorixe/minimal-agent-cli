@@ -60,6 +60,7 @@
  */
 
 import { type DiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
+import { diagnosticText } from "../../logging/diagnostic-text.ts"
 import { ANSI_CODES } from "../../terminal-kit/ansi.ts"
 import { PALETTE } from "../../terminal-kit/palette.ts"
 
@@ -229,7 +230,8 @@ export class ScrollbackDiagnosticSink {
     // own gating in TuiDiagnosticSurface.
     if (e.severity > Severity.Warning) return
 
-    const key = `${e.severity}|${e.source}|${e.message}`
+    // The key moves to source+attrs in the commit that empties a message.
+    const key = `${e.severity}|${e.source}|${diagnosticText(e)}`
     const tsNow = this.now()
     const existing = this.active.get(e.source)
 
@@ -323,7 +325,7 @@ export function renderBlock(e: LogEvent): string {
   // Split the message on real newlines so each line carries its own
   // gutter prefix. Long single lines still wrap naturally in the
   // terminal (without continuation), matching console.error behavior.
-  for (const line of e.message.split("\n")) {
+  for (const line of diagnosticText(e).split("\n")) {
     body.push(line)
   }
   if (e.structuredData) {

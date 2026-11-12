@@ -355,3 +355,27 @@ describe("TuiDiagnosticSurface — bus integration", () => {
     expect(surface.snapshot().warn.count).toBe(1)
   })
 })
+
+describe("TuiDiagnosticSurface: call-site parity (S14.2 step 0)", () => {
+  it("dedupes two events with the same message and prints the old line bytes", () => {
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    surface.onEvent(event({ message: "same text" }))
+    surface.onEvent(event({ message: "same text" }))
+    expect(surface.snapshot().warn.count).toBe(2)
+    const last = sink.calls[sink.calls.length - 1] ?? []
+    expect(last.map(strip)).toEqual(["⚠ live-area.timeout: same text (×2)"])
+  })
+
+  it("does not dedupe a different message from the same source", () => {
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    surface.onEvent(event({ message: "one" }))
+    surface.onEvent(event({ message: "two" }))
+    expect(surface.snapshot().warn.count).toBe(1)
+    const last = sink.calls[sink.calls.length - 1] ?? []
+    expect(last.map(strip)).toEqual(["⚠ live-area.timeout: two"])
+  })
+})

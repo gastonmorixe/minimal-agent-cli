@@ -24,6 +24,7 @@
  */
 
 import { type DiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
+import { diagnosticText } from "./diagnostic-text.ts"
 
 export interface StderrMirrorSinkOptions {
   /**
@@ -83,7 +84,7 @@ export class StderrMirrorSink {
 function formatLine(e: LogEvent): string {
   const tag = severityTag(e.severity)
   const sd = e.structuredData ? formatStructuredData(e.structuredData) : ""
-  return `[${tag}] ${e.source}: ${e.message}${sd}\n`
+  return `[${tag}] ${e.source}: ${diagnosticText(e)}${sd}\n`
 }
 
 function severityTag(s: Severity): string {
