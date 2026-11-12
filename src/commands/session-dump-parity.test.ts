@@ -1,7 +1,8 @@
 /**
- * Parity test (old path): the golden files are written from the core
- * `sessions.dump` path on 3 synthetic fixtures. This file runs that path and
- * compares its text with the golden files.
+ * Parity test: the CLI dump text must stay byte-equal to the golden files.
+ * The golden files were written from the old core path (`sessions.dump`, now
+ * removed) on 3 synthetic fixtures. The text now comes from `records()` data
+ * and the local formatter.
  */
 
 import { afterAll, describe, expect, test } from "bun:test"
@@ -9,6 +10,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { createSessionsReadApi } from "@minimal-agent/core/host/sessions-read"
 import { fixtures } from "./__fixtures__/session-dump-fixtures.ts"
+import { formatSessionAsMarkdown, formatSessionAsXml } from "./session-dump.ts"
 
 const dir = join(import.meta.dir, ".parity-sessions")
 mkdirSync(dir, { recursive: true })
@@ -19,8 +21,9 @@ for (const [sid, recs] of Object.entries(fixtures)) {
 const api = createSessionsReadApi({ dir })
 
 async function render(sid: string, format: "markdown" | "xml"): Promise<string> {
-  const r = await api.dump(sid, { format })
-  return r ? r.text : ""
+  const r = await api.records(sid)
+  if (!r) return ""
+  return format === "xml" ? formatSessionAsXml(r) : formatSessionAsMarkdown(r)
 }
 
 const goldenPath = (sid: string) => join(import.meta.dir, "__fixtures__", `dump-${sid}.golden.json`)
