@@ -5,6 +5,7 @@
 
 import { describe, expect, test } from "bun:test"
 import { Facility, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
+import { ScrollbackDiagnosticSink } from "../ui/status/scrollback.ts"
 import { diagnosticKey, isVolatileDiagnosticKey } from "./diagnostic-text.ts"
 
 function typed(source: string, attrs: Record<string, string | number | boolean | null>): LogEvent {
@@ -87,5 +88,59 @@ describe("diagnosticKey with message empty", () => {
     expect(diagnosticKey(typed("zz.one", { k: 1 }))).not.toBe(
       diagnosticKey(typed("zz.two", { k: 1 })),
     )
+  })
+})
+
+describe("look-alike and unlisted names", () => {
+  // Names that resemble a volatile one but are not in the deny set and do not
+  // match the suffix rule. Each must stay in the dedupe key.
+  const lookAlikes = [
+    "retry-policy",
+    "max-attempts",
+    "attempt-id",
+    "timeout-policy",
+    "ordering",
+    "pluginId",
+    "kind",
+    "order",
+    "slot",
+    "owner",
+    "refused",
+    "contract",
+    "dir",
+    "keys",
+    "field",
+    "index",
+  ]
+  for (const name of lookAlikes) {
+    test(`(b2) look-alike stable keys stay in the dedupe key: ${name}`, () => {
+      expect(isVolatileDiagnosticKey(name)).toBe(false)
+      const a = typed("zz.look", { [name]: "one" })
+      const b = typed("zz.look", { [name]: "two" })
+      expect(diagnosticKey(a)).not.toBe(diagnosticKey(b))
+
+      const lines: string[] = []
+      const sink = new ScrollbackDiagnosticSink({
+        write: (s) => {
+          lines.push(s)
+        },
+        now: () => 1000,
+        dedupRepaintMinMs: 0,
+      })
+      sink.onEvent(a)
+      sink.onEvent(b)
+      expect(lines).toHaveLength(2)
+      for (const l of lines) expect(l).not.toContain("×")
+    })
+  }
+
+  test("(known limit) an unlisted volatile key keeps repeats apart", () => {
+    // Known limit of the name list, not a promise. `latency` is volatile in
+    // nature but not in the deny set, so two repeats get different keys and
+    // do not collapse. The fix is to add the name to the deny set.
+    expect(isVolatileDiagnosticKey("latency")).toBe(false)
+    const a = typed("zz.limit", { curve: "x", latency: 10 })
+    const b = typed("zz.limit", { curve: "x", latency: 99 })
+    expect(diagnosticKey(a)).not.toBe(diagnosticKey(b))
   })
 })
