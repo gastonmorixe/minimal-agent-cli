@@ -343,7 +343,14 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
 
   // Every plugin root, computed here (S40): core knows no default plugin
   // location. See `startup/plugin-roots.ts`.
-  const pluginRoots = roots.computePluginRoots(providerEmbeddedDir, env, cwd, userDir, pluginMode)
+  const pluginRoots = roots.computePluginRoots(
+    providerEmbeddedDir,
+    env,
+    cwd,
+    userDir,
+    pluginMode,
+    roots.compiledPluginsRoot(srcDir),
+  )
 
   // Provider plugins (provider.json) live in the plugins repo. On an
   // installed box they are git-cloned into `<userDir>/plugins` (just above).

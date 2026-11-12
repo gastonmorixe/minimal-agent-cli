@@ -97,6 +97,20 @@ export function resolvePluginMode(
   return checkouts.length > 0 ? { kind: "dev", checkouts } : { kind: "install", checkouts: [] }
 }
 
+/** Path prefixes of the Bun virtual fs of a compiled binary. */
+const BUN_EMBEDDED_PREFIXES = ["/$bunfs", "B:/~BUN", "B:\\~BUN"]
+
+/**
+ * The embedded plugins dir of a compiled binary, or undefined when `dir`
+ * (the `import.meta.dir` of the running module) is a normal disk dir.
+ * `bun build --compile --asset ./plugins` puts the files at
+ * `<import.meta.dir>/plugins`, which is `/$bunfs/root/plugins` on Unix.
+ * Source: https://bun.com/docs/compiler/executables
+ */
+export function compiledPluginsRoot(dir: string): string | undefined {
+  return BUN_EMBEDDED_PREFIXES.some((p) => dir.startsWith(p)) ? join(dir, "plugins") : undefined
+}
+
 /**
  * Compute every plugin root of the CLI. See the module doc.
  *
@@ -105,6 +119,8 @@ export function resolvePluginMode(
  * @param cwd - The project dir.
  * @param agentHome - The agent home (`~/.minimal-agent`), or undefined when unknown.
  * @param mode - The plugin mode. Resolved from `cliRoot` and `env` when omitted.
+ * @param compiledRoot - The embedded plugins dir of a compiled binary (see
+ *   {@link compiledPluginsRoot}). When set, it replaces `<cliRoot>/plugins`.
  */
 export function computePluginRoots(
   cliRoot: string,
@@ -112,10 +128,11 @@ export function computePluginRoots(
   cwd: string,
   agentHome: string | undefined,
   mode: PluginMode = resolvePluginMode(cliRoot, env),
+  compiledRoot?: string,
 ): PluginRoots {
   const user = mode.kind === "install" && agentHome ? [join(agentHome, "plugins")] : []
   return {
-    embedded: [join(cliRoot, "plugins"), ...mode.checkouts],
+    embedded: [compiledRoot ?? join(cliRoot, "plugins"), ...mode.checkouts],
     user,
     project: [join(cwd, PROJECT_PLUGINS_SUBDIR)],
   }
