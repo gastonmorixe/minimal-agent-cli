@@ -56,6 +56,8 @@ import {
 import { tmpdir } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 
+import { bundlePlugins } from "./bundle-plugins.ts"
+
 const CLI_DIR = resolve(import.meta.dir, "..")
 const CORE_CHECKOUT = resolve(CLI_DIR, "..", "minimal-agent-core")
 const ENTRY = join(CLI_DIR, "src", "index.ts")
@@ -332,6 +334,12 @@ async function buildTo(
   coreExports: Map<string, string>,
   target: string | undefined,
 ): Promise<void> {
+  // Embedded plugin slot: no-op while plugins.bundle.json lists nothing.
+  bundlePlugins({
+    listFile: join(CLI_DIR, "plugins.bundle.json"),
+    pluginsRepo: resolve(CLI_DIR, "..", "minimal-agent-plugins"),
+    destDir: join(CLI_DIR, "plugins"),
+  })
   const before = new Set(bunBuildLeftovers())
   let result: Bun.BuildOutput
   try {
