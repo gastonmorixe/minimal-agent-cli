@@ -38,6 +38,7 @@ import {
 } from "@minimal-agent/core/host/oauth-login"
 import { resolveStartupAuth, startupAuthLabel } from "@minimal-agent/core/host/provider-auth"
 import { formatTurnNoticePlain, type TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
+import { errorText } from "./core-text.ts"
 
 type OAuthProvider = NonNullable<LoginDeps["provider"]>
 
@@ -76,7 +77,7 @@ async function rejection(fn: () => Promise<unknown>): Promise<string> {
   try {
     await fn()
   } catch (e) {
-    return e instanceof Error ? e.message : String(e)
+    return errorText(e)
   }
   throw new Error("expected a rejection")
 }
