@@ -168,5 +168,20 @@ export function contextExceededAdviceText(a: ContextExceededAdvice): string {
 
 /** Old text of one recovery notice. */
 export function contextNoticeText(n: ContextExceededNotice): string {
-  return typeof n === "string" ? n : contextExceededAdviceText(n)
+  switch (n.kind) {
+    case "auto_compacted":
+      return `Auto-compacted context (${n.compactKind}): ${n.messagesBefore} -> ${n.messagesAfter} messages.`
+    case "retrying_failed_turn":
+      return "Retrying the failed user turn once."
+    case "auto_compact_failed":
+      return `Auto-compact failed: ${causeText(n.cause)}`
+    default:
+      return contextExceededAdviceText(n)
+  }
+}
+
+/** Text of an auto-compact failure cause: the CLI text of a CoreError, else its message. */
+function causeText(cause: CoreErrorJson | { message: string }): string {
+  if ("message" in cause) return cause.message
+  return registry.render(cause) ?? cause.kind
 }

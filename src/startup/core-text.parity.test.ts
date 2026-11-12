@@ -269,7 +269,7 @@ const FIXTURES: readonly Fixture[] = [
         fakeAgent(async () => ({ kind: "local", messagesBefore: 40, messagesAfter: 6 }), true),
         "context_length_exceeded",
       )
-      return JSON.stringify({ ...r }, null, 2)
+      return JSON.stringify({ ...r, notices: r.notices.map(contextNoticeText) }, null, 2)
     },
   ],
   [
