@@ -60,7 +60,7 @@
  */
 
 import { type DiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
-import { diagnosticText } from "../../logging/diagnostic-text.ts"
+import { diagnosticKey, diagnosticText } from "../../logging/diagnostic-text.ts"
 import { ANSI_CODES } from "../../terminal-kit/ansi.ts"
 import { PALETTE } from "../../terminal-kit/palette.ts"
 
@@ -230,8 +230,8 @@ export class ScrollbackDiagnosticSink {
     // own gating in TuiDiagnosticSurface.
     if (e.severity > Severity.Warning) return
 
-    // The key moves to source+attrs in the commit that empties a message.
-    const key = `${e.severity}|${e.source}|${diagnosticText(e)}`
+    // A set message keys the entry. An empty one keys on the sorted attrs.
+    const key = `${e.severity}|${e.source}|${diagnosticKey(e)}`
     const tsNow = this.now()
     const existing = this.active.get(e.source)
 

@@ -24,6 +24,7 @@
 import { getDiagnosticBus } from "@minimal-agent/core/host/diagnostics"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
 import type { StdioMode } from "../cli/output-format.ts"
+import { registerA1DiagnosticText } from "../logging/diagnostic-text-a1.ts"
 import type { ScrollbackDiagnosticSink } from "../ui/status/scrollback.ts"
 
 /** Inputs the sink wiring needs from the entry point. */
@@ -73,6 +74,9 @@ export function planDiagnosticSinks(opts: DiagnosticSinkOptions): DiagnosticSink
 export async function attachStartupDiagnosticSinks(
   opts: DiagnosticSinkOptions,
 ): Promise<ScrollbackDiagnosticSink | null> {
+  // Renderers first. Core sends the old message AND attrs (dual-write), so
+  // these render only when the message is empty (the later step).
+  registerA1DiagnosticText()
   const bus = getDiagnosticBus()
   const plan = planDiagnosticSinks(opts)
 

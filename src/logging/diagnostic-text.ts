@@ -46,3 +46,16 @@ export function diagnosticText(e: LogEvent): string {
   const render = registry.get(d.source)
   return render ? render(d.attrs, d.level) : fallback(d.source, d.attrs)
 }
+
+/**
+ * Dedupe key of an event. A set message is the key. An empty message keys on
+ * the sorted attrs, so two events with the same attrs collapse as before.
+ */
+export function diagnosticKey(e: LogEvent): string {
+  if (e.message !== "" || e.diagnostic === undefined) return e.message
+  const attrs = e.diagnostic.attrs
+  const pairs = Object.keys(attrs)
+    .sort()
+    .map((k) => [k, attrs[k]])
+  return `\u0000${JSON.stringify(pairs)}`
+}
