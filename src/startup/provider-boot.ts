@@ -8,10 +8,11 @@
  * @module host/startup/provider-boot
  */
 
+import { CoreError } from "@minimal-agent/core/errors"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import {
   discoverCredentialedProviders,
-  storedProvidersHint,
+  listStoredProviderFacts,
   suggestModelForProvider,
 } from "@minimal-agent/core/host/auth-strategies"
 import type { UserConfig } from "@minimal-agent/core/host/config"
@@ -27,6 +28,7 @@ import { primeProviderSessionInfo } from "@minimal-agent/core/host/provider-sess
 import type { CliOptions } from "../cli/parse-argv.ts"
 import { printStartupRow } from "../ui/startup/tree.ts"
 import { c } from "../ui/style/ansi.ts"
+import { errorText, storedProvidersHintText } from "./core-text.ts"
 import { resolveBootModel, resolveSingleStoredProviderBootModel } from "./resolve-boot-model.ts"
 import { resolveCredentialName } from "./resolve-credential-name.ts"
 
@@ -94,7 +96,7 @@ export async function resolveStartupProviderState(
           suggestModelForProvider,
         )
   if (selected.kind === "invalid") {
-    throw new Error(`${selected.reason}. ${storedProvidersHint()}`)
+    throw new Error(`${selected.reason}. ${storedProvidersHintText(listStoredProviderFacts())}`)
   }
 
   const selectedModel = selected.model
@@ -144,13 +146,20 @@ export async function resolveStartupProviderState(
     })
   }
   const credentialName = cred.credentialName
-  const auth = await resolveStartupAuth(selectedProviderId, selectedModelBase, credentialName, {
-    endpoint: input.opts.endpoint,
-    format: input.opts.format,
-    authType: input.opts.authType,
-    apiKey: input.opts.apiKey,
-    authHeader: input.opts.authHeader,
-  })
+  let auth: AuthResult
+  try {
+    auth = await resolveStartupAuth(selectedProviderId, selectedModelBase, credentialName, {
+      endpoint: input.opts.endpoint,
+      format: input.opts.format,
+      authType: input.opts.authType,
+      apiKey: input.opts.apiKey,
+      authHeader: input.opts.authHeader,
+    })
+  } catch (err) {
+    // Core throws typed errors with no text. The CLI shows the old wording.
+    if (err instanceof CoreError) throw new Error(errorText(err), { cause: err })
+    throw err
+  }
   printStartupRow("auth", startupAuthLabel(auth, selectedProviderId, c.dim))
 
   return {
