@@ -35,6 +35,7 @@ import {
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
 
+import { registerDiagnosticText } from "../../logging/diagnostic-text.ts"
 import { type DiagnosticLinesSink, TuiDiagnosticSurface } from "./diagnostic-surface.ts"
 
 function event(over: Partial<LogEvent> = {}): LogEvent {
@@ -353,5 +354,106 @@ describe("TuiDiagnosticSurface — bus integration", () => {
     bus.emit(event())
     // Single event → single tally (would be 2 if double-attached).
     expect(surface.snapshot().warn.count).toBe(1)
+  })
+})
+
+describe("TuiDiagnosticSurface: call-site parity (S14.2 step 0)", () => {
+  it("dedupes two events with the same message and prints the old line bytes", () => {
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    surface.onEvent(event({ message: "same text" }))
+    surface.onEvent(event({ message: "same text" }))
+    expect(surface.snapshot().warn.count).toBe(2)
+    const last = sink.calls[sink.calls.length - 1] ?? []
+    expect(last.map(strip)).toEqual(["⚠ live-area.timeout: same text (×2)"])
+  })
+
+  it("does not dedupe a different message from the same source", () => {
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    surface.onEvent(event({ message: "one" }))
+    surface.onEvent(event({ message: "two" }))
+    expect(surface.snapshot().warn.count).toBe(1)
+    const last = sink.calls[sink.calls.length - 1] ?? []
+    expect(last.map(strip)).toEqual(["⚠ live-area.timeout: two"])
+  })
+})
+
+describe("empty message events (S14.2 step 0b)", () => {
+  const typed = (source: string, attrs: Record<string, string | number>): LogEvent =>
+    event({
+      source,
+      message: "",
+      diagnostic: { source, level: "warn", attrs },
+    } as Partial<LogEvent>)
+
+  it("(a) a volatile repeat collapses into (×2)", () => {
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    surface.onEvent(typed("zz.ds.retry", { curve: "x", elapsedMs: 1, attempt: 1 }))
+    surface.onEvent(typed("zz.ds.retry", { curve: "x", elapsedMs: 9, attempt: 2 }))
+    expect(surface.snapshot().warn.count).toBe(2)
+  })
+
+  it("(b) a stable attr change does not collapse", () => {
+    const surface = new TuiDiagnosticSurface()
+    surface.bindSink(makeSink())
+    surface.onEvent(typed("zz.ds.stable", { curve: "x" }))
+    surface.onEvent(typed("zz.ds.stable", { curve: "y" }))
+    expect(surface.snapshot().warn.count).toBe(1)
+  })
+
+  it("(c) a registered renderer prints the registry text, no empty tail", () => {
+    registerDiagnosticText("zz.ds.reg", (a) => `registry says ${String(a.k)}`)
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    surface.onEvent(typed("zz.ds.reg", { k: "v" }))
+    const last = sink.calls[sink.calls.length - 1] ?? []
+    expect(last.map(strip)).toEqual(["⚠ zz.ds.reg: registry says v"])
+  })
+
+  it("(f7) no renderer, empty message: icon and source only, no empty tail", () => {
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    // No diagnostic field and no message: diagnosticText is "", so the
+    // msg === "" branch prints the icon and the source, nothing after.
+    surface.onEvent(event({ source: "zz.ds.nor", message: "" }))
+    const last = sink.calls[sink.calls.length - 1] ?? []
+    expect(last.map(strip)).toEqual(["⚠ zz.ds.nor"])
+  })
+
+  const lastLines = (e: LogEvent): string[] => {
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    surface.onEvent(e)
+    return (sink.calls[sink.calls.length - 1] ?? []).map(strip)
+  }
+
+  it("(fixa) no renderer, attrs: the source shows once", () => {
+    expect(lastLines(typed("zz.ds.fixa", { k: "v" }))).toEqual(["⚠ zz.ds.fixa: k=v"])
+  })
+
+  it("(fixd) no renderer, no attrs: icon and source only", () => {
+    expect(lastLines(typed("zz.ds.fixd", {}))).toEqual(["⚠ zz.ds.fixd"])
+  })
+
+  it("(fixe) a message with attrs: the message prints, bytes unchanged", () => {
+    const e = event({
+      source: "zz.ds.fixe",
+      message: "hello",
+      diagnostic: { source: "zz.ds.fixe", level: "warn", attrs: { k: "v" } },
+    } as Partial<LogEvent>)
+    expect(lastLines(e)).toEqual(["⚠ zz.ds.fixe: hello"])
+  })
+
+  it("(fixf) a registered renderer: bytes unchanged", () => {
+    registerDiagnosticText("zz.ds.fixf", (a) => `registry says ${String(a.k)}`)
+    expect(lastLines(typed("zz.ds.fixf", { k: "v" }))).toEqual(["⚠ zz.ds.fixf: registry says v"])
   })
 })

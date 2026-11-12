@@ -90,6 +90,7 @@ import {
 } from "@minimal-agent/core/sdk/events"
 import { extractPromptFromArgs } from "../cli/extract-prompt.ts"
 import { type OutputFormat, resolveStdioMode, type StdioMode } from "../cli/output-format.ts"
+import { retryBoundaryText } from "../logging/retry-boundary-text.ts"
 import { agentCoreOf, armOneShotRun, type OneShotRunOptions } from "../oneshot/arm-run.ts"
 import { correctivePrompt } from "../oneshot/json-schema-check.ts"
 import { type OrError, OrOutputWriter } from "../oneshot/or-output.ts"
@@ -621,6 +622,12 @@ async function runEventStreamTurn(
       // Session logs internally.
       if (entryLines && (entry.ch === "diag" || keep.has(entry.data.type))) {
         write(serializeEntry(entry))
+      } else if (isStreamJson && entry.ch === "event" && entry.data.type === "retry-boundary") {
+        // S14.4: the line stays a `text_delta` that carries the old marker text.
+        writeStreamJsonEvent(
+          { type: "text_delta", id: entry.data.id, text: retryBoundaryText(entry.data) },
+          { sessionId: entry.sessionId, ts: entry.ts },
+        )
       } else if (entry.ch === "event" && keep.has(entry.data.type)) {
         if (isStreamJson) {
           writeStreamJsonEvent(entry.data, { sessionId: entry.sessionId, ts: entry.ts })

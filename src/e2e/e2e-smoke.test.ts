@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { TOOL_PRESENTATION } from "../plugins-ui/tool-presentation.ts"
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
 import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
+import { cleanSpawnEnv } from "./clean-spawn-env.ts"
 
 // These tests boot the real CLI with the opencode-go provider plugin from the
 // sibling plugins repo. On a bare core checkout (core CI) it is absent, so
@@ -60,7 +61,7 @@ describe("CLI smoke", () => {
           // Generous ceiling so the child isn't SIGKILLed under parallel load.
           timeout: 20000,
           env: {
-            ...process.env,
+            ...cleanSpawnEnv(),
             NODE_ENV: "test",
             MINIMAL_AGENT_TEST_AUTH: "1",
             MINIMAL_AGENT_TRANSPORT: "test",
@@ -134,7 +135,7 @@ describe("CLI smoke", () => {
           // Generous ceiling so the child isn't SIGKILLed under parallel load.
           timeout: 20000,
           env: {
-            ...process.env,
+            ...cleanSpawnEnv(),
             ...tempHomeSpawnEnv(),
             NODE_ENV: "test",
             MINIMAL_AGENT_TEST_AUTH: "1",
