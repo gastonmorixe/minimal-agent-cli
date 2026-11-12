@@ -15,6 +15,7 @@ import {
   contextNoticeText,
   errorEventText,
   errorText,
+  failureText,
   isNoCredentials,
   renderCoreError,
   storedProvidersHintText,
@@ -138,5 +139,21 @@ describe("errorEventText", () => {
   test("keeps event.message for plain events", () => {
     expect(errorEventText({ message: "boom" })).toBe("boom")
     expect(errorEventText({ message: "boom", error: { kind: "Unknown", fields: {} } })).toBe("boom")
+  })
+})
+
+describe("failureText", () => {
+  test("a CoreError with an empty message gets its CLI text", () => {
+    const err = new SignInTimeoutError()
+    expect(err.message).toBe("")
+    expect(failureText("could not resume session abc", err)).toBe(
+      `could not resume session abc: ${errorText(err)}`,
+    )
+    expect(errorText(err)).not.toBe("")
+  })
+  test("a plain Error keeps its message", () => {
+    expect(failureText("could not dump session x", new Error("boom"))).toBe(
+      "could not dump session x: boom",
+    )
   })
 })

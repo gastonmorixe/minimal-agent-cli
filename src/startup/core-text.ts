@@ -116,6 +116,11 @@ export function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
+/** One startup failure line: `<what>: <text of err>`. A CoreError gets its CLI text. */
+export function failureText(what: string, err: unknown): string {
+  return `${what}: ${errorText(err)}`
+}
+
 /**
  * Text of an error event or a `failed` stop cause. Core sends `error` (kind and
  * fields) for a CoreError and an empty `message`. A known kind gets its CLI

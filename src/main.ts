@@ -92,6 +92,7 @@ import { toolPresentationMap } from "./plugins-ui/tool-presentation.ts"
 import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
 import { buildResumeHeader, replayToScrollback } from "./session-replay.ts"
+import { failureText } from "./startup/core-text.ts"
 import { attachStartupDiagnosticSinks } from "./startup/diagnostic-sinks.ts"
 import { dryRunEnableIds, startDryRun } from "./startup/dry-run.ts"
 import { type EntrypointStderr, prepareEntrypointArgs } from "./startup/entry-args.ts"
@@ -937,7 +938,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     const failResume = (err: unknown): number => {
       const wrote = writeStreamFailure(failure, err)
       console.error(
-        `  ${c.boldRed("error")} could not resume session ${effectiveResumeArg}: ${err instanceof Error ? err.message : String(err)}`,
+        `  ${c.boldRed("error")} ${failureText(`could not resume session ${effectiveResumeArg}`, err)}`,
       )
       return endFailedRun(wrote, exit)
     }
