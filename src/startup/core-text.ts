@@ -65,12 +65,24 @@ export function renderCoreError(err: CoreErrorJson): string | undefined {
         : `generic-endpoint auth-type ${str(f.authType)} requires --${str(f.missing)}`
     case "UnhandledAuthTypeError":
       return `unhandled generic-endpoint auth-type: ${str(f.authType)}`
+    case "SignInTimeoutError":
+      return "Sign-in timed out. Run login again."
+    case "InvalidAuthorizationCodeError":
+      return "Authentication failed: invalid authorization code"
+    case "TokenExchangeError":
+      return `Token exchange failed (${str(f.status)}): ${str(f.body)}`
+    case "NoOAuthLoginProviderError":
+      return "No OAuth login provider is registered."
     default:
       return undefined
   }
 }
 
 const AUTH_KINDS = [
+  "SignInTimeoutError",
+  "InvalidAuthorizationCodeError",
+  "TokenExchangeError",
+  "NoOAuthLoginProviderError",
   "NoProviderSelectedError",
   "NoProviderCredentialsError",
   "GenericEndpointAuthError",
