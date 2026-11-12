@@ -6,7 +6,8 @@
  *
  *   - embedded: `<cli>/plugins`, then the dev-time plugins checkout next to
  *     the CLI repo (`../minimal-agent-plugins`), or the dirs in
- *     `MINIMAL_AGENT_PLUGIN_SIBLINGS` (colon-separated).
+ *     `MINIMAL_AGENT_PLUGIN_SIBLINGS` (colon-separated). A compiled binary
+ *     reads only the env list, never the implicit sibling probe.
  *   - user: `<agent home>/plugins` (the first-run clone target). Install
  *     mode only.
  *   - project: `<cwd>/.agents/minimal-agent/plugins`.
@@ -66,14 +67,34 @@ function hasPluginPackage(dir: string): boolean {
 }
 
 /**
+ * True when this code runs from a `bun build --compile` binary. The same
+ * narrow cast as core's `isStandaloneExecutable()` (core does not export
+ * it): the bun-types in use may not declare `Bun.isStandaloneExecutable`.
+ */
+export function isStandaloneExecutable(): boolean {
+  return (Bun as { isStandaloneExecutable?: boolean }).isStandaloneExecutable === true
+}
+
+/**
  * The dev-time plugins checkouts: `MINIMAL_AGENT_PLUGIN_SIBLINGS`, else the
  * `minimal-agent-plugins` dir next to the CLI repo. Only existing dirs.
+ *
+ * A compiled binary has no CLI repo: its `cliRoot` is `/$bunfs`, so the
+ * implicit probe would be `/minimal-agent-plugins` on the real disk, and a
+ * host dir by that name would flip the binary into dev mode. So a
+ * standalone binary skips the implicit probe and reads only the env list.
+ *
+ * @param cliRoot - The CLI install dir (`<repo>`, parent of `src/`).
+ * @param env - The process env (`MINIMAL_AGENT_PLUGIN_SIBLINGS`).
+ * @param standalone - True in a compiled binary. Default: {@link isStandaloneExecutable}.
  */
 export function pluginCheckoutRoots(
   cliRoot: string,
   env: Record<string, string | undefined>,
+  standalone: boolean = isStandaloneExecutable(),
 ): string[] {
   const fromEnv = env.MINIMAL_AGENT_PLUGIN_SIBLINGS
+  if (!fromEnv && standalone) return []
   const candidates = fromEnv
     ? fromEnv.split(":").filter((p) => p.length > 0)
     : [join(dirname(cliRoot), PLUGINS_CHECKOUT_DIR)]
@@ -88,12 +109,19 @@ export interface PluginMode {
   readonly checkouts: readonly string[]
 }
 
-/** Resolve the plugin mode: dev when a checkout dir holds a package. */
+/**
+ * Resolve the plugin mode: dev when a checkout dir holds a package.
+ *
+ * @param cliRoot - The CLI install dir (`<repo>`, parent of `src/`).
+ * @param env - The process env (`MINIMAL_AGENT_PLUGIN_SIBLINGS`).
+ * @param standalone - True in a compiled binary (see {@link pluginCheckoutRoots}).
+ */
 export function resolvePluginMode(
   cliRoot: string,
   env: Record<string, string | undefined>,
+  standalone: boolean = isStandaloneExecutable(),
 ): PluginMode {
-  const checkouts = pluginCheckoutRoots(cliRoot, env).filter(hasPluginPackage)
+  const checkouts = pluginCheckoutRoots(cliRoot, env, standalone).filter(hasPluginPackage)
   return checkouts.length > 0 ? { kind: "dev", checkouts } : { kind: "install", checkouts: [] }
 }
 

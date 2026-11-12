@@ -127,6 +127,17 @@ export async function provisionPluginBinaries(loader: PluginLoader): Promise<voi
     const label = parts.length > 0 ? parts.join(c.dim(" · ")) : c.dim("up to date")
     if (summary.halt) row.fail(c.boldRed(label))
     else row.ok(label)
+    // A non-mandatory binary that failed is not fatal: the plugin that wanted
+    // it degrades (ma-fetch hides Fetch). Say why in one line per binary, so
+    // the red `✗name` in the row is not the only trace on screen.
+    for (const f of summary.failed) {
+      emitDiag(
+        Severity.Warning,
+        "binaries.install-failed",
+        `${f.name} not installed (${f.detail}); its tool stays off until the next start`,
+        { name: f.name },
+      )
+    }
     if (summary.halt) {
       writeCommandRows(renderBinaryProvisionHalt(summary.halt), process.stderr)
       process.exit(1)

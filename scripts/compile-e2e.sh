@@ -11,8 +11,9 @@
 # core from disk and pass).
 #
 # Checks:
-#   1. `--help` exits 0, prints the command map, and shows the version in
-#      package.json (a binary that reads package.json from disk shows 0.0.0).
+#   1. `--help` exits 0 and shows the version in package.json (a binary
+#      that reads package.json from disk shows 0.0.0). `--help --json` has a
+#      `commands` section with rows (structure, not heading text).
 #   2. `plugins` exits 0, and the fixture provider plugin in HOME loads from
 #      disk: it imports core by package name with `import` and `require()`,
 #      checks that both give the same class, and writes a marker file.
@@ -157,11 +158,13 @@ run() {
 # 1. --help, and the version it prints matches the CLI package.json (a
 # binary has no package.json on disk; a file read there falls back to 0.0.0).
 WANT_VERSION="$(sed -n 's/^  "version": "\([^"]*\)".*/\1/p' "$CLI_DIR/package.json" | head -n 1)"
+# The structure check reads `--help --json` (sections[].id), not a heading
+# string, so a text rewrite of help cannot break the gate. The JSON is parsed
+# with the binary itself (BUN_BE_BUN=1 makes it act as the bun CLI), so the
+# check needs no bun or jq on the host.
 if run "--help" --help; then
   if [[ "$CODE" != "0" ]]; then
     failed "--help: exit $CODE" "$OUT"
-  elif ! grep -q "Command map" <<<"$OUT"; then
-    failed "--help: no command map in the output" "$OUT"
   else
     pass "--help"
   fi
@@ -169,6 +172,32 @@ if run "--help" --help; then
     failed "--help: version is not v$WANT_VERSION (package.json)" "$(head -n 3 <<<"$OUT")"
   else
     pass "--help shows v$WANT_VERSION"
+  fi
+fi
+if run "--help --json" --help --json; then
+  if [[ "$CODE" != "0" ]]; then
+    failed "--help --json: exit $CODE" "$OUT"
+  else
+    HELP_JSON="$WORK/help.json"
+    printf '%s' "$OUT" >"$HELP_JSON"
+    # Prints "<version> <ids>" or exits non-zero on bad JSON.
+    shape="$(env -i "PATH=/usr/bin:/bin" BUN_BE_BUN=1 "$BIN" -e '
+      const j = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"))
+      const ids = (j.sections ?? []).map((s) => s.id)
+      const cmds = (j.sections ?? []).find((s) => s.id === "commands")
+      const rows = (cmds?.groups ?? []).flatMap((g) => g.rows ?? []).length + (cmds?.rows ?? []).length
+      console.log(`${j.program?.version ?? ""} ${rows} ${ids.join(",")}`)
+    ' "$HELP_JSON" 2>&1)"
+    read -r json_version json_rows json_ids <<<"$shape"
+    if [[ ",${json_ids:-}," != *",commands,"* ]]; then
+      failed "--help --json: no commands section" "$shape"
+    elif [[ "${json_rows:-0}" -lt 1 ]] 2>/dev/null; then
+      failed "--help --json: the commands section has no rows" "$shape"
+    elif [[ -n "$WANT_VERSION" && "$json_version" != "$WANT_VERSION" ]]; then
+      failed "--help --json: program.version is $json_version, not $WANT_VERSION" "$shape"
+    else
+      pass "--help --json has a commands section ($json_rows rows)"
+    fi
   fi
 fi
 

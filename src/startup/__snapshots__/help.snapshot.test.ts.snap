@@ -31,6 +31,7 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       plugins   List installed plugins and their on or off state
       flags     Show beta feature flags
       spinners  Show available spinner presets
+      version   Show the version, commit SHAs, and build info
       help      Show help for a command
 
   HOST MODES
@@ -163,7 +164,8 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       --skip-quota   Skip the startup quota check (env:
                      MINIMAL_AGENT_SKIP_QUOTA)
     Help
-      -h, --help  Show help
+      -h, --help     Show help
+      -V, --version  Show the version and build info
 
   ENVIRONMENT
     DEBUG                               Verbose request and response debug
@@ -315,6 +317,7 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       plugins   List installed plugins and their on or off state
       flags     Show beta feature flags
       spinners  Show available spinner presets
+      version   Show the version, commit SHAs, and build info
       help      Show help for a command
 
   HOST MODES
@@ -402,7 +405,8 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       -v, --verbose  Do not truncate debug output (env: VERBOSE)
       --skip-quota   Skip the startup quota check (env: MINIMAL_AGENT_SKIP_QUOTA)
     Help
-      -h, --help  Show help
+      -h, --help     Show help
+      -V, --version  Show the version and build info
 
   ENVIRONMENT
     DEBUG                               Verbose request and response debug diagnostics (set to 1; flag: --debug)

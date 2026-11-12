@@ -249,13 +249,13 @@ describe("global flags", () => {
     expect(blocks).toEqual(order)
   })
 
-  test("visible global flags match the root help rows (42 Options, 8 System prompt, help)", () => {
+  test("visible global flags match the root help rows (42 Options, 8 System prompt, help, version)", () => {
     const visible = reg.globalFlags.filter((f) => f.hidden !== true)
     const sp = visible.filter((f) => f.group === "system-prompt")
     const help = visible.filter((f) => f.group === "help")
     expect(visible.length - sp.length - help.length).toBe(42)
     expect(sp.length).toBe(8)
-    expect(help.map((f) => f.name)).toEqual(["help"])
+    expect(help.map((f) => f.name)).toEqual(["help", "version"])
   })
 
   test("system-prompt flags match the parser's override flag specs", () => {

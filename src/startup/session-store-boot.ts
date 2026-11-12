@@ -20,6 +20,7 @@ import { loadSession } from "@minimal-agent/core/host/session-restore"
 import { BlobStore, loadBlobStoreConfig } from "@minimal-agent/core/host-kit/blob-store"
 import { FileTrackingStore } from "@minimal-agent/core/host-kit/file-tracking-store"
 import { defaultSessionsDir, SessionStore } from "@minimal-agent/core/host-kit/session-store"
+import { recordedAgentVersion } from "../cli/build-info.ts"
 import {
   renderLiveSessionWarning,
   renderSessionDriftWarning,
@@ -120,6 +121,10 @@ export async function bootSessionStores(
   // Resume drift check emits a one-line yellow warning when system/tools
   // have changed since the parent was saved.
   const resumeSame = opts.resumeSameSid === true
+  // The session meta `agentVersion`: the plain semver from source, and
+  // `<semver>+<cli sha7>.<mode>[.dirty]` from a compiled binary, so a
+  // record names the exact build that wrote it (plan 2.2).
+  const agentVersion = recordedAgentVersion(AGENT_VERSION)
   let store: SessionStore | null = null
   try {
     store =
@@ -131,7 +136,7 @@ export async function bootSessionStores(
             cwd: process.cwd(),
             systemHash,
             toolsHash,
-            agentVersion: AGENT_VERSION,
+            agentVersion,
             argv: process.argv,
             provider: providerId,
             ...(credentialName ? { credentialName } : {}),
@@ -142,7 +147,7 @@ export async function bootSessionStores(
             cwd: process.cwd(),
             systemHash,
             toolsHash,
-            agentVersion: AGENT_VERSION,
+            agentVersion,
             argv: process.argv,
             provider: providerId,
             ...(credentialName ? { credentialName } : {}),

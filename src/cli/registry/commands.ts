@@ -23,6 +23,7 @@ import { PROVIDER_COMMAND } from "../../commands/provider.command.ts"
 import { RESUME_COMMAND, RESUME_SAME_COMMAND } from "../../commands/resume.command.ts"
 import { SESSIONS_COMMAND } from "../../commands/sessions.command.ts"
 import { USAGE_COMMAND } from "../../commands/usage.command.ts"
+import { VERSION_COMMAND } from "../../commands/version.command.ts"
 
 /** Program name: the root spec name. */
 export const PROGRAM_NAME = "minimal-agent"
@@ -43,6 +44,7 @@ export const BUILTIN_COMMANDS: readonly CommandSpec[] = [
   PLUGINS_COMMAND,
   FLAGS_COMMAND,
   SPINNERS_COMMAND,
+  VERSION_COMMAND,
   HELP_COMMAND,
 ]
 

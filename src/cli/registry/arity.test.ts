@@ -205,6 +205,14 @@ const PLUGIN_PROMPTS_NO_VALUE: Readonly<Record<string, string>> = {
   "--plugin-prompts": "plugin prompt text: none",
 }
 
+/** Intended addition: `-V, --version` (plan 2.1). Startup reads it before the scan. */
+const VERSION_NO_VALUE: Readonly<Record<string, string>> = {
+  "--version": "version: none",
+}
+
+/** Intended addition: the `-V` short form of `--version` (plan 2.1). */
+const VERSION_SHORT_TO_LONG: Readonly<Record<string, string>> = { "-V": "--version" }
+
 /** Optional-value flags. Spec M-12: they stay in `FLAGS_NO_VALUE`. */
 const OPTIONAL_VALUE_FLAGS = [
   "--list-models",
@@ -239,6 +247,7 @@ describe("V-18: derived arity tables equal the old hand tables plus the pinned g
           ...Object.keys(GAINED_NO_VALUE),
           ...Object.keys(ONESHOT_NO_VALUE),
           ...Object.keys(PLUGIN_PROMPTS_NO_VALUE),
+          ...Object.keys(VERSION_NO_VALUE),
         ]),
       ),
     )
@@ -257,8 +266,8 @@ describe("V-18: derived arity tables equal the old hand tables plus the pinned g
     }
   })
 
-  test("SHORT_TO_LONG equals the old hand map", () => {
-    expect({ ...derived.shortToLong }).toEqual({ ...OLD_SHORT_TO_LONG })
+  test("SHORT_TO_LONG equals the old hand map plus -V", () => {
+    expect({ ...derived.shortToLong }).toEqual({ ...OLD_SHORT_TO_LONG, ...VERSION_SHORT_TO_LONG })
   })
 
   test("LONG_ALIAS equals the old hand map", () => {

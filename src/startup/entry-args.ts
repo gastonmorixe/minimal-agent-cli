@@ -30,6 +30,8 @@ import { findHostMode, readHelpCatalog, usableHostModeIds } from "../cli/registr
 import { type HelpRequest, resolveHelpRequest } from "../cli/registry/resolve.ts"
 import { suggest } from "../cli/registry/suggest.ts"
 import { resolveSystemPromptOverridesForStartup } from "../cli/system-prompt-override-resolution.ts"
+import { commandFlags, findUnknownFlag, formatUnknownFlag } from "../cli/unknown-flags.ts"
+import { isVersionRequest, renderVersion } from "../commands/version.ts"
 import { type CliUserConfig, loadCliUserConfig } from "../config/terminal-config.ts"
 import { parseFormatterCommand } from "../ui/formatter/formatter.ts"
 import { wantsJsonHelp } from "../ui/help/json.ts"
@@ -169,6 +171,23 @@ export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): Entryp
     exit(writeHelp(helpRequest, input, stderr))
   }
 
+  // `version`, `--version`, `-V` (plan 2.1): build info only, exit 0. Before
+  // every env write, config load, auth, network, and plugin step.
+  if (isVersionRequest(input.rawArgv, builtinRegistry())) {
+    ;(input.stdout ?? process.stdout).write(renderVersion(input.rawArgv))
+    exit(0)
+  }
+
+  // An unknown flag stops here with exit 2 (plan 2.3), instead of booting a
+  // session. The plugin catalog (flags of plugin `cli` commands) is read
+  // only when the registry does not know a token, so a normal run pays
+  // nothing for it.
+  const unknownFlag = findUnknownFlagWithPlugins(input)
+  if (unknownFlag !== undefined) {
+    stderr.write(`${formatUnknownFlag(unknownFlag)}\n`)
+    exit(2)
+  }
+
   const args = normalizeArgs(input.rawArgv)
 
   // The resolver does not read `--help=x` or `-h=x`. Keep root help for a raw
@@ -273,6 +292,20 @@ export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): Entryp
     readFlagValue,
     extractPrompt: (stdin = process.stdin) => extractPrompt(args, stdin),
   }
+}
+
+/**
+ * The first flag in raw argv that neither the built-in registry nor an
+ * enabled plugin's manifest `cli` commands declare, or undefined.
+ */
+function findUnknownFlagWithPlugins(input: PrepareEntrypointArgsInput): string | undefined {
+  const reg = builtinRegistry()
+  if (findUnknownFlag(input.rawArgv, reg) === undefined) return undefined
+  const catalog = (
+    input.helpCatalog ?? (() => defaultHelpCatalog(input.rawArgv, input.env, input.cwd))
+  )()
+  const pluginFlags = catalog.flatMap((entry) => commandFlags(entry.cli?.commands ?? []))
+  return findUnknownFlag(input.rawArgv, reg, pluginFlags)
 }
 
 /**
