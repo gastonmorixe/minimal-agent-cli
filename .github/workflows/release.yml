@@ -1,54 +1,533 @@
 name: Release
 
-# Stable proprietary releases only. The pushed v* tag must match package.json.
-# The gate is not re-run here: @minimal-agent/core is a private git dependency
-# this repo's GITHUB_TOKEN cannot install. The umbrella repo
-# (gastonmorixe/minimal-agent) gates the pinned commit before a release.
+# Builds the standalone `minimal-agent` binary for every macOS and Linux
+# target and publishes it on this repo's own GitHub Releases (private).
+#
+# Channels
+#   stable   push of a `v<version>` tag (must equal package.json version), or
+#            workflow_dispatch channel=stable run ON that tag. Marked latest.
+#   nightly  daily cron, or workflow_dispatch channel=nightly. Pre-release
+#            tagged `v<version>-nightly.<YYYYMMDDTHHMMSSZ>`. The cron skips a
+#            day whose cli, core and plugins SHAs match the newest nightly.
+#            The newest 7 nightlies are kept: older ones lose release + tag.
+#
+# Jobs: meta -> build (matrix from scripts/release/targets.ts) -> sign-macos
+# (Developer ID + notarization, gated by secrets) -> publish (draft with all
+# assets, then publish: the immutable-release pattern) -> prune-nightlies.
+#
+# Cross-repo reads. core, config and plugins are private. The
+# `minimal-agent-ci` GitHub App (vars.MA_APP_ID, secrets.MA_APP_PRIVATE_KEY)
+# mints a 1h read-only installation token scoped to those three repos. It
+# checks out core (at the package.json pin) and plugins, and a git
+# `insteadOf` rewrite lets `bun install` fetch the git+ssh pins of
+# @minimal-agent/core and @minimal-agent/config over HTTPS. Optional
+# fallback: a fine-grained PAT in secrets.MA_CROSS_REPO_TOKEN (contents:read
+# on the same repos), used only when vars.MA_APP_ID is unset.
+#
+# macOS signing secrets (all optional; missing = a warning, ad-hoc binary):
+#   MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD, MACOS_SIGN_IDENTITY,
+#   APPLE_API_KEY_P8_BASE64, APPLE_API_KEY_ID, APPLE_API_ISSUER
+# The same scripts run on a dev Mac: see scripts/release/sign-macos.sh.
+#
+# The full four-repo gate is not re-run here: it runs in the umbrella
+# monorepo CI against this repo's pin. The build legs do run the compiled
+# binary's own smoke + e2e (scripts/compile.ts, scripts/compile-e2e.sh).
 on:
   push:
     tags:
       - "v*"
+      # This workflow creates the nightly tags itself.
+      - "!v*-nightly.*"
+  schedule:
+    # 06:17 UTC daily (off the hour: runs scheduled at :00 queue the longest).
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "nightly, or stable (run it on the v<version> tag)"
+        type: choice
+        options:
+          - nightly
+          - stable
+        default: nightly
+      force:
+        description: "nightly: build even when no source moved since the last nightly"
+        type: boolean
+        default: true
+      darwin_x64_native:
+        description: "build darwin-x64 on an Intel macos-15-intel runner (native smoke, costs more)"
+        type: boolean
+        default: false
 
+# One run per channel at a time. A queued run waits, it never cancels a publish.
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ github.event_name == 'schedule' && 'nightly' || inputs.channel || 'stable' }}
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  BUN_VERSION: "1.4.4"
+  OWNER: gastonmorixe
+  # The repos the App token may read.
+  CROSS_REPOS: minimal-agent-core,minimal-agent-config,minimal-agent-plugins
 
 jobs:
-  release:
-    name: Publish release
+  meta:
+    name: meta (version, channel, SHAs)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      channel: ${{ steps.meta.outputs.channel }}
+      version: ${{ steps.meta.outputs.version }}
+      label: ${{ steps.meta.outputs.label }}
+      tag: ${{ steps.meta.outputs.tag }}
+      name: ${{ steps.meta.outputs.name }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      cli_sha: ${{ steps.meta.outputs.cli_sha }}
+      core_sha: ${{ steps.meta.outputs.core_sha }}
+      plugins_sha: ${{ steps.sources.outputs.plugins_sha }}
+      plugins_ref: ${{ steps.sources.outputs.plugins_ref }}
+      source_date_epoch: ${{ steps.meta.outputs.source_date_epoch }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      targets: ${{ steps.matrix.outputs.targets }}
+      signing: ${{ steps.signing.outputs.signing }}
+      skip: ${{ steps.skip.outputs.skip }}
     steps:
-      - name: Checkout
+      - name: Create GitHub App token
+        id: app-token
+        if: vars.MA_APP_ID != ''
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.MA_APP_ID }}
+          private-key: ${{ secrets.MA_APP_PRIVATE_KEY }}
+          owner: ${{ env.OWNER }}
+          repositories: ${{ env.CROSS_REPOS }}
+
+      - name: Checkout cli
         uses: actions/checkout@v7
-      - name: Validate tag matches package.json
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Resolve version, channel and tag
         id: meta
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_CHANNEL: ${{ inputs.channel }}
         run: |
           set -euo pipefail
           VERSION="$(jq -r '.version' package.json)"
-          TAG="${GITHUB_REF#refs/tags/}"
-          LABEL="${TAG#v}"
           if [[ -z "${VERSION}" || "${VERSION}" == "null" ]]; then
-            echo "could not read version from package.json" >&2
+            echo "::error::could not read version from package.json"
             exit 1
           fi
-          if [[ "${LABEL}" == *"-nightly."* ]]; then
-            echo "minimal-agent-cli does not publish nightlies; refusing ${TAG}" >&2
+          CHANNEL=stable
+          if [[ "${EVENT}" == "schedule" ]]; then CHANNEL=nightly; fi
+          if [[ "${EVENT}" == "workflow_dispatch" ]]; then CHANNEL="${INPUT_CHANNEL}"; fi
+          CLI_SHA="$(git rev-parse HEAD)"
+          if [[ "${CHANNEL}" == "stable" ]]; then
+            if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
+              echo "::error::a stable release runs on a v<version> tag (got ${GITHUB_REF}): push the tag, or dispatch on it"
+              exit 1
+            fi
+            TAG="${GITHUB_REF#refs/tags/}"
+            LABEL="${TAG#v}"
+            if [[ "${LABEL}" != "${VERSION}" ]]; then
+              echo "::error::stable tag ${TAG} does not match package.json version ${VERSION}"
+              echo "bump package.json (bun run version -- set ${LABEL} --targets cli) before tagging" >&2
+              exit 1
+            fi
+            PRERELEASE=false
+            NAME="minimal-agent ${TAG}"
+            EPOCH="$(git log -1 --format=%ct HEAD)"
+          else
+            STAMP="$(date -u +'%Y%m%dT%H%M%SZ')"
+            LABEL="${VERSION}-nightly.${STAMP}"
+            TAG="v${LABEL}"
+            PRERELEASE=true
+            NAME="minimal-agent ${TAG} (nightly)"
+            # Every leg stamps the same build time.
+            EPOCH="$(date -u +%s)"
+          fi
+          CORE_SHA="$(jq -r '.dependencies["@minimal-agent/core"]' package.json | sed -n 's/.*minimal-agent-core\.git#\([0-9a-f]\{40\}\)$/\1/p')"
+          if [[ -z "${CORE_SHA}" ]]; then
+            echo "::error::package.json does not pin @minimal-agent/core to a full commit sha"
             exit 1
           fi
-          if [[ "${LABEL}" != "${VERSION}" ]]; then
-            echo "stable tag ${TAG} does not match package.json version ${VERSION}" >&2
+          {
+            echo "channel=${CHANNEL}"
+            echo "version=${VERSION}"
+            echo "label=${LABEL}"
+            echo "tag=${TAG}"
+            echo "name=${NAME}"
+            echo "prerelease=${PRERELEASE}"
+            echo "cli_sha=${CLI_SHA}"
+            echo "core_sha=${CORE_SHA}"
+            echo "source_date_epoch=${EPOCH}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "Release: ${NAME} channel=${CHANNEL} cli=${CLI_SHA} core=${CORE_SHA}"
+
+      # TODO(PLAN.md wave 2, embedded plugins): pin the plugins commit (in
+      # package.json or plugins.bundle.json) instead of building from the
+      # plugins default branch HEAD. The sha lands in build-info.json either way.
+      - name: Resolve plugins commit
+        id: sources
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token || secrets.MA_CROSS_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${TOKEN}" ]]; then
+            echo "::error::no cross-repo token: set vars.MA_APP_ID and secrets.MA_APP_PRIVATE_KEY (the minimal-agent-ci App)"
             exit 1
           fi
-          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
-          echo "name=minimal-agent-cli ${TAG}" >> "${GITHUB_OUTPUT}"
-      - name: Publish GitHub release
+          url="https://x-access-token:${TOKEN}@github.com/${OWNER}/minimal-agent-plugins.git"
+          REF="$(git ls-remote --symref "${url}" HEAD | sed -n 's|^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$|\1|p')"
+          SHA="$(git ls-remote "${url}" HEAD | cut -f1)"
+          if [[ -z "${SHA}" ]]; then
+            echo "::error::cannot read minimal-agent-plugins HEAD with the cross-repo token"
+            exit 1
+          fi
+          echo "plugins_ref=${REF:-HEAD}" >> "${GITHUB_OUTPUT}"
+          echo "plugins_sha=${SHA}" >> "${GITHUB_OUTPUT}"
+          echo "plugins: ${REF:-HEAD} at ${SHA}"
+
+      - name: Build matrix
+        id: matrix
+        env:
+          DARWIN_X64_NATIVE: ${{ inputs.darwin_x64_native && '--darwin-x64-native' || '' }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          MATRIX="$(bun run scripts/release/targets.ts --matrix ${DARWIN_X64_NATIVE})"
+          TARGETS="$(bun run scripts/release/targets.ts | cut -f1 | tr '\n' ' ')"
+          echo "matrix=${MATRIX}" >> "${GITHUB_OUTPUT}"
+          echo "targets=${TARGETS% }" >> "${GITHUB_OUTPUT}"
+          echo "${MATRIX}" | jq .
+
+      - name: Signing gate
+        id: signing
+        env:
+          HAS_CERT: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
+          HAS_NOTARY: ${{ secrets.APPLE_API_KEY_P8_BASE64 != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER != '' }}
+        run: |
+          set -euo pipefail
+          if [[ "${HAS_CERT}" == "true" ]]; then
+            echo "signing=true" >> "${GITHUB_OUTPUT}"
+            if [[ "${HAS_NOTARY}" != "true" ]]; then
+              echo "::warning title=macOS notarization::APPLE_API_KEY_P8_BASE64 / APPLE_API_KEY_ID / APPLE_API_ISSUER not set: binaries are signed but not notarized"
+            fi
+          else
+            echo "signing=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning title=macOS signing::MACOS_CERT_P12_BASE64 / MACOS_CERT_PASSWORD not set: macOS binaries ship ad-hoc signed and unnotarized"
+          fi
+
+      - name: Skip an unchanged nightly
+        id: skip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+          CHANNEL: ${{ steps.meta.outputs.channel }}
+          WANT: "cli=${{ steps.meta.outputs.cli_sha }} core=${{ steps.meta.outputs.core_sha }} plugins=${{ steps.sources.outputs.plugins_sha }}"
+        run: |
+          set -euo pipefail
+          SKIP=false
+          # A scheduled run has no inputs, so FORCE is empty there.
+          if [[ "${CHANNEL}" == "nightly" && "${FORCE}" != "true" ]]; then
+            LAST="$(gh release list --repo "${GITHUB_REPOSITORY}" --limit 50 --json tagName,isDraft,isPrerelease \
+              --jq '[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | test("-nightly\\.")))] | sort_by(.tagName | sub("^.*-nightly\\."; "")) | last | .tagName // ""')"
+            if [[ -n "${LAST}" ]]; then
+              BODY="$(gh release view "${LAST}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body)"
+              if grep -qF "<!-- ma-build ${WANT} -->" <<<"${BODY}"; then
+                SKIP=true
+                echo "::notice::no source moved since ${LAST}: skipping this nightly"
+              fi
+            fi
+          fi
+          echo "skip=${SKIP}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: build ${{ matrix.targets }}
+    needs: meta
+    if: needs.meta.outputs.skip != 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      # A failed non-priority leg must not cancel the priority targets.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.meta.outputs.matrix) }}
+    env:
+      HUSKY: "0"
+      SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.source_date_epoch }}
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        if: vars.MA_APP_ID != ''
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.MA_APP_ID }}
+          private-key: ${{ secrets.MA_APP_PRIVATE_KEY }}
+          owner: ${{ env.OWNER }}
+          repositories: ${{ env.CROSS_REPOS }}
+
+      # compile.ts reads ../minimal-agent-core (release mode: git archive of
+      # the pinned commit) and ../minimal-agent-plugins, so the three
+      # checkouts sit side by side in the workspace.
+      - name: Checkout cli
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.cli_sha }}
+          path: minimal-agent-cli
+          persist-credentials: false
+
+      - name: Checkout core (pinned)
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.OWNER }}/minimal-agent-core
+          ref: ${{ needs.meta.outputs.core_sha }}
+          path: minimal-agent-core
+          token: ${{ steps.app-token.outputs.token || secrets.MA_CROSS_REPO_TOKEN }}
+          persist-credentials: false
+
+      - name: Checkout plugins
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.OWNER }}/minimal-agent-plugins
+          ref: ${{ needs.meta.outputs.plugins_sha }}
+          path: minimal-agent-plugins
+          token: ${{ steps.app-token.outputs.token || secrets.MA_CROSS_REPO_TOKEN }}
+          persist-credentials: false
+
+      # Bun clones a git+ssh dependency with git, as
+      # https://git@github.com/... first, then SSH. Rewrite every form.
+      - name: Git credentials for private dependencies
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token || secrets.MA_CROSS_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          base="https://x-access-token:${TOKEN}@github.com/"
+          git config --global url."${base}".insteadOf "https://github.com/"
+          git config --global --add url."${base}".insteadOf "https://git@github.com/"
+          git config --global --add url."${base}".insteadOf "ssh://git@github.com/"
+          git config --global --add url."${base}".insteadOf "git@github.com:"
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install cli
+        working-directory: minimal-agent-cli
+        env:
+          CHANNEL: ${{ needs.meta.outputs.channel }}
+        run: |
+          set -euo pipefail
+          if bun install --frozen-lockfile; then exit 0; fi
+          if [[ "${CHANNEL}" == "stable" ]]; then
+            echo "::error::bun.lock is out of date with package.json: run bun install and commit bun.lock"
+            exit 1
+          fi
+          # --no-save leaves bun.lock untouched, so the tree stays clean for
+          # the release-mode dirty check.
+          echo "::warning::bun.lock is out of date with package.json; this nightly installs without it"
+          bun install --no-save
+
+      - name: Build, smoke and package
+        working-directory: minimal-agent-cli
+        env:
+          LABEL: ${{ needs.meta.outputs.label }}
+          CHANNEL: ${{ needs.meta.outputs.channel }}
+          TARGETS: ${{ matrix.targets }}
+          MA_RUNNER: ${{ matrix.runner }}
+          # The smoke and e2e dirs must have no node_modules above them.
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          scripts/release/build-leg.sh "${LABEL}" "${CHANNEL}" "${RUNNER_TEMP}/out" "${RUNNER_TEMP}/raw" ${TARGETS}
+
+      - name: Upload packaged targets
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.runner }}
+          path: ${{ runner.temp }}/out
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload macOS binaries for signing
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-raw-${{ matrix.runner }}
+          path: ${{ runner.temp }}/raw
+          if-no-files-found: ignore
+          retention-days: 7
+
+  sign-macos:
+    name: sign + package macOS
+    needs: [meta, build]
+    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.meta.outputs.skip != 'true' }}
+    # codesign needs a Mac. Without the secrets nothing gets signed, so the
+    # (10x cheaper) Linux runner packages the ad-hoc binaries.
+    runs-on: ${{ needs.meta.outputs.signing == 'true' && 'macos-latest' || 'ubuntu-latest' }}
+    timeout-minutes: 45
+    env:
+      SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.source_date_epoch }}
+    steps:
+      - name: Checkout cli
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.cli_sha }}
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Download macOS binaries
+        uses: actions/download-artifact@v8
+        with:
+          pattern: macos-raw-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/raw
+
+      - name: Sign, notarize and package
+        env:
+          LABEL: ${{ needs.meta.outputs.label }}
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # A nightly with a broken cert ships ad-hoc with a warning. A
+          # stable release fails instead.
+          MA_SIGNING_SOFT_FAIL: ${{ needs.meta.outputs.channel == 'nightly' && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/raw"
+          scripts/release/finish-macos.sh "${LABEL}" "${RUNNER_TEMP}/raw" "${RUNNER_TEMP}/out"
+
+      - name: Upload packaged macOS targets
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-macos-signed
+          path: ${{ runner.temp }}/out
+          if-no-files-found: ignore
+          retention-days: 7
+
+  publish:
+    name: publish ${{ needs.meta.outputs.tag }}
+    needs: [meta, build, sign-macos]
+    # Also runs when a non-priority leg failed: assemble.ts decides (stable
+    # needs every target, a nightly only the priority ones).
+    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.meta.outputs.skip != 'true' && needs.sign-macos.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.source_date_epoch }}
+    steps:
+      - name: Checkout cli
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.cli_sha }}
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Download packaged targets
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist/release
+
+      - name: Assemble SHA256SUMS, build-info.json, sourcemaps
+        env:
+          LABEL: ${{ needs.meta.outputs.label }}
+          CHANNEL: ${{ needs.meta.outputs.channel }}
+          TAG: ${{ needs.meta.outputs.tag }}
+          CLI_SHA: ${{ needs.meta.outputs.cli_sha }}
+          CORE_SHA: ${{ needs.meta.outputs.core_sha }}
+          PLUGINS_SHA: ${{ needs.meta.outputs.plugins_sha }}
+          PLUGINS_REF: ${{ needs.meta.outputs.plugins_ref }}
+          TARGETS: ${{ needs.meta.outputs.targets }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/release
+          bun run scripts/release/assemble.ts --dir dist/release --version "${LABEL}" \
+            --channel "${CHANNEL}" --tag "${TAG}" --cli-sha "${CLI_SHA}" --core-sha "${CORE_SHA}" \
+            --plugins-sha "${PLUGINS_SHA}" --plugins-ref "${PLUGINS_REF}" --expect "${TARGETS}"
+          (cd dist/release && sha256sum -c SHA256SUMS)
+          cat dist/release/release-notes.md >> "${GITHUB_STEP_SUMMARY}"
+
+      # Immutable releases lock assets once published, so the release stays a
+      # draft until every asset is attached.
+      - name: Create draft release
+        id: release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.name }}
-          generate_release_notes: true
-          prerelease: false
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: ${{ needs.meta.outputs.name }}
+          target_commitish: ${{ needs.meta.outputs.cli_sha }}
+          body_path: dist/release/release-notes.md
+          generate_release_notes: ${{ needs.meta.outputs.channel == 'stable' }}
+          draft: true
+          prerelease: ${{ needs.meta.outputs.prerelease == 'true' }}
+          make_latest: "false"
+          fail_on_unmatched_files: true
+          files: |
+            dist/release/minimal-agent-*.tar.gz
+            dist/release/SHA256SUMS
+            dist/release/build-info.json
+
+      # By release id: a draft has no git tag yet, so a tag lookup can miss it.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.release.outputs.id }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+          LATEST: ${{ needs.meta.outputs.channel == 'stable' }}
+        run: |
+          set -euo pipefail
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F draft=false \
+            -F prerelease="${PRERELEASE}" \
+            -f make_latest="${LATEST}" \
+            --jq '"published \(.tag_name) draft=\(.draft) prerelease=\(.prerelease) \(.html_url)"'
+
+  prune-nightlies:
+    name: prune old nightlies
+    needs: [meta, publish]
+    if: ${{ !cancelled() && needs.meta.outputs.channel == 'nightly' && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout cli
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.cli_sha }}
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Keep the newest 7 nightlies
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.meta.outputs.tag }}
+        run: bun run scripts/release/prune-nightlies.ts --repo "${GITHUB_REPOSITORY}" --keep 7 --current "${TAG}"

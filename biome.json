@@ -6,6 +6,7 @@
     "includes": [
       "src/**",
       "scripts/compile.ts",
+      "scripts/release/**",
       "package.json",
       "tsconfig.json",
       "biome.json",

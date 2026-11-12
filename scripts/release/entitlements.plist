@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the Bun-compiled minimal-agent binary.
+  JavaScriptCore needs JIT memory. This is the set from Bun's codesign guide
+  (bun.com/docs/guides/runtime/codesign-macos-executable) minus
+  allow-dyld-environment-variables, which only opens DYLD_* injection.
+  sign-macos.sh signs with these; release.yml re-runs the smoke on the
+  signed binary, so a missing entitlement fails the build, not a user.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-executable-page-protection</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
