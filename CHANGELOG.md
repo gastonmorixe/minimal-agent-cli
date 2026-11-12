@@ -21,6 +21,21 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-12: A compiled binary carries every first-party plugin.
+  `scripts/gen-embedded-plugins.ts` writes a table of literal `import()`
+  thunks plus text and file imports for each plugin dir with a
+  `manifest.json` or `provider.json`. `scripts/compile.ts` maps
+  `#embedded-plugins` to it (from source, `package.json#imports` names an
+  empty stub), and `src/index.ts` registers it with core. User and
+  project copies still win by id. A release embeds a `git archive` of the
+  plugins HEAD (or `MA_PLUGINS_SHA`), not the working tree. The hidden
+  `<binary> __run <plugin-id>/<script> [args]` runs an embedded entry
+  script (manifest `scripts`): a path or an unknown id exits 64.
+  `compile-e2e.sh` checks the plugin and provider counts from an empty
+  HOME, the user shadow, `__run`, and a BackgroundRun job plus a
+  SpawnAgent child against a mock model with no bun on PATH. Removed:
+  `scripts/bundle-plugins.ts`, `plugins.bundle.json`, the
+  `<cli>/plugins` root and `compiledPluginsRoot`.
 - 2026-11-04: Root help reads the core plugin catalog (manifest JSON only,
   no plugin module import). A new HOST MODES section lists usable host
   modes with their plugin id. PLUGIN NOTES keeps the static block first,

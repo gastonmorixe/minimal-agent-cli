@@ -45,7 +45,7 @@ import {
   printHostModeHelp,
   renderHostModeHelpJson,
 } from "./help.ts"
-import { compiledPluginsRoot, computePluginRoots } from "./plugin-roots.ts"
+import { computePluginRoots } from "./plugin-roots.ts"
 
 /** Process environment shape used by startup argument preparation. */
 export type EntrypointEnv = Record<string, string | undefined>
@@ -105,14 +105,7 @@ export function defaultHelpCatalog(
     env.MINIMAL_AGENT_NO_AGENTS_MD === "1"
   const platformIdx = rawArgv.indexOf("--platform")
   return readHelpCatalog({
-    roots: computePluginRoots(
-      cliRoot,
-      env,
-      cwd,
-      resolveAgentHome(env),
-      undefined,
-      compiledPluginsRoot(here),
-    ),
+    roots: computePluginRoots(cliRoot, env, cwd, resolveAgentHome(env)),
     config: loadPluginEnabledOverrides(),
     env: { disable: env.MINIMAL_AGENT_DISABLE_PLUGINS, enable: env.MINIMAL_AGENT_ENABLE_PLUGINS },
     cli: {

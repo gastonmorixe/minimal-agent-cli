@@ -2,12 +2,16 @@
  * Resolve a validated live-area slot to invocable form (S35). Moved from
  * core with the `ui` block.
  *
+ * Files are reached through core's `PluginPackage` for the package dir
+ * (`pluginPackageFor`): a disk package behaves as before (`existsSync`,
+ * an `import()` of the absolute path through {@link importPluginModule}),
+ * and an embedded package of a compiled binary uses its table (module
+ * thunks, and an extracted copy for a subprocess command).
+ *
  * @module plugins-ui/resolve-slot
  */
 
-import { existsSync } from "node:fs"
-import { isAbsolute, resolve } from "node:path"
-
+import { type PluginPackage, pluginPackageFor } from "@minimal-agent/core/host-kit/embedded-plugins"
 import type {
   LiveAreaHandler,
   LiveAreaHandlerContext,
@@ -17,9 +21,14 @@ import type {
 
 import { importPluginModule } from "./plugin-module.ts"
 
-/** Resolve `rel` against the package dir; absolute paths pass through. */
-function resolvePath(pkgDir: string, rel: string): string {
-  return isAbsolute(rel) ? rel : resolve(pkgDir, rel)
+/**
+ * Import the module `rel` of `pkg`. A disk package keeps the containment
+ * and core-path checks of {@link importPluginModule}. An embedded package
+ * imports its table thunk (the table only holds the package's own files).
+ */
+export function importPackageModule(pkg: PluginPackage, rel: string): Promise<unknown> {
+  if (pkg.kind === "embedded") return pkg.importModule(rel)
+  return importPluginModule(pkg.resolve(rel), pkg.dir)
 }
 
 /**
@@ -53,15 +62,16 @@ export async function resolveLiveAreaSlot(
     refreshOn: slot.refreshOn ?? [],
   }
 
+  const pkg = pluginPackageFor(packageDir)
   if (slot.handler.type === "module") {
-    const abs = resolvePath(packageDir, slot.handler.path)
-    if (!existsSync(abs)) {
+    const abs = pkg.resolve(slot.handler.path)
+    if (!pkg.hasFile(slot.handler.path)) {
       logger(`${packageDir}: live-area slot handler module not found: ${abs}`)
       return null
     }
     let mod: { default?: LiveAreaHandler }
     try {
-      mod = (await importPluginModule(abs, packageDir)) as { default?: LiveAreaHandler }
+      mod = (await importPackageModule(pkg, slot.handler.path)) as { default?: LiveAreaHandler }
     } catch (e) {
       logger(
         `${packageDir}: failed to import live-area slot handler ${abs}: ${
@@ -96,9 +106,18 @@ export async function resolveLiveAreaSlot(
   // subprocess
   const cmd = slot.handler.command
   const exe = cmd[0]
-  const exeAbs = isAbsolute(exe) ? exe : resolve(packageDir, exe)
-  if (!existsSync(exeAbs)) {
-    logger(`${packageDir}: live-area slot executable not found: ${exeAbs}`)
+  if (!pkg.hasFile(exe)) {
+    logger(`${packageDir}: live-area slot executable not found: ${pkg.resolve(exe)}`)
+    return null
+  }
+  // Disk: the path itself. Embedded: extracted once into the package dir.
+  let exeAbs: string
+  try {
+    exeAbs = pkg.execPath(exe)
+  } catch (e) {
+    logger(
+      `${packageDir}: live-area slot executable not usable: ${e instanceof Error ? e.message : String(e)}`,
+    )
     return null
   }
   return {

@@ -7,8 +7,7 @@ coverage/
 tmp/
 *.log
 
-# embedded plugin bundle copy target (filled by scripts/bundle-plugins.ts)
-/plugins/
+# the generated embedded plugin table lives in tmp/ (scripts/gen-embedded-plugins.ts)
 
 # private / local-only
 private/

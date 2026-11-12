@@ -17,8 +17,9 @@
  * @module plugins-ui/ui-loader
  */
 
-import { readFileSync } from "node:fs"
-import { isAbsolute, join, resolve } from "node:path"
+import { join } from "node:path"
+
+import { pluginPackageFor } from "@minimal-agent/core/host-kit/embedded-plugins"
 
 import type {
   LiveAreaHandlerContext,
@@ -29,8 +30,7 @@ import type {
 import { TERMINAL_KIT } from "../terminal-kit/kit.ts"
 import { paletteEnvJson } from "../terminal-kit/palette.ts"
 
-import { importPluginModule } from "./plugin-module.ts"
-import { resolveLiveAreaSlot } from "./resolve-slot.ts"
+import { importPackageModule, resolveLiveAreaSlot } from "./resolve-slot.ts"
 import { isObject, parseLiveAreaSlot, parseUiSetup, UiManifestError } from "./ui-manifest.ts"
 
 /** One plugin package that core accepted (`PluginLoader.loadedPackages()`). */
@@ -118,8 +118,9 @@ async function runUiSetup(
   try {
     const entry = parseUiSetup(raw, manifestPath)
     if (entry.type !== "module") return
-    const abs = isAbsolute(entry.path) ? entry.path : resolve(pkg.packageDir, entry.path)
-    const mod = (await importPluginModule(abs, pkg.packageDir)) as { default?: UiSetupHandler }
+    const source = pluginPackageFor(pkg.packageDir)
+    const abs = source.resolve(entry.path)
+    const mod = (await importPackageModule(source, entry.path)) as { default?: UiSetupHandler }
     if (typeof mod.default !== "function") {
       logger(`${pkg.packageDir}: ui.setup ${abs} has no default export function`)
       return
@@ -154,7 +155,11 @@ export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi>
     let rawSlots: unknown[]
     let ui: Record<string, unknown> | undefined
     try {
-      const raw: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"))
+      // Through the package source, so an embedded package (no manifest
+      // on disk) reads the manifest text of the binary.
+      const text = pluginPackageFor(pkg.packageDir).readText("manifest.json")
+      if (text === null) throw new Error(`cannot read ${manifestPath}`)
+      const raw: unknown = JSON.parse(text)
       if (!isObject(raw)) continue
       ui = uiBlockOf(raw)
       rawSlots = rawSlotsOf(ui)

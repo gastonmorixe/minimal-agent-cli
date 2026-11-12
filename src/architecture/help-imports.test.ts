@@ -88,9 +88,15 @@ const NON_LITERAL_LOAD = /\b(?:import|require)\(\s*[^"'`\s)]/u
  *   `discoverPackageDirs` (a directory scan) and never calls
  *   `resolveHandler`. Follow-up: move `discoverPackageDirs` to a leaf module
  *   in core, then drop this entry.
+ * - core `src/plugins/source.ts`: the disk `PluginPackage.importModule`
+ *   (since core 995a08b every plugin-file import goes through it). Help
+ *   reaches this file only via the catalog's package listing and never
+ *   imports a plugin module. Embedded packages use literal thunks instead.
  */
 const ALLOWED_DYNAMIC: readonly string[] = [
   "/src/plugins/loader/helpers.ts: mod = await import(abs);",
+  "/src/plugins/source.ts: return import(this.resolve(rel));",
+  "/src/plugins/source.ts: return import(rel);",
 ]
 
 /** True when `load` (`<relative path>: <line>`) is in {@link ALLOWED_DYNAMIC}. */

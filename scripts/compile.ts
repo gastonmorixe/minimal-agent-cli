@@ -15,6 +15,20 @@
  *   --bytecode, --no-bytecode   default: off for dev (faster), on for release
  *   --no-smoke              skip the smoke and e2e runs of the built binary
  *
+ * Where the plugins come from
+ * ----------------------------
+ * Every first-party plugin is embedded. `scripts/gen-embedded-plugins.ts`
+ * writes a table of literal `import()` thunks plus text and file imports
+ * (gitignored, under `tmp/`), and a build-time resolver maps the CLI's
+ * `#embedded-plugins` import to it (from source that import is an empty
+ * stub, see `package.json#imports`). `src/index.ts` registers the table
+ * with core at startup.
+ *
+ *   - dev: `MA_PLUGINS_DIR`, else the `../minimal-agent-plugins` working tree.
+ *   - release: `git archive` of the plugins checkout HEAD (or
+ *     `MA_PLUGINS_SHA`) into `tmp/`, the same as core. A dirty plugins tree
+ *     does not leak into a release. The sha is `pluginsSha` in the build info.
+ *
  * Where core comes from
  * ---------------------
  * The CLI imports `@minimal-agent/core/SUBPATH`. A build-time resolver
@@ -58,7 +72,7 @@ import {
 import { tmpdir } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 
-import { bundlePlugins } from "./bundle-plugins.ts"
+import { writeEmbeddedPluginsModule } from "./gen-embedded-plugins.ts"
 import { findReleaseTarget, RELEASE_TARGET_IDS, RELEASE_TARGETS } from "./release/targets.ts"
 
 const CLI_DIR = resolve(import.meta.dir, "..")
@@ -76,7 +90,7 @@ const PIN_RE = /minimal-agent-core\.git#([0-9a-f]{7,40})/
 const SMOKE_FAIL_RE = /fatal:|Cannot find package|ENOENT|at .*\(\/\$bunfs\/|panic/
 /** Time limit for one smoke command and for the whole e2e script. */
 const SMOKE_TIMEOUT_MS = 30_000
-const E2E_TIMEOUT_MS = 180_000
+const E2E_TIMEOUT_MS = 300_000
 
 /**
  * Bun compile target strings for `--all`: every macOS and Linux target in
@@ -245,6 +259,32 @@ function archivePinnedCore(sha: string): string {
   return dir
 }
 
+/**
+ * Extract commit `sha` of the plugins checkout into a fresh dir under
+ * `tmp/`. A release embeds the plugins from this archive, never from the
+ * working tree.
+ */
+function archivePlugins(sha: string): string {
+  if (!existsSync(PLUGINS_CHECKOUT)) fail(`plugins checkout not found at ${PLUGINS_CHECKOUT}`)
+  if (gitIn(PLUGINS_CHECKOUT, ["cat-file", "-e", `${sha}^{commit}`]) === undefined) {
+    fail(
+      `plugins commit ${sha} is not in ${PLUGINS_CHECKOUT}. Run: git -C ${PLUGINS_CHECKOUT} fetch`,
+    )
+  }
+  mkdirSync(join(CLI_DIR, "tmp"), { recursive: true })
+  const dir = mkdtempSync(join(CLI_DIR, "tmp", `plugins-${sha.slice(0, 7)}-`))
+  cleanupPaths.add(dir)
+  const archive = Bun.spawnSync(["git", "-C", PLUGINS_CHECKOUT, "archive", "--format=tar", sha], {
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  if (archive.exitCode !== 0)
+    fail(`git archive ${sha} (plugins) failed: ${archive.stderr.toString()}`)
+  const untar = Bun.spawnSync(["tar", "-x", "-C", dir], { stdin: archive.stdout, stderr: "pipe" })
+  if (untar.exitCode !== 0) fail(`tar -x failed: ${untar.stderr.toString()}`)
+  return dir
+}
+
 /** Read the `exports` map of the core tree at `coreDir`. Every target must be a string. */
 function readCoreExports(coreDir: string): Map<string, string> {
   const pkgPath = join(coreDir, "package.json")
@@ -264,6 +304,20 @@ function readCoreExports(coreDir: string): Map<string, string> {
     map.set(key, join(coreDir, target))
   }
   return map
+}
+
+/**
+ * Build-time resolver for the CLI's `#embedded-plugins` import: the
+ * generated table at `tableFile`, in place of the empty stub that
+ * `package.json#imports` names for source runs.
+ */
+function embeddedPluginsPlugin(tableFile: string): Bun.BunPlugin {
+  return {
+    name: "minimal-agent-embedded-plugins",
+    setup(build) {
+      build.onResolve({ filter: /^#embedded-plugins$/ }, () => ({ path: tableFile }))
+    },
+  }
 }
 
 /**
@@ -350,17 +404,12 @@ async function buildTo(
   coreExports: Map<string, string>,
   target: string | undefined,
 ): Promise<void> {
-  // Embedded plugin slot: no-op while plugins.bundle.json lists nothing.
-  const bundled = bundlePlugins({
-    listFile: process.env.MA_BUNDLE_LIST_FILE ?? join(CLI_DIR, "plugins.bundle.json"),
-    pluginsRepo:
-      process.env.MA_BUNDLE_PLUGINS_REPO ?? resolve(CLI_DIR, "..", "minimal-agent-plugins"),
-    destDir: join(CLI_DIR, "plugins"),
-  })
+  const info = buildInfo(opts, target)
+  const table = generateTable(info)
   const before = new Set(bunBuildLeftovers())
   let result: Bun.BuildOutput
   try {
-    result = await build(outfile, opts, coreExports, target, bundled.length > 0)
+    result = await build(outfile, opts, coreExports, target, info, table)
   } finally {
     for (const name of bunBuildLeftovers()) {
       if (!before.has(name)) rmSync(join(process.cwd(), name), { force: true })
@@ -372,8 +421,52 @@ async function buildTo(
   }
 }
 
-/** The plugins checkout whose commit the build info names. */
-const PLUGINS_CHECKOUT = resolve(CLI_DIR, "..", "minimal-agent-plugins")
+/**
+ * The plugins checkout whose commit the build info names, and the source of
+ * a release archive. `MA_PLUGINS_DIR` overrides it.
+ */
+const PLUGINS_CHECKOUT = resolve(
+  process.env.MA_PLUGINS_DIR ?? resolve(CLI_DIR, "..", "minimal-agent-plugins"),
+)
+
+/** Where the generated table is written (gitignored `tmp/`). */
+const TABLE_FILE = join(CLI_DIR, "tmp", "embedded-plugins.gen.ts")
+
+/**
+ * Write the embedded plugin table for this build. Dev: the plugins working
+ * tree. Release: the archive at {@link pluginsSha}. The table's `buildId`
+ * names the three trees, so a new build never reuses old extracted files.
+ */
+function generateTable(info: Record<string, unknown>): string {
+  const dir = pluginsDir ?? PLUGINS_CHECKOUT
+  const short = (v: unknown): string => String(v).slice(0, 12)
+  const buildId =
+    `${short(info.cliSha)}-${short(info.coreSha)}-${short(info.pluginsSha)}` +
+    (info.dirty
+      ? `-dirty${contentHash(pluginsDir === undefined ? [CLI_DIR, dir] : [CLI_DIR])}`
+      : "")
+  const r = writeEmbeddedPluginsModule(dir, TABLE_FILE, buildId)
+  cleanupPaths.add(TABLE_FILE)
+  console.log(
+    `compile: embedded plugins ${r.packages} packages, ${r.modules} modules, ${r.texts} texts, ` +
+      `${r.files} files, scripts ${r.scripts.join(" ")} (build ${buildId})`,
+  )
+  return TABLE_FILE
+}
+
+/**
+ * A short hash of the uncommitted state of the git trees in `dirs`
+ * (`git status` plus `git diff HEAD`). A dirty build puts it in the build
+ * id, so an edited plugin file gets a fresh extract dir.
+ */
+function contentHash(dirs: readonly string[]): string {
+  const h = new Bun.CryptoHasher("sha256")
+  for (const dir of dirs) {
+    h.update(gitIn(dir, ["status", "--porcelain"]) ?? "")
+    h.update(gitIn(dir, ["diff", "HEAD"]) ?? "")
+  }
+  return h.digest("hex").slice(0, 8)
+}
 
 /** `git -C <dir> <args>`, trimmed stdout, or undefined when git fails. */
 function gitIn(dir: string, args: string[]): string | undefined {
@@ -416,15 +509,17 @@ function buildInfo(opts: Options, target: string | undefined): Record<string, un
   const epoch = Number(process.env.SOURCE_DATE_EPOCH)
   const builtAt = Number.isFinite(epoch) && epoch > 0 ? new Date(epoch * 1000) : new Date()
   const coreSha = pinnedSha ?? headSha(CORE_CHECKOUT)
+  // A release embeds the plugins archive at `pluginsSha`, so a dirty plugins
+  // working tree does not make it dirty.
   const dirty =
     dirtyTracked(CLI_DIR).length > 0 ||
     (pinnedSha === undefined && dirtyTracked(CORE_CHECKOUT).length > 0) ||
-    dirtyTracked(PLUGINS_CHECKOUT).length > 0
+    (pluginsSha === undefined && dirtyTracked(PLUGINS_CHECKOUT).length > 0)
   return {
     version: pkg.version ?? "0.0.0",
     cliSha: headSha(CLI_DIR),
     coreSha,
-    pluginsSha: headSha(PLUGINS_CHECKOUT),
+    pluginsSha: pluginsSha ?? headSha(PLUGINS_CHECKOUT),
     dirty,
     bunVersion: Bun.version,
     target: (target ?? HOST_TARGET).replace(/^bun-/, ""),
@@ -438,9 +533,9 @@ function build(
   opts: Options,
   coreExports: Map<string, string>,
   target: string | undefined,
-  withPlugins: boolean,
+  info: Record<string, unknown>,
+  tableFile: string,
 ): Promise<Bun.BuildOutput> {
-  const info = buildInfo(opts, target)
   console.log(
     `compile: build info cli ${String(info.cliSha).slice(0, 7)} core ${String(info.coreSha).slice(0, 7)} ` +
       `plugins ${String(info.pluginsSha).slice(0, 7)}${info.dirty ? " (dirty)" : ""}`,
@@ -466,9 +561,6 @@ function build(
       // `target` is a Bun compile target string (see TARGETS). The cast keeps
       // this file independent of the bun-types version's target union.
       ...(target ? { target: target as Bun.Build.CompileTarget } : {}),
-      // Embed the bundled plugins at `<import.meta.dir>/plugins` (read-only
-      // in the binary). Absent with an empty list: options stay unchanged.
-      ...(withPlugins ? { assets: [join(CLI_DIR, "plugins")] } : {}),
     },
     format: "esm",
     bytecode: opts.bytecode,
@@ -477,7 +569,7 @@ function build(
     // for crash stacks (`/$bunfs/root/minimal-agent:<line>`), not shipped.
     sourcemap: "external",
     throw: false,
-    plugins: [corePlugin(coreExports)],
+    plugins: [embeddedPluginsPlugin(tableFile), corePlugin(coreExports)],
   })
 }
 
@@ -590,13 +682,16 @@ async function e2e(binary: string): Promise<void> {
 }
 
 let pinnedSha: string | undefined
+/** Release mode: the plugins commit embedded, and its archive dir. */
+let pluginsSha: string | undefined
+let pluginsDir: string | undefined
 try {
   const opts = parseArgs(process.argv.slice(2))
   if (opts.all && opts.mode !== "release") fail("--all is for release builds")
   let coreDir = CORE_CHECKOUT
   if (opts.mode === "release") {
     // A release bundles the CLI working tree and names its HEAD sha, so any
-    // tracked change (src, package.json version, plugins.bundle.json, ...)
+    // tracked change (src, package.json version, ...)
     // would ship under a sha that does not contain it. Fail, do not warn.
     // MA_COMPILE_ALLOW_DIRTY=1 builds anyway and marks the build dirty.
     const dirty = dirtyTracked(CLI_DIR)
@@ -617,8 +712,23 @@ try {
     pinnedSha = sha
     coreDir = archivePinnedCore(sha)
     console.log(`compile: core pinned at ${sha}`)
+    const psha =
+      process.env.MA_PLUGINS_SHA?.trim() ||
+      gitIn(PLUGINS_CHECKOUT, ["rev-parse", "HEAD"]) ||
+      fail(`cannot read the plugins HEAD in ${PLUGINS_CHECKOUT} (a release needs a git checkout)`)
+    const full = gitIn(PLUGINS_CHECKOUT, ["rev-parse", `${psha}^{commit}`]) ?? psha
+    pluginsDir = archivePlugins(full)
+    pluginsSha = full
+    const dirtyPlugins = dirtyTracked(PLUGINS_CHECKOUT)
+    console.log(
+      `compile: plugins archived at ${full}` +
+        (dirtyPlugins.length > 0
+          ? ` (${dirtyPlugins.length} uncommitted change(s) in the checkout are NOT embedded)`
+          : ""),
+    )
   } else {
     console.log(`compile: core from working tree ${coreDir}`)
+    console.log(`compile: plugins from working tree ${PLUGINS_CHECKOUT}`)
   }
   const coreExports = readCoreExports(coreDir)
 

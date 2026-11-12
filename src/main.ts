@@ -74,6 +74,7 @@ import {
   createLifecyclePort,
   openAgentCoreSession,
 } from "@minimal-agent/core/host-kit/build-agent-core"
+import { hasEmbeddedPlugins } from "@minimal-agent/core/host-kit/embedded-plugins"
 import { lastAdvertisedModeFromHistory, ModeManager } from "@minimal-agent/core/host-kit/modes"
 import { PluginLoader, providerRootsOf } from "@minimal-agent/core/host-kit/plugin-loader"
 import { resolveAgentHome } from "@minimal-agent/core/plugin-api/utils/agent-paths"
@@ -226,6 +227,11 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   const { env, cwd, exit } = io
   applyPreferredDnsResultOrder()
 
+  // `update` (plan phase 7): before any config, provider, plugin, or session
+  // step. Undefined for any other argv, including `update --help`.
+  const updateCode = await (await import("./startup/update-dispatch.ts")).maybeRunUpdate(io)
+  if (updateCode !== undefined) return updateCode
+
   // All the side-effecting entry-point argument setup (smart-dash rejection,
   // `--help` dispatch, env flag propagation, config load, command planning,
   // startup-tree visibility, and early session-id seeding) lives in
@@ -328,9 +334,11 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   //   - install mode only. In dev mode (a plugins checkout with packages next
   //     to the CLI, or MINIMAL_AGENT_PLUGIN_SIBLINGS) the checkout is the only
   //     first-party copy, so there is no clone and no user tier.
+  //   - never in a compiled binary that carries the embedded table: its
+  //     plugins are built in, and the user tier holds overrides only.
   const pluginMode = roots.resolvePluginMode(providerEmbeddedDir, env)
   let pluginSyncResult: Awaited<ReturnType<typeof bootstrapUserPlugins>> | undefined
-  if (userDir && SHOW_HEADER && pluginMode.kind === "install") {
+  if (userDir && SHOW_HEADER && pluginMode.kind === "install" && !hasEmbeddedPlugins()) {
     pluginSyncResult = await bootstrapUserPlugins({
       targetDir: join(userDir, "plugins"),
       enabled: env.MINIMAL_AGENT_NO_PLUGIN_SYNC === "1" ? false : (userConfig.pluginSync ?? true),
@@ -343,14 +351,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
 
   // Every plugin root, computed here (S40): core knows no default plugin
   // location. See `startup/plugin-roots.ts`.
-  const pluginRoots = roots.computePluginRoots(
-    providerEmbeddedDir,
-    env,
-    cwd,
-    userDir,
-    pluginMode,
-    roots.compiledPluginsRoot(srcDir),
-  )
+  const pluginRoots = roots.computePluginRoots(providerEmbeddedDir, env, cwd, userDir, pluginMode)
 
   // Provider plugins (provider.json) live in the plugins repo. On an
   // installed box they are git-cloned into `<userDir>/plugins` (just above).
