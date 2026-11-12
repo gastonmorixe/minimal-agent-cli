@@ -103,3 +103,21 @@ outcome: {"ok":false,"reason":"state mismatch — pasted code does not match thi
 exports[`core text parity (S0.6 before snapshot) d16-no-provider: oauth: no login provider registered 1`] = `"No OAuth login provider is registered."`;
 
 exports[`core text parity (S0.6 before snapshot) b24-unregistered: status model label for an unregistered id 1`] = `"vendor-model-1"`;
+
+exports[`core text parity (S0.6 before snapshot) b13-max-salvaged: notice: max_tokens salvaged mid tool-call 1`] = `"· [max_tokens] Response hit the max_tokens ceiling mid tool-call; salvaged the in-flight call and continuing."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-stream-continuing: notice: stream interrupted, continuing 1`] = `"· [stream] Provider closed the response without a terminal event mid-output; auto-continuing from local state (2/3)."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-stream-salvaged-one: notice: stream interrupted, salvaged 1 tool call (singular) 1`] = `"· [stream] Provider closed the response without a terminal event after 1 complete tool call; salvaged closed tools, discarded partials, and continuing from local state. Do not repeat those tool calls."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-reflection-plural: notice: reflection ack, plural, with reason 1`] = `"· reflection ack: silencing next 3 checkpoints — long run"`;
+
+exports[`core text parity (S0.6 before snapshot) b13-reflection-singular: notice: reflection ack, singular, no reason 1`] = `"· reflection ack: silencing next 1 checkpoint"`;
+
+exports[`core text parity (S0.6 before snapshot) b13-reflection-tool: notice: reflection ack, tool fallback, with reason 1`] = `"· reflection ack: silencing next 2 checkpoints — focus (from tool_use fallback)"`;
+
+exports[`core text parity (S0.6 before snapshot) b13-content-filter: notice: content filter with category and message 1`] = `"✗ [content filter] The provider's safety layer ended the response (hate) — flagged. The reply above (if any) is incomplete; rephrasing the request usually gets past a false positive."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-refusal-bare: notice: refusal with null category and message 1`] = `"✗ [refusal] The provider's safety layer ended the response. The reply above (if any) is incomplete; rephrasing the request usually gets past a false positive."`;
+
+exports[`core text parity (S0.6 before snapshot) b13-model-adopted-plain: notice: model adopted, effort not reset 1`] = `"· [model] Adopted model "model-b" (was "model-a")."`;
