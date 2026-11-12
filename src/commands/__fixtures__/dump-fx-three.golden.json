@@ -1,0 +1,4 @@
+{
+  "markdown": "# Session: fx-three\n**Model**: model-x\n**Date**: 2026-01-01T00:00:00.000Z\n**CWD**: `/proj/demo`\n\n## User\n\n> 📄 **Document**: (url https://example.test/d.pdf)\n\n## Assistant\n\nend\n",
+  "xml": "<session id=\"fx-three\" model=\"model-x\" date=\"2026-01-01T00:00:00.000Z\">\n  <turn role=\"user\">\n    <document source=\"url\" ref=\"https://example.test/d.pdf\" />\n  </turn>\n  <turn role=\"assistant\">\n    <text>end</text>\n  </turn>\n</session>\n"
+}
