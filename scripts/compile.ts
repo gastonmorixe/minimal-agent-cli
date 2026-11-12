@@ -7,8 +7,10 @@
  *   (from the monorepo root: bun run cli:compile:dev / cli:compile:release)
  *
  * Options (after `--mode dev|release`):
- *   --target BUN_TARGET     cross-compile (e.g. bun-linux-x64). Default: this machine.
- *   --all                   build every target in TARGETS (release builds only)
+ *   --target TARGET         cross-compile: a release target id (linux-x64-musl) or its
+ *                           Bun string (bun-linux-x64-musl). See scripts/release/targets.ts.
+ *                           Default: this machine.
+ *   --all                   build every release target (release builds only)
  *   --outfile PATH          output path, one target only. Default: dist/minimal-agent[-TARGET]
  *   --bytecode, --no-bytecode   default: off for dev (faster), on for release
  *   --no-smoke              skip the smoke and e2e runs of the built binary
@@ -57,6 +59,7 @@ import { tmpdir } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 
 import { bundlePlugins } from "./bundle-plugins.ts"
+import { findReleaseTarget, RELEASE_TARGET_IDS, RELEASE_TARGETS } from "./release/targets.ts"
 
 const CLI_DIR = resolve(import.meta.dir, "..")
 const CORE_CHECKOUT = resolve(CLI_DIR, "..", "minimal-agent-core")
@@ -75,13 +78,11 @@ const SMOKE_FAIL_RE = /fatal:|Cannot find package|ENOENT|at .*\(\/\$bunfs\/|pani
 const SMOKE_TIMEOUT_MS = 30_000
 const E2E_TIMEOUT_MS = 180_000
 
-/** Release targets for `--all`. Values are Bun compile target strings. */
-const TARGETS: Record<string, string> = {
-  "darwin-arm64": "bun-darwin-arm64",
-  "darwin-x64": "bun-darwin-x64",
-  "linux-x64": "bun-linux-x64",
-  "linux-arm64": "bun-linux-arm64",
-}
+/**
+ * Bun compile target strings for `--all`: every macOS and Linux target in
+ * `scripts/release/targets.ts` (glibc, musl, x64-baseline). No Windows.
+ */
+const TARGETS: readonly string[] = RELEASE_TARGETS.map((t) => t.bun)
 
 type Mode = "dev" | "release"
 
@@ -167,8 +168,18 @@ async function runChild(
 /** The host's own compile target (smoke and e2e run only for it). */
 const HOST_TARGET = `bun-${process.platform}-${process.arch}`
 
-/** `bun-<os>-<arch>[-<variant>...]`, as `Bun.Build.CompileTarget` accepts. */
-const TARGET_RE = /^bun-(darwin|linux|windows)-(x64|arm64|aarch64)(-[a-z0-9]+)*$/
+/**
+ * Map `--target` to its Bun compile target string. It accepts a release
+ * target id (`linux-x64-musl`) or a Bun string (`bun-linux-x64-musl`) from
+ * `scripts/release/targets.ts`, and fails on anything else (Windows, typos).
+ */
+function resolveTarget(spec: string): string {
+  const found = findReleaseTarget(spec)
+  if (found === undefined) {
+    fail(`--target ${spec} is not a release target. One of: ${RELEASE_TARGET_IDS.join(", ")}`)
+  }
+  return found.bun
+}
 
 function parseArgs(argv: string[]): Options {
   let mode: string | undefined
@@ -195,9 +206,7 @@ function parseArgs(argv: string[]): Options {
   }
   if (mode !== "dev" && mode !== "release") fail("--mode dev|release is required")
   if (all && (target || outfile)) fail("--all cannot be combined with --target or --outfile")
-  if (target !== undefined && !TARGET_RE.test(target)) {
-    fail(`--target ${target} is not a Bun compile target (e.g. bun-linux-x64, bun-darwin-arm64)`)
-  }
+  if (target !== undefined) target = resolveTarget(target)
   // The host's own target is a native build: smoke-test it.
   if (target === HOST_TARGET) target = undefined
   return { mode, target, outfile, bytecode: bytecode ?? mode === "release", all, smoke }
@@ -307,6 +316,9 @@ async function compileOne(opts: Options, coreExports: Map<string, string>, targe
   const staging = join(dirname(outfile), `.${basename(outfile)}.staging-${process.pid}`)
   mkdirSync(dirname(outfile), { recursive: true })
   cleanupPaths.add(staging)
+  // The external sourcemap Bun writes next to the staging binary.
+  const stagingMap = `${staging}.map`
+  cleanupPaths.add(stagingMap)
   console.log(
     `compile: ${opts.mode} ${target ?? "native"}${opts.bytecode ? " +bytecode" : ""} -> ${outfile}`,
   )
@@ -319,11 +331,15 @@ async function compileOne(opts: Options, coreExports: Map<string, string>, targe
       console.log("compile: smoke skipped for a cross-compiled target")
     }
     renameSync(staging, outfile)
+    if (existsSync(stagingMap)) renameSync(stagingMap, `${outfile}.map`)
   } finally {
     rmSync(staging, { force: true })
+    rmSync(stagingMap, { force: true })
     cleanupPaths.delete(staging)
+    cleanupPaths.delete(stagingMap)
   }
   console.log(`compile: wrote ${outfile}`)
+  if (existsSync(`${outfile}.map`)) console.log(`compile: sourcemap ${outfile}.map`)
   return outfile
 }
 
@@ -356,6 +372,67 @@ async function buildTo(
   }
 }
 
+/** The plugins checkout whose commit the build info names. */
+const PLUGINS_CHECKOUT = resolve(CLI_DIR, "..", "minimal-agent-plugins")
+
+/** `git -C <dir> <args>`, trimmed stdout, or undefined when git fails. */
+function gitIn(dir: string, args: string[]): string | undefined {
+  if (!existsSync(dir)) return undefined
+  const r = Bun.spawnSync(["git", "-C", dir, ...args], { stdout: "pipe", stderr: "pipe" })
+  return r.exitCode === 0 ? r.stdout.toString().trim() : undefined
+}
+
+/** The HEAD sha of the git tree at `dir`, or `dev` when it is not a git tree. */
+function headSha(dir: string): string {
+  return gitIn(dir, ["rev-parse", "HEAD"]) || "dev"
+}
+
+/**
+ * Tracked files with uncommitted changes in the git tree at `dir` (porcelain
+ * lines, untracked files ignored). Empty when clean or not a git tree.
+ */
+function dirtyTracked(dir: string): string[] {
+  const out = gitIn(dir, ["status", "--porcelain", "--untracked-files=no"]) ?? ""
+  // `gitIn` trims the output, which eats the first line's leading status
+  // column: trim every line so the list prints aligned.
+  return out
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+}
+
+/**
+ * The build identity baked into the binary as `MA_BUILD_INFO` (read by
+ * `src/cli/build-info.ts`). SHAs come from git at build time, never at run
+ * time. `coreSha` is the pinned commit in release mode, else the core
+ * checkout HEAD. `dirty` is true when any of the three trees has tracked
+ * changes (a release build has already failed on a dirty CLI tree).
+ * `SOURCE_DATE_EPOCH` (seconds) fixes `builtAt` for a reproducible build.
+ */
+function buildInfo(opts: Options, target: string | undefined): Record<string, unknown> {
+  const pkg = JSON.parse(readFileSync(join(CLI_DIR, "package.json"), "utf8")) as {
+    version?: string
+  }
+  const epoch = Number(process.env.SOURCE_DATE_EPOCH)
+  const builtAt = Number.isFinite(epoch) && epoch > 0 ? new Date(epoch * 1000) : new Date()
+  const coreSha = pinnedSha ?? headSha(CORE_CHECKOUT)
+  const dirty =
+    dirtyTracked(CLI_DIR).length > 0 ||
+    (pinnedSha === undefined && dirtyTracked(CORE_CHECKOUT).length > 0) ||
+    dirtyTracked(PLUGINS_CHECKOUT).length > 0
+  return {
+    version: pkg.version ?? "0.0.0",
+    cliSha: headSha(CLI_DIR),
+    coreSha,
+    pluginsSha: headSha(PLUGINS_CHECKOUT),
+    dirty,
+    bunVersion: Bun.version,
+    target: (target ?? HOST_TARGET).replace(/^bun-/, ""),
+    mode: opts.mode,
+    builtAt: builtAt.toISOString(),
+  }
+}
+
 function build(
   outfile: string,
   opts: Options,
@@ -363,8 +440,15 @@ function build(
   target: string | undefined,
   withPlugins: boolean,
 ): Promise<Bun.BuildOutput> {
+  const info = buildInfo(opts, target)
+  console.log(
+    `compile: build info cli ${String(info.cliSha).slice(0, 7)} core ${String(info.coreSha).slice(0, 7)} ` +
+      `plugins ${String(info.pluginsSha).slice(0, 7)}${info.dirty ? " (dirty)" : ""}`,
+  )
   return Bun.build({
     entrypoints: [ENTRY],
+    // `src/cli/build-info.ts` reads this. A run from source has no define.
+    define: { MA_BUILD_INFO: JSON.stringify(info) },
     compile: {
       outfile,
       // A compiled binary skips `package.json` files on disk by default, so
@@ -389,7 +473,9 @@ function build(
     format: "esm",
     bytecode: opts.bytecode,
     minify: false,
-    sourcemap: "none",
+    // `<outfile>.map` next to the binary, not inside it: a debug artifact
+    // for crash stacks (`/$bunfs/root/minimal-agent:<line>`), not shipped.
+    sourcemap: "external",
     throw: false,
     plugins: [corePlugin(coreExports)],
   })
@@ -509,25 +595,35 @@ try {
   if (opts.all && opts.mode !== "release") fail("--all is for release builds")
   let coreDir = CORE_CHECKOUT
   if (opts.mode === "release") {
+    // A release bundles the CLI working tree and names its HEAD sha, so any
+    // tracked change (src, package.json version, plugins.bundle.json, ...)
+    // would ship under a sha that does not contain it. Fail, do not warn.
+    // MA_COMPILE_ALLOW_DIRTY=1 builds anyway and marks the build dirty.
+    const dirty = dirtyTracked(CLI_DIR)
+    if (dirty.length > 0) {
+      const list = dirty.slice(0, 10).join("\n  ")
+      if (process.env.MA_COMPILE_ALLOW_DIRTY === "1") {
+        console.warn(
+          `compile: warning: release from a dirty CLI tree (MA_COMPILE_ALLOW_DIRTY=1):\n  ${list}`,
+        )
+      } else {
+        fail(
+          `release mode needs a clean minimal-agent-cli tree; ${dirty.length} tracked file(s) changed:\n  ${list}\n` +
+            "Commit or stash them (or set MA_COMPILE_ALLOW_DIRTY=1 for a local test build).",
+        )
+      }
+    }
     const sha = pinnedCoreSha()
     pinnedSha = sha
     coreDir = archivePinnedCore(sha)
     console.log(`compile: core pinned at ${sha}`)
-    const dirty = Bun.spawnSync(["git", "-C", CLI_DIR, "status", "--porcelain", "--", "src"], {
-      stdout: "pipe",
-    })
-    if (dirty.stdout.toString().trim() !== "") {
-      console.warn(
-        "compile: warning: minimal-agent-cli/src has uncommitted changes; they are bundled",
-      )
-    }
   } else {
     console.log(`compile: core from working tree ${coreDir}`)
   }
   const coreExports = readCoreExports(coreDir)
 
   if (opts.all) {
-    for (const target of Object.values(TARGETS)) await compileOne(opts, coreExports, target)
+    for (const target of TARGETS) await compileOne(opts, coreExports, target)
   } else {
     await compileOne(opts, coreExports, opts.target)
   }

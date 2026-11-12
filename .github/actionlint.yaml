@@ -1,0 +1,7 @@
+# actionlint config. GitHub-hosted runner labels that actionlint 1.7.7 does
+# not know yet. release.yml builds darwin-x64 natively on macos-15-intel
+# when its `darwin_x64_native` input is on (scripts/release/targets.ts).
+self-hosted-runner:
+  labels:
+    - macos-15-intel
+    - ubuntu-24.04-arm
