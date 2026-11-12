@@ -142,10 +142,11 @@ describe("COMMAND_FORM_ORDER", () => {
     }
   })
 
-  test("every top-level command has a form, except run forms, help, and version", () => {
+  test("every top-level command has a form, except run forms, help, version, and update", () => {
     const reg = builtinRegistry()
     const noForm = reg.commands.filter((c) => wordFormIndex([c.name]) === -1).map((c) => c.name)
     // `version` and `--version` resolve before routing (startup/entry-args.ts).
-    expect(noForm.sort()).toEqual(["help", "resume", "resume-same", "version"])
+    // `update` runs before routing too (startup/update-dispatch.ts), word form only.
+    expect(noForm.sort()).toEqual(["help", "resume", "resume-same", "update", "version"])
   })
 })
