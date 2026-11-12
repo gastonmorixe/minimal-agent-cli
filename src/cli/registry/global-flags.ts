@@ -716,6 +716,17 @@ export const HELP_FLAG: FlagSpec = {
   global: true,
 }
 
+/** `-V, --version`. Same as the `version` command: prints build info and exits 0. */
+export const VERSION_FLAG: FlagSpec = {
+  name: "version",
+  short: "V",
+  type: "boolean",
+  value: "none",
+  summary: "Show the version and build info",
+  group: "help",
+  global: true,
+}
+
 // ---------------------------------------------------------------------------
 // command-forms: the legacy flag forms of commands, all hidden
 // ---------------------------------------------------------------------------
@@ -789,5 +800,6 @@ export const GLOBAL_FLAGS: readonly FlagSpec[] = [
   ...APPEND_SYSTEM_PROMPT_FLAGS,
   ...DEBUG_FLAGS,
   HELP_FLAG,
+  VERSION_FLAG,
   ...COMMAND_FORM_FLAGS,
 ]

@@ -57,10 +57,26 @@ function nearestPackageName(dir: string): string | undefined {
 
 let coreRootCache: string | null | undefined
 
-/** The real root dir of the installed core package, or null when it does not resolve. */
+/**
+ * True when this code runs from a `bun build --compile` binary. The same
+ * narrow cast as core's `isStandaloneExecutable()` (not exported by core).
+ */
+function isStandaloneExecutable(): boolean {
+  return (Bun as { isStandaloneExecutable?: boolean }).isStandaloneExecutable === true
+}
+
+/**
+ * The real root dir of the installed core package, or null when it does not
+ * resolve. A compiled binary has no installed core: its core is bundled in
+ * `/$bunfs`, and a `Bun.resolveSync` there would fall back to the cwd and
+ * could name a project's own `node_modules` core. So a binary returns null
+ * (the same guard as core's `hostCoreRoot()`), and the package name check
+ * still refuses any core checkout on disk.
+ */
 function realCoreRoot(): string | null {
   if (coreRootCache !== undefined) return coreRootCache
   coreRootCache = null
+  if (isStandaloneExecutable()) return coreRootCache
   try {
     let dir = dirname(realpathSync(Bun.resolveSync(CORE_PACKAGE, import.meta.dir)))
     while (packageNameAt(dir) !== CORE_PACKAGE) {

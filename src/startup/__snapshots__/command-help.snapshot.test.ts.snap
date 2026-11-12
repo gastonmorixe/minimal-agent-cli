@@ -1303,3 +1303,39 @@ exports[`command help: help COLUMNS=120, NO_COLOR=1 1`] = `
     -d, --debug  Enable debug logging
 "
 `;
+
+exports[`command help: version COLUMNS=80, NO_COLOR=1 1`] = `
+"  minimal-agent version
+    Show the version, commit SHAs, and build info
+    Aliases: --version, -V.
+    Prints one line: semver, cli/core/plugins commits, Bun version, target,
+    build mode, and build date. A run from source shows dev for unknown commits.
+    No network, no session, no credentials. Exit 0.
+
+  USAGE
+    minimal-agent version [--json]
+
+  GLOBAL FLAGS
+    See minimal-agent --help for all global flags.
+    -h, --help   Show help
+    -d, --debug  Enable debug logging
+"
+`;
+
+exports[`command help: version COLUMNS=120, NO_COLOR=1 1`] = `
+"  minimal-agent version
+    Show the version, commit SHAs, and build info
+    Aliases: --version, -V.
+    Prints one line: semver, cli/core/plugins commits, Bun version, target, build mode, and build date. A run from
+    source shows dev for unknown commits.
+    No network, no session, no credentials. Exit 0.
+
+  USAGE
+    minimal-agent version [--json]
+
+  GLOBAL FLAGS
+    See minimal-agent --help for all global flags.
+    -h, --help   Show help
+    -d, --debug  Enable debug logging
+"
+`;
