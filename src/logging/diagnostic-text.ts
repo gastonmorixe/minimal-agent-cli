@@ -28,12 +28,17 @@ export function registerDiagnosticText(source: string, render: DiagnosticRendere
   registry.set(source, render)
 }
 
-/** Generic render `source: k=v` (sorted keys) for a source with no renderer. */
-export function fallback(source: string, attrs: DiagnosticAttrs): string {
-  const pairs = Object.keys(attrs)
+/**
+ * Generic render `k=v` (sorted keys, one space) for a source with no renderer.
+ * Empty string when there are no attrs. It never repeats the source: the
+ * caller (line, block, stderr) prints the source itself. The `source`
+ * parameter stays for the callers and is unused.
+ */
+export function fallback(_source: string, attrs: DiagnosticAttrs): string {
+  return Object.keys(attrs)
     .sort()
     .map((k) => `${k}=${String(attrs[k])}`)
-  return pairs.length > 0 ? `${source}: ${pairs.join(" ")}` : source
+    .join(" ")
 }
 
 /**

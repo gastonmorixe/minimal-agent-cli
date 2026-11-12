@@ -148,22 +148,18 @@ describe("code 3 sideband_entry_invalid: every field value", () => {
 
 describe("unknown or missing code: generic fallback, never empty", () => {
   test("plugin.manifest unknown code", () => {
-    expect(diagnosticText(man({ code: "zzz" }))).toBe(
-      "plugin.manifest: code=zzz manifestPath=/x/manifest.json",
-    )
+    expect(diagnosticText(man({ code: "zzz" }))).toBe("code=zzz manifestPath=/x/manifest.json")
   })
   test("plugin.manifest missing code", () => {
-    expect(diagnosticText(man({ index: 1 }))).toBe(
-      "plugin.manifest: index=1 manifestPath=/x/manifest.json",
-    )
+    expect(diagnosticText(man({ index: 1 }))).toBe("index=1 manifestPath=/x/manifest.json")
   })
   test("plugin-loader unknown code", () => {
     expect(diagnosticText(ev("plugin-loader", { code: "other", dir: "/d" }))).toBe(
-      "plugin-loader: code=other dir=/d",
+      "code=other dir=/d",
     )
   })
   test("plugin-loader missing code", () => {
-    expect(diagnosticText(ev("plugin-loader", { dir: "/d" }))).toBe("plugin-loader: dir=/d")
+    expect(diagnosticText(ev("plugin-loader", { dir: "/d" }))).toBe("dir=/d")
   })
 })
 

@@ -131,6 +131,6 @@ describe("A1 dual-write: the old message wins over attrs", () => {
 describe("A1 auth.refresh unknown code", () => {
   test("falls back to the generic render, not an empty string", () => {
     const e = ev(Severity.Info, "auth.refresh", { code: "nope" })
-    expect(diagnosticText(e)).toBe("auth.refresh: code=nope")
+    expect(diagnosticText(e)).toBe("code=nope")
   })
 })

@@ -75,7 +75,7 @@ describe("diagnosticText registry and fallback", () => {
       message: "",
       diagnostic: { source: "zz.unknown", level: "warn", attrs: { b: 2, a: "x", c: true } },
     })
-    expect(diagnosticText(e)).toBe("zz.unknown: a=x b=2 c=true")
+    expect(diagnosticText(e)).toBe("a=x b=2 c=true")
   })
 
   test("empty message, no diagnostic: empty string (same as message)", () => {
