@@ -300,6 +300,30 @@ describe("InteractiveSession", () => {
     )
   })
 
+  it("renders the retry-boundary marker, byte for byte, between the streamed text parts", async () => {
+    let calls = 0
+    const sendFn = async function* (): AsyncGenerator<string, StreamedResponse, undefined> {
+      calls++
+      if (calls === 1) {
+        yield "partial"
+        throw Object.assign(new Error("stall"), { errorClass: "transient" })
+      }
+      yield "done"
+      return response("done")
+    }
+    const session = await createSession(sendFn)
+    const chunks: string[] = []
+    const gen = session.run("go")
+    for (;;) {
+      const next = await gen.next()
+      if (next.done) break
+      chunks.push(next.value)
+    }
+    expect(calls).toBe(2)
+    // The old core marker, inline. Not imported from the module under test.
+    expect(chunks.join("")).toBe("partial\n↳ stream stalled — retrying (attempt 2)…\ndone")
+  })
+
   it("keeps a tool row behind an async block-stop step", async () => {
     let round = 0
     const sendFn = async function* (
