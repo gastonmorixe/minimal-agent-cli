@@ -36,9 +36,16 @@ import {
   resolveDefaultOAuthLoginProvider,
   runOAuthLogin,
 } from "@minimal-agent/core/host/oauth-login"
-import { resolveStartupAuth, startupAuthLabel } from "@minimal-agent/core/host/provider-auth"
+import { describeStartupAuth, resolveStartupAuth } from "@minimal-agent/core/host/provider-auth"
 import { formatTurnNoticePlain, type TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
-import { errorText, loginEventText, loginFailureText } from "./core-text.ts"
+import {
+  contextExceededAdviceText,
+  contextNoticeText,
+  errorText,
+  loginEventText,
+  loginFailureText,
+  startupAuthText,
+} from "./core-text.ts"
 
 type OAuthProvider = NonNullable<LoginDeps["provider"]>
 
@@ -223,9 +230,11 @@ const FIXTURES: readonly Fixture[] = [
     "startup tree auth row: oauth with account",
     "core src/auth/provider-auth.ts:158-170",
     () =>
-      startupAuthLabel(
-        { type: "oauth", token: "t", accountUuid: "abcdef1234567890" } as AuthResult,
-        undefined,
+      startupAuthText(
+        describeStartupAuth(
+          { type: "oauth", token: "t", accountUuid: "abcdef1234567890" } as AuthResult,
+          undefined,
+        ),
         (s) => `<dim>${s}</dim>`,
       ),
   ],
@@ -233,20 +242,23 @@ const FIXTURES: readonly Fixture[] = [
     "b25-apikey",
     "startup tree auth row: api-key",
     "core src/auth/provider-auth.ts:158-170",
-    () => startupAuthLabel({ type: "api-key", token: "t" } as AuthResult, undefined),
+    () =>
+      startupAuthText(
+        describeStartupAuth({ type: "api-key", token: "t" } as AuthResult, undefined),
+      ),
   ],
   // Context window and compact (d31, d32, d33)
   [
     "d32-model",
     "context exceeded advice with a model",
     "core src/llm/model-error.ts:73-80",
-    () => contextLengthExceededAdvice("model-a"),
+    () => contextExceededAdviceText(contextLengthExceededAdvice("model-a")),
   ],
   [
     "d32-nomodel",
     "context exceeded advice without a model",
     "core src/llm/model-error.ts:73-80",
-    () => contextLengthExceededAdvice(undefined),
+    () => contextExceededAdviceText(contextLengthExceededAdvice(undefined)),
   ],
   [
     "d33-retry",
@@ -271,7 +283,7 @@ const FIXTURES: readonly Fixture[] = [
         }, true),
         "maximum context length",
       )
-      return r.notices.join("\n--\n")
+      return r.notices.map(contextNoticeText).join("\n--\n")
     },
   ],
   [
@@ -280,7 +292,7 @@ const FIXTURES: readonly Fixture[] = [
     "core src/agent/context-exceeded-recovery.ts:80-87",
     async () => {
       const r = await tryRecoverContextExceeded(fakeAgent(null, false), "context_length_exceeded")
-      return r.notices.join("\n--\n")
+      return r.notices.map(contextNoticeText).join("\n--\n")
     },
   ],
   [

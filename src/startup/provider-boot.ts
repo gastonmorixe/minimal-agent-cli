@@ -18,7 +18,7 @@ import {
 import type { UserConfig } from "@minimal-agent/core/host/config"
 import { Facility, getDiagnosticBus, Severity } from "@minimal-agent/core/host/diagnostics"
 import { findModelForProvider } from "@minimal-agent/core/host/model-registry"
-import { resolveStartupAuth, startupAuthLabel } from "@minimal-agent/core/host/provider-auth"
+import { describeStartupAuth, resolveStartupAuth } from "@minimal-agent/core/host/provider-auth"
 import {
   canonicalProviderId,
   findProviderPlugin,
@@ -28,7 +28,7 @@ import { primeProviderSessionInfo } from "@minimal-agent/core/host/provider-sess
 import type { CliOptions } from "../cli/parse-argv.ts"
 import { printStartupRow } from "../ui/startup/tree.ts"
 import { c } from "../ui/style/ansi.ts"
-import { errorText, storedProvidersHintText } from "./core-text.ts"
+import { errorText, startupAuthText, storedProvidersHintText } from "./core-text.ts"
 import { resolveBootModel, resolveSingleStoredProviderBootModel } from "./resolve-boot-model.ts"
 import { resolveCredentialName } from "./resolve-credential-name.ts"
 
@@ -160,7 +160,7 @@ export async function resolveStartupProviderState(
     if (err instanceof CoreError) throw new Error(errorText(err), { cause: err })
     throw err
   }
-  printStartupRow("auth", startupAuthLabel(auth, selectedProviderId, c.dim))
+  printStartupRow("auth", startupAuthText(describeStartupAuth(auth, selectedProviderId), c.dim))
 
   return {
     selectedModel,

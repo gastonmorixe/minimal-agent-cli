@@ -42,6 +42,7 @@ import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
 import type { QueueKeyHandler } from "./editor/types.ts"
 import { RawInput } from "./input/input.ts"
 import { runReplLiveArea } from "./repl-live-area.ts"
+import { contextNoticeText } from "./startup/core-text.ts"
 import { turnEventRenderer } from "./turn-event-render.ts"
 import type { StepLive } from "./turn-render-pump.ts"
 import { Formatter } from "./ui/formatter/formatter.ts"
@@ -734,7 +735,7 @@ export async function runRepl(
         if (parseContextLengthExceededError(msg)) {
           const recovery = await tryRecoverContextExceeded(agent, msg)
           for (const line of recovery.notices) {
-            errOutput.write(`  ${c.boldYellow("!")} ${c.yellow(line)}\n`)
+            errOutput.write(`  ${c.boldYellow("!")} ${c.yellow(contextNoticeText(line))}\n`)
           }
           if (recovery.shouldRetry && recovery.retryText) {
             recovered = true

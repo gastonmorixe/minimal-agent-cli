@@ -41,6 +41,7 @@ import type {
   StatusController,
 } from "./repl.ts"
 import { applyTurnWillStart, registerEditorPluginHooks } from "./repl-editor-hooks.ts"
+import { contextNoticeText } from "./startup/core-text.ts"
 import { turnEventRenderer } from "./turn-event-render.ts"
 import type { StepLive } from "./turn-render-pump.ts"
 import { printGoodbye } from "./ui/chrome/goodbye-banner.ts"
@@ -1430,7 +1431,7 @@ export async function runReplLiveArea(
               : {}),
           }).finally(() => endQuietly(autoStream))
           for (const line of recovery.notices) {
-            compositor.writeStream(`  ${c.boldYellow("!")} ${c.yellow(line)}\n`)
+            compositor.writeStream(`  ${c.boldYellow("!")} ${c.yellow(contextNoticeText(line))}\n`)
           }
           if (recovery.shouldRetry && recovery.retryText) {
             recovered = true

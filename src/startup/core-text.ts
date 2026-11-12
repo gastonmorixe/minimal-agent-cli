@@ -14,7 +14,10 @@ import {
   HOST_OWNER_ID,
   type StoredProviderFact,
 } from "@minimal-agent/core/errors"
+import type { ContextExceededNotice } from "@minimal-agent/core/host/context-exceeded-recovery"
+import type { ContextExceededAdvice } from "@minimal-agent/core/host/model-error"
 import type { LoginEvent, LoginFailureCode } from "@minimal-agent/core/host/oauth-login"
+import type { StartupAuthDescription } from "@minimal-agent/core/host/provider-auth"
 
 /** Hint for a store with no credentials. */
 const NO_CREDENTIALS_HINT =
@@ -141,4 +144,29 @@ export function loginEventText(ev: LoginEvent): string {
     default:
       return `State mismatch. Please paste the code from this login attempt only.`
   }
+}
+
+/** Old text of the startup auth row. `dim` styles the detail in parentheses. */
+export function startupAuthText(
+  d: StartupAuthDescription,
+  dim: (text: string) => string = (text) => text,
+): string {
+  if (d.kind === "anonymous") return `anonymous ${dim(`(${d.providerId})`)}`
+  if (d.kind === "provider-plugin") return `${d.type} ${dim(`(${d.providerId})`)}`
+  return `${d.type}${d.accountPrefix ? ` ${dim(`(account: ${d.accountPrefix}...)`)}` : ""}`
+}
+
+/** Old text of the context-exceeded advice (the /compact guidance). */
+export function contextExceededAdviceText(a: ContextExceededAdvice): string {
+  const modelSuffix = a.model ? ` for ${a.model}` : ""
+  return (
+    `Context window exceeded${modelSuffix}. The failed user turn was rolled back. ` +
+    "Run /compact (or enable auto-compact on exceeded), start a fresh session, or prune old history before retrying. " +
+    "Resuming the same oversized transcript will fail again."
+  )
+}
+
+/** Old text of one recovery notice. */
+export function contextNoticeText(n: ContextExceededNotice): string {
+  return typeof n === "string" ? n : contextExceededAdviceText(n)
 }
