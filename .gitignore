@@ -7,6 +7,9 @@ coverage/
 tmp/
 *.log
 
+# embedded plugin bundle copy target (filled by scripts/bundle-plugins.ts)
+/plugins/
+
 # private / local-only
 private/
 research/
