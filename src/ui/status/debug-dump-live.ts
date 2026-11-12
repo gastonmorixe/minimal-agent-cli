@@ -25,6 +25,7 @@ import {
   getDiagnosticBus,
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
+import { diagnosticText } from "../../logging/diagnostic-text.ts"
 import { isRequestDumpRow, RequestDumpCollector, renderDumpBlock } from "./debug-dump.ts"
 
 /** What the sink needs to paint. */
@@ -83,10 +84,10 @@ export function attachRequestDumpRenderer(opts: RequestDumpRenderOptions): Reque
     (e) => e.source === "transport.request-dump" && e.severity === Severity.Debug,
     (e) => {
       if (!isRequestDumpRow(e.source, e.structuredData)) {
-        write(`${e.message}\n`)
+        write(`${diagnosticText(e)}\n`)
         return
       }
-      const completed = collector.push(e.message, e.structuredData)
+      const completed = collector.push(diagnosticText(e), e.structuredData)
       if (completed !== null) write(`${renderDumpBlock(completed).join("\n")}\n`)
     },
   )
