@@ -25,6 +25,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { join } from "node:path"
 
+import {
+  InvalidAuthorizationCodeError,
+  SignInTimeoutError,
+  TokenExchangeError,
+} from "@minimal-agent/core/errors"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { parseCompactArgs } from "@minimal-agent/core/host/compact-contract"
 import { tryRecoverContextExceeded } from "@minimal-agent/core/host/context-exceeded-recovery"
@@ -522,10 +527,28 @@ const FIXTURES: readonly Fixture[] = [
       try {
         resolveDefaultOAuthLoginProvider()
       } catch (e) {
-        return e instanceof Error ? e.message : String(e)
+        return errorText(e)
       }
       throw new Error("expected a throw")
     },
+  ],
+  [
+    "oauth-timeout",
+    "oauth: sign-in timed out",
+    "core src/auth/oauth-login.ts:52,105",
+    () => errorText(new SignInTimeoutError()),
+  ],
+  [
+    "oauth-invalid-code",
+    "oauth: token endpoint 401",
+    "core src/auth/oauth-login.ts:326",
+    () => errorText(new InvalidAuthorizationCodeError()),
+  ],
+  [
+    "oauth-token-exchange",
+    "oauth: token exchange failed with status and body",
+    "core src/auth/oauth-login.ts:328",
+    () => errorText(new TokenExchangeError(503, "service unavailable")),
   ],
   [
     "b24-unregistered",

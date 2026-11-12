@@ -2,8 +2,12 @@ import { describe, expect, test } from "bun:test"
 
 import {
   GenericEndpointAuthError,
+  InvalidAuthorizationCodeError,
+  NoOAuthLoginProviderError,
   NoProviderCredentialsError,
   NoProviderSelectedError,
+  SignInTimeoutError,
+  TokenExchangeError,
   UnhandledAuthTypeError,
 } from "@minimal-agent/core/errors"
 
@@ -59,6 +63,23 @@ describe("core-text", () => {
     expect(errorText(new UnhandledAuthTypeError("x"))).toBe(
       "unhandled generic-endpoint auth-type: x",
     )
+  })
+
+  test("oauth errors keep the old bytes", () => {
+    expect(errorText(new SignInTimeoutError())).toBe("Sign-in timed out. Run login again.")
+    expect(errorText(new InvalidAuthorizationCodeError())).toBe(
+      "Authentication failed: invalid authorization code",
+    )
+    expect(errorText(new TokenExchangeError(503, "service unavailable"))).toBe(
+      "Token exchange failed (503): service unavailable",
+    )
+    expect(errorText(new NoOAuthLoginProviderError())).toBe(
+      "No OAuth login provider is registered.",
+    )
+  })
+
+  test("a timeout error keeps the TimeoutError name check working", () => {
+    expect(new SignInTimeoutError().name).toBe("SignInTimeoutError")
   })
 
   test("other kinds decline, plain errors keep their message", () => {

@@ -35,7 +35,7 @@ import {
   canonicalProviderId,
   type OAuthLoginProvider,
 } from "@minimal-agent/core/host/provider-plugin"
-import { loginEventText, loginFailureText } from "../startup/core-text.ts"
+import { errorText, loginEventText, loginFailureText } from "../startup/core-text.ts"
 import {
   renderApiKeyLoginSuccess,
   renderLoginBanner,
@@ -308,7 +308,7 @@ export async function runLoginCommand(opts: LoginCommandOptions = {}): Promise<n
         writeCommandRows(renderLoginFailure("aborted"), output)
         return 130
       }
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = errorText(err)
       writeCommandRows(renderLoginFailure(msg), output)
       return 1
     }
@@ -342,7 +342,7 @@ export async function runLoginCommand(opts: LoginCommandOptions = {}): Promise<n
       writeCommandRows(renderLoginFailure("aborted"), output)
       return 130
     }
-    const msg = err instanceof Error ? err.message : String(err)
+    const msg = errorText(err)
     writeCommandRows(renderLoginFailure(msg), output)
     return 1
   } finally {

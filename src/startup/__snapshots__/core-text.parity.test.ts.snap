@@ -121,3 +121,9 @@ exports[`core text parity (S0.6 before snapshot) b13-content-filter: notice: con
 exports[`core text parity (S0.6 before snapshot) b13-refusal-bare: notice: refusal with null category and message 1`] = `"✗ [refusal] The provider's safety layer ended the response. The reply above (if any) is incomplete; rephrasing the request usually gets past a false positive."`;
 
 exports[`core text parity (S0.6 before snapshot) b13-model-adopted-plain: notice: model adopted, effort not reset 1`] = `"· [model] Adopted model "model-b" (was "model-a")."`;
+
+exports[`core text parity (S0.6 before snapshot) oauth-timeout: oauth: sign-in timed out 1`] = `"Sign-in timed out. Run login again."`;
+
+exports[`core text parity (S0.6 before snapshot) oauth-invalid-code: oauth: token endpoint 401 1`] = `"Authentication failed: invalid authorization code"`;
+
+exports[`core text parity (S0.6 before snapshot) oauth-token-exchange: oauth: token exchange failed with status and body 1`] = `"Token exchange failed (503): service unavailable"`;
