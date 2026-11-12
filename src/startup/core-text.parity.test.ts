@@ -27,6 +27,7 @@ import { join } from "node:path"
 
 import {
   InvalidAuthorizationCodeError,
+  NoProviderCredentialsError,
   SignInTimeoutError,
   TokenExchangeError,
 } from "@minimal-agent/core/errors"
@@ -286,6 +287,20 @@ const FIXTURES: readonly Fixture[] = [
       const r = await tryRecoverContextExceeded(
         fakeAgent(async () => {
           throw new Error("summary call failed")
+        }, true),
+        "maximum context length",
+      )
+      return r.notices.map(contextNoticeText).join("\n--\n")
+    },
+  ],
+  [
+    "d33-failed-core-error",
+    "auto-compact failed with a CoreError cause",
+    "core src/agent/context-exceeded-recovery.ts:132",
+    async () => {
+      const r = await tryRecoverContextExceeded(
+        fakeAgent(async () => {
+          throw new NoProviderCredentialsError("anthropic", "model-a", [])
         }, true),
         "maximum context length",
       )

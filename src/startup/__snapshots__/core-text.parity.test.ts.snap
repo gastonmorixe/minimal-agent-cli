@@ -127,3 +127,9 @@ exports[`core text parity (S0.6 before snapshot) oauth-timeout: oauth: sign-in t
 exports[`core text parity (S0.6 before snapshot) oauth-invalid-code: oauth: token endpoint 401 1`] = `"Authentication failed: invalid authorization code"`;
 
 exports[`core text parity (S0.6 before snapshot) oauth-token-exchange: oauth: token exchange failed with status and body 1`] = `"Token exchange failed (503): service unavailable"`;
+
+exports[`core text parity (S0.6 before snapshot) d33-failed-core-error: auto-compact failed with a CoreError cause 1`] = `
+"Auto-compact failed: no credentials for provider "anthropic" (model "model-a"). Run minimal-agent provider anthropic login. No provider credentials found. Run \`minimal-agent provider <id> login\` (e.g. \`minimal-agent provider example-provider login\`).
+--
+Context window exceeded for model-a. The failed user turn was rolled back. Run /compact (or enable auto-compact on exceeded), start a fresh session, or prune old history before retrying. Resuming the same oversized transcript will fail again."
+`;
