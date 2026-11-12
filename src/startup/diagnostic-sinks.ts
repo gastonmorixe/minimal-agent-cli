@@ -26,6 +26,7 @@ import { getSessionId } from "@minimal-agent/core/host/session-id"
 import type { StdioMode } from "../cli/output-format.ts"
 import { registerA1DiagnosticText } from "../logging/diagnostic-text-a1.ts"
 import { registerManifestDiagnosticText } from "../logging/diagnostic-text-manifest.ts"
+import { registerPromptDiagnosticText } from "../logging/diagnostic-text-prompt.ts"
 import type { ScrollbackDiagnosticSink } from "../ui/status/scrollback.ts"
 
 /** Inputs the sink wiring needs from the entry point. */
@@ -79,6 +80,7 @@ export async function attachStartupDiagnosticSinks(
   // these render only when the message is empty (the later step).
   registerA1DiagnosticText()
   registerManifestDiagnosticText()
+  registerPromptDiagnosticText()
   const bus = getDiagnosticBus()
   const plan = planDiagnosticSinks(opts)
 
