@@ -563,7 +563,37 @@ describe("empty message events (S14.2 step 0b)", () => {
 
   it("(d) no renderer, no data, attrs: the fallback is the one row", () => {
     const plain = strip(renderBlock(typed("zz.sb.fb", { k: "v" })))
-    expect(plain.split("\n")[1]).toBe("  ╰ zz.sb.fb: k=v")
+    expect(plain.split("\n")[1]).toBe("  ╰ k=v")
+  })
+
+  it("(fixc) no renderer, attrs: the source shows once in the block", () => {
+    const plain = strip(renderBlock(typed("zz.sb.fixc", { k: "v" })))
+    const rows = plain.split("\n")
+    expect(rows[0]).toContain("zz.sb.fixc")
+    expect(rows[1]).toBe("  ╰ k=v")
+    expect(plain.split("zz.sb.fixc")).toHaveLength(2)
+  })
+
+  it("(fixd) no renderer, no attrs: no body row", () => {
+    const plain = strip(renderBlock(typed("zz.sb.fixd", {})))
+    expect(plain.split("zz.sb.fixd")).toHaveLength(2)
+    expect(plain.split("\n").slice(1).join("\n").trim()).toBe("")
+  })
+
+  it("(fixe) a message with attrs: the body is the message, bytes unchanged", () => {
+    const e = event({
+      source: "zz.sb.fixe",
+      message: "hello",
+      diagnostic: { source: "zz.sb.fixe", level: "warn", attrs: { k: "v" } },
+    } as Partial<LogEvent>)
+    expect(strip(renderBlock(e)).split("\n")[1]).toBe("  ╰ hello")
+  })
+
+  it("(fixf) a registered renderer: bytes unchanged", () => {
+    registerDiagnosticText("zz.sb.fixf", (a) => `registry says ${String(a.k)}`)
+    expect(strip(renderBlock(typed("zz.sb.fixf", { k: "v" }))).split("\n")[1]).toBe(
+      "  ╰ registry says v",
+    )
   })
 
   it("(e) a registered renderer: the first row is the registry text", () => {
