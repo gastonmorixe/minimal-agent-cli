@@ -60,7 +60,7 @@
  */
 
 import { type DiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
-import { diagnosticKey, diagnosticText } from "../../logging/diagnostic-text.ts"
+import { diagnosticKey, diagnosticText, hasDiagnosticText } from "../../logging/diagnostic-text.ts"
 import { ANSI_CODES } from "../../terminal-kit/ansi.ts"
 import { PALETTE } from "../../terminal-kit/palette.ts"
 
@@ -325,14 +325,22 @@ export function renderBlock(e: LogEvent): string {
   // Split the message on real newlines so each line carries its own
   // gutter prefix. Long single lines still wrap naturally in the
   // terminal (without continuation), matching console.error behavior.
-  for (const line of diagnosticText(e).split("\n")) {
-    body.push(line)
-  }
-  if (e.structuredData) {
-    for (const [k, v] of Object.entries(e.structuredData)) {
-      body.push(`${dim(`${k}:`)} ${String(v)}`)
+  // An empty message prints no empty first row: the registry text leads
+  // when a renderer exists, else only the data rows (or the fallback text
+  // when there are none).
+  const text = diagnosticText(e)
+  const dataRows = e.structuredData
+    ? Object.entries(e.structuredData).map(([k, v]) => `${dim(`${k}:`)} ${String(v)}`)
+    : []
+  const showText =
+    e.message !== "" ||
+    (text !== "" && (hasDiagnosticText(e.diagnostic?.source ?? "") || dataRows.length === 0))
+  if (showText) {
+    for (const line of text.split("\n")) {
+      body.push(line)
     }
   }
+  body.push(...dataRows)
 
   const out: string[] = [head]
   for (let i = 0; i < body.length; i++) {

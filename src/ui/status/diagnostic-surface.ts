@@ -190,5 +190,6 @@ function renderLine(kind: "warn" | "error", e: LogEvent, count: number): string 
   const src = c.faintWhite(e.source)
   const msg = diagnosticText(e)
   const suffix = count > 1 ? " " + c.dim(`(×${count})`) : ""
+  if (msg === "") return `${icon} ${src}${suffix}`
   return `${icon} ${src}: ${msg}${suffix}`
 }

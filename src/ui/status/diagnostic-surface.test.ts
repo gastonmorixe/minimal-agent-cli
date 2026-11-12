@@ -35,6 +35,7 @@ import {
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
 
+import { registerDiagnosticText } from "../../logging/diagnostic-text.ts"
 import { type DiagnosticLinesSink, TuiDiagnosticSurface } from "./diagnostic-surface.ts"
 
 function event(over: Partial<LogEvent> = {}): LogEvent {
@@ -377,5 +378,41 @@ describe("TuiDiagnosticSurface: call-site parity (S14.2 step 0)", () => {
     expect(surface.snapshot().warn.count).toBe(1)
     const last = sink.calls[sink.calls.length - 1] ?? []
     expect(last.map(strip)).toEqual(["⚠ live-area.timeout: two"])
+  })
+})
+
+describe("empty message events (S14.2 step 0b)", () => {
+  const typed = (source: string, attrs: Record<string, string | number>): LogEvent =>
+    event({
+      source,
+      message: "",
+      diagnostic: { source, level: "warn", attrs },
+    } as Partial<LogEvent>)
+
+  it("(a) a volatile repeat collapses into (×2)", () => {
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    surface.onEvent(typed("zz.ds.retry", { curve: "x", elapsedMs: 1, attempt: 1 }))
+    surface.onEvent(typed("zz.ds.retry", { curve: "x", elapsedMs: 9, attempt: 2 }))
+    expect(surface.snapshot().warn.count).toBe(2)
+  })
+
+  it("(b) a stable attr change does not collapse", () => {
+    const surface = new TuiDiagnosticSurface()
+    surface.bindSink(makeSink())
+    surface.onEvent(typed("zz.ds.stable", { curve: "x" }))
+    surface.onEvent(typed("zz.ds.stable", { curve: "y" }))
+    expect(surface.snapshot().warn.count).toBe(1)
+  })
+
+  it("(c) a registered renderer prints the registry text, no empty tail", () => {
+    registerDiagnosticText("zz.ds.reg", (a) => `registry says ${String(a.k)}`)
+    const surface = new TuiDiagnosticSurface()
+    const sink = makeSink()
+    surface.bindSink(sink)
+    surface.onEvent(typed("zz.ds.reg", { k: "v" }))
+    const last = sink.calls[sink.calls.length - 1] ?? []
+    expect(last.map(strip)).toEqual(["⚠ zz.ds.reg: registry says v"])
   })
 })
