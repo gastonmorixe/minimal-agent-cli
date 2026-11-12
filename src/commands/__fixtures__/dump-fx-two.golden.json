@@ -1,0 +1,4 @@
+{
+  "markdown": "# Session: fx-two\n**Model**: model-x\n**Date**: 2026-01-01T00:00:00.000Z\n**CWD**: `/proj/demo`\n\n## User\n\nsummary of the past NEEDLE-ONE\n\n## Assistant\n\nack\n\n## User\n\nafter compact\n\n## Assistant\n\ndone\n",
+  "xml": "<session id=\"fx-two\" model=\"model-x\" date=\"2026-01-01T00:00:00.000Z\">\n  <turn role=\"user\">\n    <text>summary of the past NEEDLE-ONE</text>\n  </turn>\n  <turn role=\"assistant\">\n    <text>ack</text>\n  </turn>\n  <turn role=\"user\">\n    <text>after compact</text>\n  </turn>\n  <turn role=\"assistant\">\n    <text>done</text>\n  </turn>\n</session>\n"
+}
