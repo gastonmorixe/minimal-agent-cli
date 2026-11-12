@@ -22,6 +22,7 @@ import { LOGOUT_COMMAND } from "../../commands/logout.command.ts"
 import { PROVIDER_COMMAND } from "../../commands/provider.command.ts"
 import { RESUME_COMMAND, RESUME_SAME_COMMAND } from "../../commands/resume.command.ts"
 import { SESSIONS_COMMAND } from "../../commands/sessions.command.ts"
+import { UPDATE_COMMAND } from "../../commands/update.command.ts"
 import { USAGE_COMMAND } from "../../commands/usage.command.ts"
 import { VERSION_COMMAND } from "../../commands/version.command.ts"
 
@@ -45,6 +46,7 @@ export const BUILTIN_COMMANDS: readonly CommandSpec[] = [
   FLAGS_COMMAND,
   SPINNERS_COMMAND,
   VERSION_COMMAND,
+  UPDATE_COMMAND,
   HELP_COMMAND,
 ]
 

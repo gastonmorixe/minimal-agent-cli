@@ -210,6 +210,18 @@ const VERSION_NO_VALUE: Readonly<Record<string, string>> = {
   "--version": "version: none",
 }
 
+/** Intended addition: the `update` command flags (plan phase 7). Startup runs update before the scan. */
+const UPDATE_WITH_VALUES: Readonly<Record<string, string>> = {
+  "--channel": "update: required <name>",
+  "--to": "update: required <version>",
+}
+
+/** The boolean half of the `update` command flags. */
+const UPDATE_NO_VALUE: Readonly<Record<string, string>> = {
+  "--check": "update: none",
+  "--rollback": "update: none",
+}
+
 /** Intended addition: the `-V` short form of `--version` (plan 2.1). */
 const VERSION_SHORT_TO_LONG: Readonly<Record<string, string>> = { "-V": "--version" }
 
@@ -234,6 +246,7 @@ describe("V-18: derived arity tables equal the old hand tables plus the pinned g
           ...Object.keys(GAINED_WITH_VALUES),
           ...Object.keys(ONESHOT_WITH_VALUES),
           ...Object.keys(PLUGIN_PROMPTS_WITH_VALUES),
+          ...Object.keys(UPDATE_WITH_VALUES),
         ]),
       ),
     )
@@ -248,6 +261,7 @@ describe("V-18: derived arity tables equal the old hand tables plus the pinned g
           ...Object.keys(ONESHOT_NO_VALUE),
           ...Object.keys(PLUGIN_PROMPTS_NO_VALUE),
           ...Object.keys(VERSION_NO_VALUE),
+          ...Object.keys(UPDATE_NO_VALUE),
         ]),
       ),
     )

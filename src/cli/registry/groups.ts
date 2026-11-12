@@ -34,7 +34,7 @@ export const ROOT_GROUPS: readonly RootGroup[] = [
     id: "local",
     title: "Local",
     summary: "inspect the local installation",
-    members: [["plugins"], ["flags"], ["spinners"], ["version"], ["help"]],
+    members: [["plugins"], ["flags"], ["spinners"], ["version"], ["update"], ["help"]],
   },
 ]
 

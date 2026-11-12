@@ -32,6 +32,7 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       flags     Show beta feature flags
       spinners  Show available spinner presets
       version   Show the version, commit SHAs, and build info
+      update    Update this binary from the GitHub release (stable or nightly)
       help      Show help for a command
 
   HOST MODES
@@ -318,6 +319,7 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       flags     Show beta feature flags
       spinners  Show available spinner presets
       version   Show the version, commit SHAs, and build info
+      update    Update this binary from the GitHub release (stable or nightly)
       help      Show help for a command
 
   HOST MODES

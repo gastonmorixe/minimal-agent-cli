@@ -1270,40 +1270,6 @@ exports[`command help: spinners list COLUMNS=120, NO_COLOR=1 1`] = `
 "
 `;
 
-exports[`command help: help COLUMNS=80, NO_COLOR=1 1`] = `
-"  minimal-agent help
-    Show help for a command
-
-  USAGE
-    minimal-agent help [<command>...]
-
-  ARGUMENTS
-    command  Command path, for example sessions dump
-
-  GLOBAL FLAGS
-    See minimal-agent --help for all global flags.
-    -h, --help   Show help
-    -d, --debug  Enable debug logging
-"
-`;
-
-exports[`command help: help COLUMNS=120, NO_COLOR=1 1`] = `
-"  minimal-agent help
-    Show help for a command
-
-  USAGE
-    minimal-agent help [<command>...]
-
-  ARGUMENTS
-    command  Command path, for example sessions dump
-
-  GLOBAL FLAGS
-    See minimal-agent --help for all global flags.
-    -h, --help   Show help
-    -d, --debug  Enable debug logging
-"
-`;
-
 exports[`command help: version COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent version
     Show the version, commit SHAs, and build info
@@ -1332,6 +1298,129 @@ exports[`command help: version COLUMNS=120, NO_COLOR=1 1`] = `
 
   USAGE
     minimal-agent version [--json]
+
+  GLOBAL FLAGS
+    See minimal-agent --help for all global flags.
+    -h, --help   Show help
+    -d, --debug  Enable debug logging
+"
+`;
+
+exports[`command help: update COLUMNS=80, NO_COLOR=1 1`] = `
+"  minimal-agent update
+    Update this binary from the GitHub release (stable or nightly)
+    Replaces a standalone binary in place: downloads the release asset for this
+    host (os, arch, musl, x64 baseline), checks it against SHA256SUMS, runs the
+    new binary's version --json, then renames it over the current one. The old
+    binary is kept as <exe>.old for --rollback.
+    A run from source prints git pull instead, and a Homebrew install prints
+    brew upgrade. Neither changes anything.
+    Releases live on the private gastonmorixe/minimal-agent-cli repo, so a
+    GitHub token is required: MINIMAL_AGENT_GITHUB_TOKEN, GITHUB_TOKEN,
+    GH_TOKEN, or gh auth token.
+    Plugins are embedded in the binary, so update does not touch plugin dirs. A
+    downgrade needs --to.
+    Exit codes: 0 ok or nothing to do, 1 failed (the binary is unchanged), 2 bad
+    arguments, 3 no token or no access, 4 no release or no build for this host,
+    5 directory not writable, 10 update available (--check).
+
+  USAGE
+    minimal-agent update [--check] [--channel stable|nightly] [--json]
+    minimal-agent update --to <version|tag> [--json]
+    minimal-agent update --rollback [--json]
+
+  FLAGS
+    --check           Only report: exit 0 when up to date, 10 when an update is
+                      available
+    --channel <name>  Release channel: stable or nightly (one of: stable,
+                      nightly; default: stable)
+    --to <version>    Install this exact version or tag, also an older one
+    --rollback        Put back the binary the last update replaced (<exe>.old)
+
+  GLOBAL FLAGS
+    See minimal-agent --help for all global flags.
+    -h, --help   Show help
+    -d, --debug  Enable debug logging
+
+  ENVIRONMENT
+    MINIMAL_AGENT_GITHUB_TOKEN  GitHub token for the private release repo (then
+                                GITHUB_TOKEN, GH_TOKEN, gh)
+
+  EXAMPLES
+    minimal-agent update --check     Is a newer stable release out?
+    minimal-agent update --channel nightly
+                                     Install the newest nightly
+    minimal-agent update --to 0.1.0  Install one version, also an older one
+    minimal-agent update --rollback  Undo the last update
+"
+`;
+
+exports[`command help: update COLUMNS=120, NO_COLOR=1 1`] = `
+"  minimal-agent update
+    Update this binary from the GitHub release (stable or nightly)
+    Replaces a standalone binary in place: downloads the release asset for this host (os, arch, musl, x64 baseline),
+    checks it against SHA256SUMS, runs the new binary's version --json, then renames it over the current one. The old
+    binary is kept as <exe>.old for --rollback.
+    A run from source prints git pull instead, and a Homebrew install prints brew upgrade. Neither changes anything.
+    Releases live on the private gastonmorixe/minimal-agent-cli repo, so a GitHub token is required:
+    MINIMAL_AGENT_GITHUB_TOKEN, GITHUB_TOKEN, GH_TOKEN, or gh auth token.
+    Plugins are embedded in the binary, so update does not touch plugin dirs. A downgrade needs --to.
+    Exit codes: 0 ok or nothing to do, 1 failed (the binary is unchanged), 2 bad arguments, 3 no token or no access, 4
+    no release or no build for this host, 5 directory not writable, 10 update available (--check).
+
+  USAGE
+    minimal-agent update [--check] [--channel stable|nightly] [--json]
+    minimal-agent update --to <version|tag> [--json]
+    minimal-agent update --rollback [--json]
+
+  FLAGS
+    --check           Only report: exit 0 when up to date, 10 when an update is available
+    --channel <name>  Release channel: stable or nightly (one of: stable, nightly; default: stable)
+    --to <version>    Install this exact version or tag, also an older one
+    --rollback        Put back the binary the last update replaced (<exe>.old)
+
+  GLOBAL FLAGS
+    See minimal-agent --help for all global flags.
+    -h, --help   Show help
+    -d, --debug  Enable debug logging
+
+  ENVIRONMENT
+    MINIMAL_AGENT_GITHUB_TOKEN  GitHub token for the private release repo (then GITHUB_TOKEN, GH_TOKEN, gh)
+
+  EXAMPLES
+    minimal-agent update --check            Is a newer stable release out?
+    minimal-agent update --channel nightly  Install the newest nightly
+    minimal-agent update --to 0.1.0         Install one version, also an older one
+    minimal-agent update --rollback         Undo the last update
+"
+`;
+
+exports[`command help: help COLUMNS=80, NO_COLOR=1 1`] = `
+"  minimal-agent help
+    Show help for a command
+
+  USAGE
+    minimal-agent help [<command>...]
+
+  ARGUMENTS
+    command  Command path, for example sessions dump
+
+  GLOBAL FLAGS
+    See minimal-agent --help for all global flags.
+    -h, --help   Show help
+    -d, --debug  Enable debug logging
+"
+`;
+
+exports[`command help: help COLUMNS=120, NO_COLOR=1 1`] = `
+"  minimal-agent help
+    Show help for a command
+
+  USAGE
+    minimal-agent help [<command>...]
+
+  ARGUMENTS
+    command  Command path, for example sessions dump
 
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
