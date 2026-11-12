@@ -7,7 +7,7 @@
  * @module logging/diagnostic-text-a1
  */
 
-import { type DiagnosticAttrs, registerDiagnosticText } from "./diagnostic-text.ts"
+import { type DiagnosticAttrs, fallback, registerDiagnosticText } from "./diagnostic-text.ts"
 
 const str = (a: DiagnosticAttrs, k: string): string => String(a[k] ?? "")
 
@@ -30,5 +30,8 @@ export function registerA1DiagnosticText(): void {
       `MINIMAL_AGENT_HTTP3="${str(a, "mode")}" unrecognized (expected off/opt/force); h3 disabled.`,
   )
   registerDiagnosticText("auth.login", (a) => str(a, "line"))
-  registerDiagnosticText("auth.refresh", (a) => REFRESH_TEXT[str(a, "code")] ?? "")
+  registerDiagnosticText(
+    "auth.refresh",
+    (a) => REFRESH_TEXT[str(a, "code")] ?? fallback("auth.refresh", a),
+  )
 }
