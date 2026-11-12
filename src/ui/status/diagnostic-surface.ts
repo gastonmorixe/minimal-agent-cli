@@ -51,7 +51,7 @@
  */
 
 import { type DiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
-import { diagnosticText } from "../../logging/diagnostic-text.ts"
+import { diagnosticKey, diagnosticText } from "../../logging/diagnostic-text.ts"
 import { c } from "../style/ansi.ts"
 
 /**
@@ -176,8 +176,8 @@ function bumpOrReplace(slot: Slot, e: LogEvent): Slot {
   if (
     slot.event !== null &&
     slot.event.source === e.source &&
-    // The key moves to source+attrs in the commit that empties a message.
-    diagnosticText(slot.event) === diagnosticText(e) &&
+    // A set message keys the entry. An empty one keys on the sorted attrs.
+    diagnosticKey(slot.event) === diagnosticKey(e) &&
     slot.event.severity === e.severity
   ) {
     return { event: e, count: slot.count + 1 }
