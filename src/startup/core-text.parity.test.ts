@@ -38,7 +38,7 @@ import {
 } from "@minimal-agent/core/host/oauth-login"
 import { resolveStartupAuth, startupAuthLabel } from "@minimal-agent/core/host/provider-auth"
 import { formatTurnNoticePlain, type TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
-import { errorText } from "./core-text.ts"
+import { errorText, loginEventText, loginFailureText } from "./core-text.ts"
 
 type OAuthProvider = NonNullable<LoginDeps["provider"]>
 
@@ -139,7 +139,7 @@ async function loginLines(
   const lines: string[] = []
   const outcome = await runOAuthLogin({
     provider,
-    display: (m) => lines.push(m),
+    onLoginEvent: (ev) => lines.push(loginEventText(ev)),
     readPaste: async () => paste,
     randomBytes: FIXED_BYTES,
     maxAttempts,
@@ -150,7 +150,10 @@ async function loginLines(
       } as unknown as NonNullable<LoginDeps["install"]>["store"],
     },
   })
-  return [...lines, `outcome: ${JSON.stringify(outcome)}`].join("\n--\n")
+  return [
+    ...lines,
+    `outcome: ${JSON.stringify(outcome.ok ? outcome : { ...outcome, reason: loginFailureText(outcome.reason) })}`,
+  ].join("\n--\n")
 }
 
 const fakeAgent = (
