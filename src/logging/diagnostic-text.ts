@@ -48,15 +48,65 @@ export function diagnosticText(e: LogEvent): string {
   return render ? render(d.attrs, d.level) : fallback(d.source, d.attrs)
 }
 
+/** True when a renderer is registered for the source. */
+export function hasDiagnosticText(source: string): boolean {
+  return registry.has(source)
+}
+
+/**
+ * Volatile attr names: values that differ between two identical repeats.
+ * Dedupe keys skip them. Names come from the attrs that core emits
+ * (api.retry, api.stream-stalled, api.retry-terminal-less-stop):
+ * - attempt, attempts, retries, retry: attempt counters.
+ * - reset-at, ts, timestamp, time: clock values.
+ * - completed-tool-calls, count: progress counters.
+ * - duration, elapsed, delay, idle, bytes, size: measures.
+ * Names are compared in kebab-case, so camelCase and snake_case match too.
+ * A name that ends in `-ms`, `-bytes`, `-seconds` or `-at` is volatile too.
+ */
+const VOLATILE_NAMES: ReadonlySet<string> = new Set([
+  "attempt",
+  "attempts",
+  "retries",
+  "retry",
+  "reset-at",
+  "ts",
+  "timestamp",
+  "time",
+  "completed-tool-calls",
+  "count",
+  "duration",
+  "elapsed",
+  "delay",
+  "idle",
+  "bytes",
+  "size",
+])
+const VOLATILE_SUFFIX = /-(ms|bytes|seconds|at)$/
+
+/** True when an attr or structuredData key is volatile (not part of the dedupe key). */
+export function isVolatileDiagnosticKey(name: string): boolean {
+  const kebab = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/_/g, "-")
+    .toLowerCase()
+  return VOLATILE_NAMES.has(kebab) || VOLATILE_SUFFIX.test(kebab)
+}
+
 /**
  * Dedupe key of an event. A set message is the key. An empty message keys on
- * the sorted attrs, so two events with the same attrs collapse as before.
+ * the source, the code (if any) and the stable attrs (sorted, volatile keys
+ * dropped). Attrs come from `diagnostic`, else from `structuredData`.
  */
 export function diagnosticKey(e: LogEvent): string {
-  if (e.message !== "" || e.diagnostic === undefined) return e.message
-  const attrs = e.diagnostic.attrs
-  const pairs = Object.keys(attrs)
+  if (e.message !== "") return e.message
+  const attrs: Readonly<Record<string, unknown>> | undefined =
+    e.diagnostic?.attrs ?? e.structuredData
+  if (attrs === undefined) return e.message
+  const source = e.diagnostic?.source ?? e.source
+  const stable = Object.keys(attrs)
+    .filter((k) => !isVolatileDiagnosticKey(k))
     .sort()
     .map((k) => [k, attrs[k]])
-  return `\u0000${JSON.stringify(pairs)}`
+  return `\u0000${JSON.stringify([source, attrs.code ?? null, stable])}`
 }

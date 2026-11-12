@@ -30,6 +30,7 @@ import {
   type LogEvent,
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
+import { registerDiagnosticText } from "../../logging/diagnostic-text.ts"
 import { PALETTE } from "../../terminal-kit/palette.ts"
 
 import {
@@ -511,5 +512,63 @@ describe("ScrollbackDiagnosticSink: call-site parity (S14.2 step 0)", () => {
         "  ╰ k: v",
       ].join("\n"),
     )
+  })
+})
+
+describe("empty message events (S14.2 step 0b)", () => {
+  const typed = (source: string, attrs: Record<string, string | number>): LogEvent =>
+    event({
+      source,
+      message: "",
+      diagnostic: { source, level: "warn", attrs },
+    } as Partial<LogEvent>)
+
+  it("(a) a volatile repeat collapses into one (xN) line", () => {
+    const w = makeWriter()
+    const sink = new ScrollbackDiagnosticSink({
+      write: w.write,
+      now: () => T0,
+      dedupRepaintMinMs: 0,
+    })
+    sink.onEvent(typed("zz.sb.retry", { curve: "x", elapsedMs: 10, attempt: 1 }))
+    sink.onEvent(typed("zz.sb.retry", { curve: "x", elapsedMs: 99, attempt: 2 }))
+    const all = w.calls.map(strip).join("")
+    expect(all).toContain("×2")
+    expect(all.match(/╰/g)).toHaveLength(1)
+  })
+
+  it("(b) a stable attr change does not collapse: two blocks", () => {
+    const w = makeWriter()
+    const sink = new ScrollbackDiagnosticSink({
+      write: w.write,
+      now: () => T0,
+      dedupRepaintMinMs: 0,
+    })
+    sink.onEvent(typed("zz.sb.stable", { curve: "x", attempt: 1 }))
+    sink.onEvent(typed("zz.sb.stable", { curve: "y", attempt: 1 }))
+    const all = w.calls.map(strip).join("")
+    expect(all.match(/╰/g)).toHaveLength(2)
+    expect(all).not.toContain("×2")
+  })
+
+  it("(d) no renderer and structuredData: data rows only, no empty first row", () => {
+    const plain = strip(
+      renderBlock(event({ source: "zz.sb.nor", message: "", structuredData: { a: 1, b: 2 } })),
+    )
+    const rows = plain.split("\n")
+    expect(rows).toHaveLength(3)
+    expect(rows[1]).toBe("  │ a: 1")
+    expect(rows[2]).toBe("  ╰ b: 2")
+  })
+
+  it("(d) no renderer, no data, attrs: the fallback is the one row", () => {
+    const plain = strip(renderBlock(typed("zz.sb.fb", { k: "v" })))
+    expect(plain.split("\n")[1]).toBe("  ╰ zz.sb.fb: k=v")
+  })
+
+  it("(e) a registered renderer: the first row is the registry text", () => {
+    registerDiagnosticText("zz.sb.reg", (a) => `registry says ${String(a.k)}`)
+    const plain = strip(renderBlock(typed("zz.sb.reg", { k: "v" })))
+    expect(plain.split("\n")[1]).toBe("  ╰ registry says v")
   })
 })
