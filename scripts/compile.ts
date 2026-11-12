@@ -335,7 +335,7 @@ async function buildTo(
   target: string | undefined,
 ): Promise<void> {
   // Embedded plugin slot: no-op while plugins.bundle.json lists nothing.
-  bundlePlugins({
+  const bundled = bundlePlugins({
     listFile: process.env.MA_BUNDLE_LIST_FILE ?? join(CLI_DIR, "plugins.bundle.json"),
     pluginsRepo:
       process.env.MA_BUNDLE_PLUGINS_REPO ?? resolve(CLI_DIR, "..", "minimal-agent-plugins"),
@@ -344,7 +344,7 @@ async function buildTo(
   const before = new Set(bunBuildLeftovers())
   let result: Bun.BuildOutput
   try {
-    result = await build(outfile, opts, coreExports, target)
+    result = await build(outfile, opts, coreExports, target, bundled.length > 0)
   } finally {
     for (const name of bunBuildLeftovers()) {
       if (!before.has(name)) rmSync(join(process.cwd(), name), { force: true })
@@ -361,6 +361,7 @@ function build(
   opts: Options,
   coreExports: Map<string, string>,
   target: string | undefined,
+  withPlugins: boolean,
 ): Promise<Bun.BuildOutput> {
   return Bun.build({
     entrypoints: [ENTRY],
@@ -381,6 +382,9 @@ function build(
       // `target` is a Bun compile target string (see TARGETS). The cast keeps
       // this file independent of the bun-types version's target union.
       ...(target ? { target: target as Bun.Build.CompileTarget } : {}),
+      // Embed the bundled plugins at `<import.meta.dir>/plugins` (read-only
+      // in the binary). Absent with an empty list: options stay unchanged.
+      ...(withPlugins ? { assets: [join(CLI_DIR, "plugins")] } : {}),
     },
     format: "esm",
     bytecode: opts.bytecode,

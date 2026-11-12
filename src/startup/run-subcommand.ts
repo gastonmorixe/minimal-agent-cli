@@ -37,7 +37,7 @@ import { runLogoutCommand } from "../commands/logout.ts"
 import { runSessionsCommand } from "../commands/sessions.ts"
 import { runUsageCommand } from "../commands/usage.ts"
 import { c } from "../ui/style/ansi.ts"
-import { computePluginRoots } from "./plugin-roots.ts"
+import { compiledPluginsRoot, computePluginRoots } from "./plugin-roots.ts"
 
 /** Everything the subcommand dispatcher needs from the entry point. */
 export interface SubcommandContext {
@@ -114,7 +114,14 @@ export async function runStartupSubcommand(ctx: SubcommandContext): Promise<bool
       return true
     case "list-plugins":
       runListPluginsCommand({
-        roots: computePluginRoots(ctx.repoRoot, process.env, process.cwd(), resolveAgentHome()),
+        roots: computePluginRoots(
+          ctx.repoRoot,
+          process.env,
+          process.cwd(),
+          resolveAgentHome(),
+          undefined,
+          compiledPluginsRoot(import.meta.dir),
+        ),
         cliArgs: args,
       })
       return true
