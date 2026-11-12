@@ -13,12 +13,15 @@
   "bin": {
     "minimal-agent": "src/index.ts"
   },
+  "imports": {
+    "#embedded-plugins": "./src/generated/embedded-plugins.empty.ts"
+  },
   "engines": {
     "bun": ">=1.4.4",
     "node": ">=22.18.0"
   },
   "dependencies": {
-    "@minimal-agent/core": "git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#a608155fd88681c068d4e2af70d24dcb1137b207"
+    "@minimal-agent/core": "git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#a7b990f8bf5ef05c55343491f24b7e5d973cbbb8"
   },
   "scripts": {
     "start": "bun run src/index.ts",

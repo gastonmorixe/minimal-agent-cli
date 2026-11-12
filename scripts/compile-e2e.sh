@@ -22,6 +22,17 @@
 #   4. `-p` with no credentials exits non-zero at the credentials check.
 #   5. The interactive REPL in tmux starts and stops at the credentials
 #      check (the fresh HOME has none). Skipped without tmux.
+#   6. Embedded plugins: with an EMPTY HOME and no plugin dir anywhere,
+#      `plugins` lists >= 40 plugins and `providers` lists 13.
+#   7. A user-tier plugin with the id of an embedded one shadows it.
+#   8. `__run`: a path or an unknown id exits 64. `__run ma-bg/runner`
+#      reaches the runner (its missing-env error, exit 2).
+#   9. Self-spawn with no bun on PATH (`PATH=/usr/bin:/bin`), against a
+#      local mock model (`compile-e2e-mock-model.ts`, run by the binary
+#      itself as BUN_BE_BUN=1): one turn calls BackgroundRun and
+#      SubAgentsSpawnAgent. The job log shows the command ran with no
+#      BUN_BE_BUN and no bun. The child agent (the binary spawning itself)
+#      calls the model.
 #
 # Every output is also scanned for crash text (CRASH_RE). Each command has a
 # time limit. Exit codes: 0 all checks passed, 1 a check failed, 2 bad usage
@@ -37,6 +48,7 @@ if [[ ! -f "$SRC_BIN" || ! -x "$SRC_BIN" ]]; then
 fi
 
 TIMEOUT_SECS=30
+MOCK_PID=""
 CRASH_RE='Cannot find package|ENOENT|at .*\(/\$bunfs/|^error: |panic'
 SESSION="ma-e2e-$$-$RANDOM"
 CHILD=""
@@ -47,6 +59,7 @@ WORK="$(cd "$WORK" && pwd -P)"
 
 cleanup() {
   [[ -n "$CHILD" ]] && kill -KILL "$CHILD" 2>/dev/null
+  [[ -n "$MOCK_PID" ]] && kill -KILL "$MOCK_PID" 2>/dev/null
   [[ -n "$WATCHER" ]] && kill "$WATCHER" 2>/dev/null
   if command -v tmux >/dev/null 2>&1; then
     tmux kill-session -t "$SESSION" 2>/dev/null
@@ -118,8 +131,9 @@ failed() {
   failures=$((failures + 1))
 }
 
-# run NAME ARGS...: run the binary in the project dir with a time limit.
-# Sets OUT (stdout + stderr) and CODE (124 on timeout).
+# run NAME ARGS...: run the binary in the project dir with a time limit
+# (RUN_TIMEOUT, default TIMEOUT_SECS). Sets OUT (stdout + stderr) and CODE
+# (124 on timeout).
 run() {
   local name="$1"
   shift
@@ -128,8 +142,9 @@ run() {
   (cd "$PROJECT" && exec "${ENV[@]}" TERM=dumb NO_COLOR=1 "$BIN" "$@") \
     </dev/null >"$out_file" 2>&1 &
   CHILD=$!
+  local limit="${RUN_TIMEOUT:-$TIMEOUT_SECS}"
   (
-    sleep "$TIMEOUT_SECS"
+    sleep "$limit"
     touch "$WORK/timed-out"
     kill -TERM "$CHILD" 2>/dev/null
     sleep 2
@@ -145,7 +160,7 @@ run() {
   OUT="$(cat "$out_file")"
   if [[ -e "$WORK/timed-out" ]]; then
     CODE=124
-    failed "$name: no exit after ${TIMEOUT_SECS}s" "$OUT"
+    failed "$name: no exit after ${limit}s" "$OUT"
     return 1
   fi
   if grep -qE "$CRASH_RE" <<<"$OUT"; then
@@ -276,6 +291,124 @@ if command -v tmux >/dev/null 2>&1; then
 else
   echo "e2e: skip  REPL (tmux not installed)"
 fi
+
+# 6. Embedded plugins from an empty HOME, no plugin dir anywhere.
+EMPTY_HOME="$WORK/empty-home"
+mkdir -p "$EMPTY_HOME"
+EMPTY_ENV=(env -i "PATH=/usr/bin:/bin" "HOME=$EMPTY_HOME" "LANG=$UTF8_LANG"
+  "MINIMAL_AGENT_NO_PLUGIN_SYNC=1" "MINIMAL_AGENT_NO_BINARY_SETUP=1")
+# Strip ANSI SGR codes (the listings dim their footer even with NO_COLOR).
+plain() { sed $'s/\x1b\\[[0-9;]*m//g' <<<"$1"; }
+# run_empty NAME ARGS...: `run` with the empty-HOME env.
+run_empty() {
+  local saved=("${ENV[@]}")
+  ENV=("${EMPTY_ENV[@]}")
+  run "$@"
+  local rc=$?
+  ENV=("${saved[@]}")
+  return $rc
+}
+if run_empty "plugins (empty HOME)" plugins; then
+  n="$(plain "$OUT" | grep -oE '^ *[0-9]+ plugins' | grep -oE '[0-9]+' | head -n 1)"
+  if [[ "$CODE" == "0" && "${n:-0}" -ge 40 ]]; then
+    pass "embedded: $n plugins with an empty HOME"
+  else
+    failed "embedded: plugins listed ${n:-none} (exit $CODE), want >= 40" "$OUT"
+  fi
+fi
+if run_empty "providers (empty HOME)" providers; then
+  n="$(plain "$OUT" | grep -oE '^ *[0-9]+ providers' | grep -oE '[0-9]+' | head -n 1)"
+  if [[ "$CODE" == "0" && "${n:-0}" == "13" ]]; then
+    pass "embedded: 13 providers with an empty HOME"
+  else
+    failed "embedded: providers listed ${n:-none} (exit $CODE), want 13" "$OUT"
+  fi
+fi
+if [[ -e "$EMPTY_HOME/.minimal-agent/plugins" ]]; then
+  failed "embedded: the binary created a user plugins dir (a first-run clone?)"
+fi
+
+# 7. A user-tier copy of an embedded plugin id shadows it.
+SHADOW_DIR="$EMPTY_HOME/.minimal-agent/plugins/ma-tps-plugin"
+mkdir -p "$SHADOW_DIR"
+printf '%s\n' '{ "id": "tps", "name": "TPS user override", "version": "0.0.1", "description": "e2e shadow" }' \
+  >"$SHADOW_DIR/manifest.json"
+if run_empty "plugins (user shadow)" plugins; then
+  if grep -q "TPS user override" <<<"$OUT" && [[ "$(plain "$OUT" | grep -cE '^ *tps ')" == "1" ]]; then
+    pass "a user-tier plugin shadows the embedded one by id"
+  else
+    failed "user-tier tps did not shadow the embedded tps" "$(grep -E 'tps|plugins \(' <<<"$OUT")"
+  fi
+fi
+rm -rf "$EMPTY_HOME/.minimal-agent/plugins"
+
+# 8. __run: script ids only, never paths.
+for bad in "../x" "/tmp/x.ts" "ma-bg/nope"; do
+  if run_empty "__run $bad" __run "$bad"; then
+    if [[ "$CODE" == "64" ]] && grep -q "unknown embedded script" <<<"$OUT"; then
+      pass "__run $bad exits 64"
+    else
+      failed "__run $bad: exit $CODE, want 64" "$OUT"
+    fi
+  fi
+done
+if run_empty "__run ma-bg/runner" __run ma-bg/runner; then
+  if [[ "$CODE" == "2" ]] && grep -q "MA_BG_JOB_ID is required" <<<"$OUT"; then
+    pass "__run ma-bg/runner dispatches to the embedded runner"
+  else
+    failed "__run ma-bg/runner: exit $CODE, want 2 with the runner's env error" "$OUT"
+  fi
+fi
+
+# 9. BackgroundRun + SpawnAgent against a mock model, no bun on PATH.
+if PATH=/usr/bin:/bin command -v bun >/dev/null 2>&1; then
+  echo "e2e: note  bun is in /usr/bin or /bin; check 9 runs but cannot prove 'no bun'"
+fi
+MOCK_DIR="$WORK/mock"
+mkdir -p "$MOCK_DIR"
+cp "$CLI_DIR/scripts/compile-e2e-mock-model.ts" "$MOCK_DIR/mock-model.ts" || exit 2
+BG_CMD='echo bg-hi; echo "be=${BUN_BE_BUN-unset}"; command -v bun >/dev/null && echo bun=found || echo bun=none'
+# The mock runs on the binary itself (BUN_BE_BUN=1), so no bun is needed.
+(cd "$MOCK_DIR" && exec env -i "PATH=/usr/bin:/bin" BUN_BE_BUN=1 "$BIN" mock-model.ts \
+  "$MOCK_DIR/port" "$MOCK_DIR/log" "$BG_CMD") >"$MOCK_DIR/stdout" 2>&1 &
+MOCK_PID=$!
+for _ in $(seq 1 40); do
+  [[ -s "$MOCK_DIR/port" ]] && break
+  sleep 0.25
+done
+if [[ ! -s "$MOCK_DIR/port" ]]; then
+  failed "mock model did not start" "$(cat "$MOCK_DIR/stdout")"
+else
+  MOCK_URL="http://127.0.0.1:$(cat "$MOCK_DIR/port")"
+  rm -rf "$EMPTY_HOME" && mkdir -p "$EMPTY_HOME"
+  if RUN_TIMEOUT=90 run_empty "-p self-spawn (mock model)" --skip-quota \
+    --provider generic-endpoint --endpoint "$MOCK_URL" --format openai-chat-completions \
+    --auth-type none --model mock-model --mode none -p "go"; then
+    mock_log="$(cat "$MOCK_DIR/log" 2>/dev/null)"
+    job_log="$(cat "$EMPTY_HOME"/.minimal-agent/sessions/*.bgjobs/*.log 2>/dev/null)"
+    if [[ "$CODE" != "0" ]]; then
+      failed "self-spawn run: exit $CODE" "$OUT"$'\n'"$mock_log"
+    fi
+    if grep -q "parent-request 1 bg=true spawn=true" <<<"$mock_log"; then
+      pass "the request carries the embedded BackgroundRun and SubAgentsSpawnAgent tools"
+    else
+      failed "the first request lacks BackgroundRun or SubAgentsSpawnAgent" "$mock_log"
+    fi
+    if grep -q "^bg-hi$" <<<"$job_log" && grep -q "^be=unset$" <<<"$job_log" &&
+      grep -q "^bun=none$" <<<"$job_log"; then
+      pass "BackgroundRun job ran via __run ma-bg/runner: no BUN_BE_BUN, no bun on PATH"
+    else
+      failed "BackgroundRun job log is not as expected" "job log: $job_log"$'\n'"$mock_log"
+    fi
+    if grep -q "child-request" <<<"$mock_log"; then
+      pass "SpawnAgent: the child agent (the binary itself) called the model"
+    else
+      failed "SpawnAgent: no child request reached the mock model" "$OUT"$'\n'"$mock_log"
+    fi
+  fi
+fi
+kill -KILL "$MOCK_PID" 2>/dev/null
+MOCK_PID=""
 
 if [[ "$failures" -gt 0 ]]; then
   echo "e2e: $failures check(s) failed for $SRC_BIN" >&2

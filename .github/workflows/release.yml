@@ -173,9 +173,11 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
           echo "Release: ${NAME} channel=${CHANNEL} cli=${CLI_SHA} core=${CORE_SHA}"
 
-      # TODO(PLAN.md wave 2, embedded plugins): pin the plugins commit (in
-      # package.json or plugins.bundle.json) instead of building from the
-      # plugins default branch HEAD. The sha lands in build-info.json either way.
+      # The plugins checkout below is at this sha, and compile.ts (release
+      # mode) embeds a `git archive` of its HEAD, so the binary carries
+      # exactly this commit (pluginsSha in build-info.json).
+      # TODO(PLAN.md): pin the plugins commit in package.json instead of
+      # the plugins default branch HEAD.
       - name: Resolve plugins commit
         id: sources
         env:

@@ -284,8 +284,10 @@ Common environment variables:
 ## Extended plugins
 
 The first-party plugins (providers, modes, tools, and UI extras) live in
-[`minimal-agent-plugins`][map]. The CLI clones that repo once into
-`~/.minimal-agent/plugins/` on the first interactive run. The clone is one-shot:
+[`minimal-agent-plugins`][map]. A compiled binary carries all of them: it
+needs no clone, and `~/.minimal-agent/plugins/` only holds your overrides.
+Run from source with no plugins checkout next to it, the CLI clones that
+repo once into `~/.minimal-agent/plugins/` on the first interactive run. The clone is one-shot:
 once that directory has plugins it is never auto-pulled, so you stay in control.
 Update them yourself with `git -C ~/.minimal-agent/plugins pull`.
 
@@ -293,9 +295,10 @@ The CLI reads 3 plugin roots. Precedence: project, then user, then embedded.
 
 - **Project:** `<cwd>/.agents/minimal-agent/plugins/`.
 - **User:** `~/.minimal-agent/plugins/`, the clone above (install mode only).
-- **Embedded:** `<cli>/plugins/`, plus the `../minimal-agent-plugins` checkout
-  next to the CLI, or the dirs in `MINIMAL_AGENT_PLUGIN_SIBLINGS`
-  (colon separated).
+- **Embedded:** the `../minimal-agent-plugins` checkout next to the CLI, or
+  the dirs in `MINIMAL_AGENT_PLUGIN_SIBLINGS` (colon separated). A compiled
+  binary also has its built-in plugins, below every disk root, so a project
+  or user copy of a plugin id wins.
 
 Dev mode: when a checkout dir holds at least one plugin package (a subdir with
 `manifest.json` or `provider.json`), the user tier is empty and the CLI does

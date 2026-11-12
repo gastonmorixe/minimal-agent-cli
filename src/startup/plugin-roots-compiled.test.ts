@@ -1,5 +1,5 @@
 /**
- * Unit tests for the compiled-binary plugin root (`compiledRoot`).
+ * Unit tests for the plugin roots of a compiled binary.
  *
  * @module startup/plugin-roots-compiled.test
  */
@@ -10,7 +10,6 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import {
-  compiledPluginsRoot,
   computePluginRoots,
   isStandaloneExecutable,
   PLUGINS_CHECKOUT_DIR,
@@ -22,40 +21,26 @@ import {
 const install: PluginMode = { kind: "install", checkouts: [] }
 const dev: PluginMode = { kind: "dev", checkouts: ["/co/plugins"] }
 
-describe("computePluginRoots compiledRoot", () => {
-  test("no compiledRoot: embedded root is <cliRoot>/plugins", () => {
-    const r = computePluginRoots("/cli", {}, "/proj", "/home/.ma", dev)
-    expect(r.embedded).toEqual([join("/cli", "plugins"), "/co/plugins"])
+describe("computePluginRoots in a compiled binary", () => {
+  // The binary's own plugins are the registered embedded table (core
+  // appends it after these disk roots), not a `<cli>/plugins` dir.
+  test("dev mode: the embedded tier is the checkouts only", () => {
+    const r = computePluginRoots("/$bunfs", {}, "/proj", "/home/.ma", dev)
+    expect(r.embedded).toEqual(["/co/plugins"])
+    expect(r.user).toEqual([])
   })
 
-  test("compiledRoot replaces the first embedded entry and keeps checkouts", () => {
-    const r = computePluginRoots("/$bunfs", {}, "/proj", "/home/.ma", dev, "/$bunfs/root/plugins")
-    expect(r.embedded).toEqual(["/$bunfs/root/plugins", "/co/plugins"])
-  })
-
-  test("install mode keeps the user tier", () => {
-    const r = computePluginRoots(
-      "/$bunfs",
-      {},
-      "/proj",
-      "/home/.ma",
-      install,
-      "/$bunfs/root/plugins",
-    )
-    expect(r.embedded).toEqual(["/$bunfs/root/plugins"])
+  test("install mode: no disk embedded root, the user tier stays (overrides)", () => {
+    const r = computePluginRoots("/$bunfs", {}, "/proj", "/home/.ma", install)
+    expect(r.embedded).toEqual([])
     expect(r.user).toEqual([join("/home/.ma", "plugins")])
   })
-})
 
-describe("compiledPluginsRoot", () => {
-  test("true for the Bun virtual fs dir", () => {
-    expect(compiledPluginsRoot("/$bunfs/root")).toBe(join("/$bunfs/root", "plugins"))
-  })
-  test("true for the Windows form", () => {
-    expect(compiledPluginsRoot("B:/~BUN/root")).toBe(join("B:/~BUN/root", "plugins"))
-  })
-  test("undefined for a disk dir", () => {
-    expect(compiledPluginsRoot("/repo/minimal-agent-cli/src")).toBeUndefined()
+  test("no root ever points into the Bun virtual fs", () => {
+    const r = computePluginRoots("/$bunfs/root", {}, "/proj", "/home/.ma", install)
+    for (const dir of [...(r.embedded ?? []), ...(r.user ?? []), ...(r.project ?? [])]) {
+      expect(dir.startsWith("/$bunfs")).toBe(false)
+    }
   })
 })
 

@@ -36,19 +36,19 @@ describe("computePluginRoots", () => {
     addPackage(checkout)
     const roots = computePluginRoots(cliRoot, { HOME: "/h" }, "/work", "/h/.minimal-agent")
     expect(roots).toEqual({
-      embedded: [join(cliRoot, "plugins"), checkout],
+      embedded: [checkout],
       user: [],
       project: [join("/work", PROJECT_PLUGINS_SUBDIR)],
     })
     // Provider roots: only one first-party copy, the checkout.
-    expect(providerRootsOf(roots)).toEqual([join(cliRoot, "plugins"), checkout])
+    expect(providerRootsOf(roots)).toEqual([checkout])
   })
 
   it("install mode: no checkout keeps the user clone", () => {
     const cliRoot = join(root, "cli")
     const roots = computePluginRoots(cliRoot, { HOME: "/h" }, "/work", "/h/.minimal-agent")
     expect(roots).toEqual({
-      embedded: [join(cliRoot, "plugins")],
+      embedded: [],
       user: ["/h/.minimal-agent/plugins"],
       project: [join("/work", PROJECT_PLUGINS_SUBDIR)],
     })
@@ -80,7 +80,7 @@ describe("computePluginRoots", () => {
 
   it("unknown agent home gives an empty user tier", () => {
     const roots = computePluginRoots(join(root, "cli"), {}, "/work", undefined)
-    expect(roots.embedded).toEqual([join(root, "cli", "plugins")])
+    expect(roots.embedded).toEqual([])
     expect(roots.user).toEqual([])
   })
 
