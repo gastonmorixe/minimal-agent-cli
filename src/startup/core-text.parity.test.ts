@@ -37,7 +37,7 @@ import {
   runOAuthLogin,
 } from "@minimal-agent/core/host/oauth-login"
 import { describeStartupAuth, resolveStartupAuth } from "@minimal-agent/core/host/provider-auth"
-import { formatTurnNoticePlain, type TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
+import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
 import {
   contextExceededAdviceText,
   contextNoticeText,
@@ -46,6 +46,7 @@ import {
   loginFailureText,
   startupAuthText,
 } from "./core-text.ts"
+import { turnNoticePlainText } from "./turn-notice-text.ts"
 
 type OAuthProvider = NonNullable<LoginDeps["provider"]>
 
@@ -99,7 +100,7 @@ function compactLine(argv: string): string {
 /** What print-mode writes for a notice event (`src/print-mode.ts` notice case). */
 function printNotice(notice: TurnNotice): string {
   const marker = notice.severity === "error" ? "✗" : "·"
-  return `${marker} ${formatTurnNoticePlain(notice)}`
+  return `${marker} ${turnNoticePlainText(notice)}`
 }
 
 /** Fixed bytes so PKCE state and verifier are the same on every run. */
@@ -389,6 +390,97 @@ const FIXTURES: readonly Fixture[] = [
         model: "model-a",
         requested: "model-z",
         reason: "unknown",
+      }),
+  ],
+  [
+    "b13-max-salvaged",
+    "notice: max_tokens salvaged mid tool-call",
+    "core src/agent/turn-notice.ts:218-219",
+    () => printNotice({ kind: "max_tokens_salvaged", severity: "warn" }),
+  ],
+  [
+    "b13-stream-continuing",
+    "notice: stream interrupted, continuing",
+    "core src/agent/turn-notice.ts:233-234",
+    () =>
+      printNotice({ kind: "stream_interrupted_continuing", severity: "warn", attempt: 2, cap: 3 }),
+  ],
+  [
+    "b13-stream-salvaged-one",
+    "notice: stream interrupted, salvaged 1 tool call (singular)",
+    "core src/agent/turn-notice.ts:229-231",
+    () =>
+      printNotice({ kind: "stream_interrupted_salvaged", severity: "warn", completedToolCalls: 1 }),
+  ],
+  [
+    "b13-reflection-plural",
+    "notice: reflection ack, plural, with reason",
+    "core src/agent/turn-notice.ts:224-227",
+    () =>
+      printNotice({
+        kind: "reflection_ack",
+        severity: "info",
+        silenceFor: 3,
+        reason: "long run",
+        fromToolFallback: false,
+      }),
+  ],
+  [
+    "b13-reflection-singular",
+    "notice: reflection ack, singular, no reason",
+    "core src/agent/turn-notice.ts:224-227",
+    () =>
+      printNotice({
+        kind: "reflection_ack",
+        severity: "info",
+        silenceFor: 1,
+        reason: "",
+        fromToolFallback: false,
+      }),
+  ],
+  [
+    "b13-reflection-tool",
+    "notice: reflection ack, tool fallback, with reason",
+    "core src/agent/turn-notice.ts:224-227",
+    () =>
+      printNotice({
+        kind: "reflection_ack",
+        severity: "info",
+        silenceFor: 2,
+        reason: "focus",
+        fromToolFallback: true,
+      }),
+  ],
+  [
+    "b13-content-filter",
+    "notice: content filter with category and message",
+    "core src/agent/turn-notice.ts:211-216",
+    () =>
+      printNotice({
+        kind: "content_filter",
+        severity: "error",
+        category: "hate",
+        message: "flagged",
+      }),
+  ],
+  [
+    "b13-refusal-bare",
+    "notice: refusal with null category and message",
+    "core src/agent/turn-notice.ts:211-216",
+    () => printNotice({ kind: "refusal", severity: "error", category: null, message: null }),
+  ],
+  [
+    "b13-model-adopted-plain",
+    "notice: model adopted, effort not reset",
+    "core src/agent/turn-notice.ts:239-242",
+    () =>
+      printNotice({
+        kind: "model_adopted",
+        severity: "info",
+        from: "model-a",
+        to: "model-b",
+        effortReset: false,
+        effortFrom: null,
       }),
   ],
   // Error event with hint (print-mode error case over core fatalErrorFields)

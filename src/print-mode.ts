@@ -28,7 +28,7 @@
 
 import type { AgentEvent, StatusEvent } from "@minimal-agent/core/sdk/events"
 import { serializeEvent } from "@minimal-agent/core/sdk/events"
-import { formatTurnNoticePlain } from "@minimal-agent/core/sdk/turn-notice"
+import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 
 // ---------------------------------------------------------------------------
 // Output mode
@@ -169,7 +169,7 @@ export function renderHumanProgressLine(event: AgentEvent): string {
       // Reuse the core's style-free one-liner: `human` progress lines are
       // plain text, and the fallback formatter is exactly that.
       const marker = event.notice.severity === "error" ? "✗" : "·"
-      return `${marker} ${formatTurnNoticePlain(event.notice)}`
+      return `${marker} ${turnNoticePlainText(event.notice)}`
     }
     case "error":
       return event.hint ? `✗ ${event.message}\n  hint: ${event.hint}` : `✗ ${event.message}`
