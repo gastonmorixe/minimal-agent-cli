@@ -7,6 +7,8 @@
  * @module ui/command-table
  */
 
+import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
+
 import { type CommandOutput, writeCommandRows } from "./command-output.ts"
 import { resolveHelpColor } from "./help/policy.ts"
 import { c } from "./style/ansi.ts"
@@ -59,10 +61,6 @@ function paint(text: string, color: CommandTableColumn["color"], on: boolean): s
   }
 }
 
-function cellWidth(rows: CommandTableRow[], column: CommandTableColumn): number {
-  return Math.max(column.minWidth ?? 0, ...rows.map((row) => (row.cells[column.key] ?? "").length))
-}
-
 /** Render titled sections with left-aligned columns. */
 export function renderCommandTable(spec: CommandTableSpec): string[] {
   const rows: string[] = [""]
@@ -78,7 +76,15 @@ export function renderCommandTable(spec: CommandTableSpec): string[] {
     return rows
   }
 
-  const widths = new Map(spec.columns.map((column) => [column.key, cellWidth(visibleRows, column)]))
+  // Widths are measured on the plain text, so a pre-painted cell must not be
+  // counted with its escapes.
+  const plain = (row: CommandTableRow, key: string): string => stripAnsi(row.cells[key] ?? "")
+  const widths = new Map(
+    spec.columns.map((column) => [
+      column.key,
+      Math.max(column.minWidth ?? 0, ...visibleRows.map((row) => plain(row, column.key).length)),
+    ]),
+  )
 
   for (const section of spec.sections) {
     if (section.rows.length === 0) continue
@@ -86,17 +92,16 @@ export function renderCommandTable(spec: CommandTableSpec): string[] {
 
     for (const row of section.rows) {
       const paintedCells = spec.columns.map((column) => {
-        const value = row.cells[column.key] ?? ""
+        const value = plain(row, column.key)
         return paint(value.padEnd(widths.get(column.key) ?? value.length), column.color, on)
       })
       const lastIndex = paintedCells.length - 1
       if (lastIndex >= 0) {
         const lastColumn = spec.columns[lastIndex]
-        const value = row.cells[lastColumn.key] ?? ""
-        paintedCells[lastIndex] = paint(value, lastColumn.color, on)
+        paintedCells[lastIndex] = paint(plain(row, lastColumn.key), lastColumn.color, on)
       }
       const line = paintedCells.join(" ").trimEnd()
-      rows.push(`${section.title ? rowIndent : baseIndent}${line}`)
+      rows.push(`${section.title ? rowIndent : baseIndent}${on ? line : stripAnsi(line)}`)
     }
     rows.push("")
   }
