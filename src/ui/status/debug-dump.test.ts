@@ -221,6 +221,67 @@ describe("renderDumpBlock", () => {
     expect(renderDumpBlock(block).map(strip)).toContain("    tools: [1 tool(s)]")
   })
 
+  // Regression: without `--verbose`, the transport sends a capped preview row
+  // and then an 8-space continuation row with the full text. Real prompt text
+  // contains `: `, so a separator test classified the continuation as a
+  // labelled row and the TUI printed the full text anyway.
+  it("hides an 8-space continuation row even when its text contains ': '", () => {
+    const rows = [
+      "--- POST m ---",
+      "  Body:",
+      "    messages: [1 message(s)]",
+      '      user: "what is...(+40ch)',
+      '        user: "what is this? note: a colon"',
+      "    system: [1 block(s)]",
+      "      block 0 [cached]: # Rules ⏎ CORE-01: write...(+90ch)",
+      "        # Rules ⏎ CORE-01: write short sentences.",
+      "    tools: [1 tool(s)]",
+      "      Bash: Executes a given...(+20ch)",
+      "        Executes a given bash command. Output: capped.",
+    ]
+    const [block] = collect(rows)
+    for (const name of ["messages", "system", "tools"]) {
+      const section = block.sections.find((s) => s.name === name)
+      expect(section?.rows).toHaveLength(1)
+      expect(section?.continuations).toBe(1)
+    }
+    const rendered = renderDumpBlock(block).map(strip).join("\n")
+    expect(rendered).not.toContain("note: a colon")
+    expect(rendered).not.toContain("write short sentences.")
+    expect(rendered).not.toContain("Output: capped.")
+  })
+
+  // Regression: core caps a preview at 80 chars, but the label and indent come
+  // on top, so a row overflowed and wrapped in a 93-column terminal.
+  it("fits every line to the width and folds the cut into the core hint", () => {
+    const rows = [
+      "--- POST m ---",
+      "  output_config: " + "o".repeat(60),
+      "  Body:",
+      "    messages: [1 message(s)]",
+      `      user [← cached prefix ends here]: "${"u".repeat(60)}"`,
+      "    system: [1 block(s)]",
+      `      block 3 [cached]: # Schema ${"s".repeat(60)}...(+31189ch)`,
+      "    tools: [2 tool(s)]",
+      `      Bash: Executes ${"b".repeat(60)}...(+2334ch)`,
+      "      Write: short",
+    ]
+    const [block] = collect(rows)
+    const width = 50
+    const lines = renderDumpBlock(block, width).map(strip)
+    for (const l of lines) expect(l.length).toBeLessThanOrEqual(width)
+    const block3 = lines.find((l) => l.includes("block 3")) ?? ""
+    const bash = lines.find((l) => l.includes("Bash:")) ?? ""
+    // One hint, and its count covers what core cut plus what we cut.
+    expect(block3.match(/\.\.\.\(\+/g)).toHaveLength(1)
+    expect(Number(/\(\+(\d+)ch\)$/.exec(block3)?.[1])).toBeGreaterThan(31189)
+    expect(Number(/\(\+(\d+)ch\)$/.exec(bash)?.[1])).toBeGreaterThan(2334)
+    expect(lines).toContain("      Write: short")
+    expect(lines.some((l) => l.includes("[← cached prefix ends here]"))).toBe(true)
+    // No width: nothing is clipped (`--verbose`, or no TTY).
+    expect(renderDumpBlock(block).map(strip).join("\n")).toContain("s".repeat(60))
+  })
+
   it("degrades to dim text for a row it cannot parse", () => {
     const odd = renderDumpBlock({
       label: "--- POST x ---",

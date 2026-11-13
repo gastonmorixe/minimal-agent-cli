@@ -46,7 +46,9 @@
  * @module ui/status/debug-dump
  */
 
+import { displayWidth, truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import { c } from "../style/ansi.ts"
+import { truncHint } from "../style/truncate-hint.ts"
 
 /**
  * The `structuredData` shape a diagnostic carries. Declared locally: the
@@ -108,12 +110,16 @@ const SECTION = /^ {4}([A-Za-z0-9_]+):(?:\s(.*))?$/
  * A body row: SIX OR MORE spaces, then anything — including nothing.
  *
  * `{6,}` not `{6}`: a continuation row carries more indentation than the row
- * it belongs to. `[^]*` not `.*`: a row must never span lines, but if a
+ * it belongs to, and group 1 keeps that indent so it can be classified.
+ * `[^]*` not `.*`: a row must never span lines, but if a
  * producer smuggles one in, the whole row is still captured rather than
  * silently dropped (the bug that made `system: [4 block(s)]` print only
  * `block 0`).
  */
-const ROW = /^ {6,}([^]*)$/
+const ROW = /^( {6,})([^]*)$/
+
+/** Indent of a labelled body row. A deeper indent marks a continuation row. */
+const ROW_INDENT = 6
 
 /** True when this diagnostic carries one of our request-dump rows. */
 export function isRequestDumpRow(
@@ -185,14 +191,15 @@ export class RequestDumpCollector {
     const row = ROW.exec(message)
     if (row && p.section >= 0) {
       const current = p.sections[p.section]
-      // A row with no label and no `: ` — or one still carrying a newline —
-      // is the untruncated continuation of the row above it. It is counted
-      // so the section's content never disappears, but it does not get a
-      // label of its own.
-      const text = row[1].trimEnd()
-      // Every labelled row has a `: ` separator; `block 0` and tool names may
-      // contain spaces, so test for the separator, not for a first word.
-      const isContinuation = text.includes("\n") || !text.includes(": ")
+      // The transport writes a labelled row at 6 spaces and, when it capped
+      // the preview, the full text on an 8-space continuation row below it.
+      // The continuation is counted, never rendered: showing it would print
+      // the untruncated text without `--verbose`. Classify by indent first,
+      // because prompt text often contains `: ` too. A row with no `: ` or a
+      // raw newline is also a continuation (older producers).
+      const indent = row[1].length
+      const text = row[2].trimEnd()
+      const isContinuation = indent > ROW_INDENT || text.includes("\n") || !text.includes(": ")
       p.sections[p.section] = isContinuation
         ? { ...current, continuations: (current.continuations ?? 0) + 1 }
         : { ...current, rows: [...current.rows, text] }
@@ -236,17 +243,51 @@ function splitRole(row: string): { role: string; body: string; cached: boolean }
   return { role: head, body: row.slice(i + 2), cached }
 }
 
+/** The `...(+Nch)` hint core appends to a preview it capped. */
+const CORE_HINT = /\.\.\.\(\+(\d+)ch\)$/
+
+/**
+ * Fit `body` into `room` cells.
+ *
+ * Core already cut the preview to 80 chars and appended `...(+Nch)`. When the
+ * line still does not fit, cut more and fold that count into the same hint,
+ * so the line keeps one hint and its number stays the true elided total.
+ */
+function fitBody(body: string, room: number): string {
+  if (displayWidth(body) <= room) return body
+  const hint = CORE_HINT.exec(body)
+  const base = hint ? body.slice(0, hint.index) : body
+  const already = hint ? Number(hint[1]) : 0
+  // Reserve the widest hint we could need, then cut the base to the rest.
+  const keepWidth = room - displayWidth(truncHint(already + base.length))
+  if (keepWidth <= 0) return truncateDisplayWidth(body, room)
+  const kept = truncateDisplayWidth(base, keepWidth, "")
+  return `${kept}${truncHint(already + base.length - kept.length)}`
+}
+
+/**
+ * Join a styled prefix and a dim body, clipped to `width` cells.
+ *
+ * `width` undefined means no clip (`--verbose`, or no TTY width).
+ */
+function fitLine(prefix: string, body: string, width: number | undefined): string {
+  if (width === undefined) return `${prefix}${c.dim(body)}`
+  const room = width - displayWidth(prefix)
+  if (room <= 0) return truncateDisplayWidth(prefix, width)
+  return `${prefix}${c.dim(fitBody(body, room))}`
+}
+
 /**
  * Style one section row. Section names drive the palette so a `messages`
  * row reads like the old renderer, a `tools` row names the tool in magenta,
  * and cache markers pop in bright green.
  */
-function renderRow(section: string, row: string): string {
+function renderRow(section: string, row: string, width: number | undefined): string {
   if (section === "messages") {
     const parts = splitRole(row)
-    if (parts === null) return `      ${c.dim(row)}`
+    if (parts === null) return fitLine("      ", row, width)
     const mark = parts.cached ? ` ${c.bold(c.brightGreen(CACHE_MSG_MARK))}` : ""
-    return `      ${c.green(parts.role)}${mark}: ${c.dim(parts.body)}`
+    return fitLine(`      ${c.green(parts.role)}${mark}: `, parts.body, width)
   }
 
   if (section === "system") {
@@ -259,16 +300,16 @@ function renderRow(section: string, row: string): string {
     const withMark = label.endsWith(` ${CACHE_BLOCK_MARK}`)
     const name = withMark ? label.slice(0, label.length - CACHE_BLOCK_MARK.length).trimEnd() : label
     const mark = withMark ? ` ${c.bold(c.brightGreen(CACHE_BLOCK_MARK))}` : ""
-    return `      ${c.magenta(name)}${mark}: ${c.dim(rest)}`
+    return fitLine(`      ${c.magenta(name)}${mark}: `, rest, width)
   }
 
   if (section === "tools") {
     const colon = row.indexOf(": ")
-    if (colon <= 0) return `      ${c.dim(row)}`
-    return `      ${c.magenta(row.slice(0, colon))}: ${c.dim(row.slice(colon + 2))}`
+    if (colon <= 0) return fitLine("      ", row, width)
+    return fitLine(`      ${c.magenta(row.slice(0, colon))}: `, row.slice(colon + 2), width)
   }
 
-  return `      ${c.dim(row)}`
+  return fitLine("      ", row, width)
 }
 
 /**
@@ -280,13 +321,23 @@ function renderRow(section: string, row: string): string {
  * consecutive requests stay visually separated in scrollback.
  *
  * @param block - Collected request.
+ * @param width - Terminal cells per line. Each line is clipped to it, so a
+ *   row never wraps. Omit it to keep lines whole (`--verbose`, or no TTY).
  * @returns Styled lines, ready for a single `writeStream` call.
  */
-export function renderDumpBlock(block: DumpBlock): string[] {
-  const out = ["", c.bold(c.cyan(block.label))]
+export function renderDumpBlock(block: DumpBlock, width?: number): string[] {
+  const w = width !== undefined && width > 0 ? width : undefined
+  const label = w === undefined ? block.label : truncateDisplayWidth(block.label, w)
+  const out = ["", c.bold(c.cyan(label))]
 
   for (const [key, value] of block.fields) {
-    out.push(`  ${c.dim(`${key}:`)} ${value}`)
+    const prefix = `  ${c.dim(`${key}:`)} `
+    // Field values stay at normal intensity, so clip without the dim wrap.
+    out.push(
+      w === undefined
+        ? `${prefix}${value}`
+        : `${prefix}${fitBody(value, w - displayWidth(prefix))}`,
+    )
   }
 
   if (block.sections.length > 0) out.push(`  ${c.bold("Body:")}`)
@@ -300,7 +351,7 @@ export function renderDumpBlock(block: DumpBlock): string[] {
     const label = received > 0 ? `[${received} ${unitFor(section.name)}]` : (section.count ?? "")
     const count = label === "" ? "" : ` ${c.dim(label)}`
     out.push(`    ${c.yellow(section.name)}:${count}`)
-    for (const row of section.rows) out.push(renderRow(section.name, row))
+    for (const row of section.rows) out.push(renderRow(section.name, row, w))
   }
 
   return out
