@@ -25,7 +25,12 @@ import {
   getDiagnosticBus,
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
-import { isRequestDumpRow, RequestDumpCollector, renderDumpBlock } from "./debug-dump.ts"
+import {
+  type DumpBlock,
+  isRequestDumpRow,
+  RequestDumpCollector,
+  renderDumpBlock,
+} from "./debug-dump.ts"
 
 /** What the sink needs to paint. */
 export interface RequestDumpRenderOptions {
@@ -33,6 +38,23 @@ export interface RequestDumpRenderOptions {
   readonly bus: DiagnosticBus
   /** Write one finished block above the live area (typically `compositor.writeStream`). */
   readonly write: (text: string) => void
+  /**
+   * Cells per line, read at paint time so a resize applies. Return undefined
+   * to keep lines whole. Omitted: lines are never clipped.
+   */
+  readonly width?: () => number | undefined
+}
+
+/**
+ * Line width for the live dump: the terminal width, or undefined under
+ * `--verbose` (which promises untruncated debug output) or with no width.
+ */
+export function liveDumpWidth(): number | undefined {
+  if (process.env.VERBOSE) return undefined
+  const cols = process.stdout.columns ?? 0
+  if (cols > 0) return cols
+  const env = Number.parseInt(process.env.COLUMNS ?? "", 10)
+  return Number.isFinite(env) && env > 0 ? env : undefined
 }
 
 /** Live wiring handle. Call {@link RequestDumpRenderHandle.dispose} on teardown. */
@@ -61,7 +83,11 @@ export function attachLiveAreaRequestDump(
   compositor: DumpStreamWriter,
   bus: DiagnosticBus = getDiagnosticBus(),
 ): RequestDumpRenderHandle {
-  return attachRequestDumpRenderer({ bus, write: (text) => compositor.writeStream(text) })
+  return attachRequestDumpRenderer({
+    bus,
+    write: (text) => compositor.writeStream(text),
+    width: liveDumpWidth,
+  })
 }
 
 /**
@@ -78,6 +104,8 @@ export function attachLiveAreaRequestDump(
 export function attachRequestDumpRenderer(opts: RequestDumpRenderOptions): RequestDumpRenderHandle {
   const collector = new RequestDumpCollector()
   const { write } = opts
+  const paint = (block: DumpBlock): void =>
+    write(`${renderDumpBlock(block, opts.width?.()).join("\n")}\n`)
 
   const off = opts.bus.on(
     (e) => e.source === "transport.request-dump" && e.severity === Severity.Debug,
@@ -87,7 +115,7 @@ export function attachRequestDumpRenderer(opts: RequestDumpRenderOptions): Reque
         return
       }
       const completed = collector.push(e.message, e.structuredData)
-      if (completed !== null) write(`${renderDumpBlock(completed).join("\n")}\n`)
+      if (completed !== null) paint(completed)
     },
   )
 
@@ -95,7 +123,7 @@ export function attachRequestDumpRenderer(opts: RequestDumpRenderOptions): Reque
     dispose: () => {
       off()
       const tail = collector.flush()
-      if (tail !== null) write(`${renderDumpBlock(tail).join("\n")}\n`)
+      if (tail !== null) paint(tail)
     },
   }
 }
