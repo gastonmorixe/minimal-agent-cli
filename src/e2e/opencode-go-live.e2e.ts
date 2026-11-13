@@ -10,8 +10,7 @@
  * `.e2e.ts` suffix keeps this out. Opt in:
  *
  *   # from minimal-agent-cli
- *   MA_E2E_LIVE=1 MA_E2E_CREDENTIAL_NAME="opencode-console-oauth-2" \
- *     bun test ./src/e2e/*.e2e.ts --timeout 180000
+ *   MA_E2E_LIVE=1 MA_E2E_CREDENTIAL_NAME="opencode-console-oauth-2" bun test ./src/e2e/*.e2e.ts --timeout 180000
  *
  * SAFETY: the credential is resolved by the CLI itself via `--credential-name`;
  * this test never reads `auth.jsonc` and never prints a token. With the gate
@@ -164,6 +163,6 @@ describe.skipIf(SKIP_REASON !== null)("opencode-go live CLI e2e", () => {
       readStream(p.stderr),
     ])
     expect(exitCode).not.toBe(0)
-    expect(`${stderr}`.toLowerCase()).toMatch(/credential|unknown|not found/)
+    expect(stderr.toLowerCase()).toMatch(/credential|unknown|not found/)
   })
 })
