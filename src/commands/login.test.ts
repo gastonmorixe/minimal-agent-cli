@@ -149,7 +149,7 @@ describe("runLoginCommand with a former provider id", () => {
 
     expect(await promise).toBe(0)
     expect(out).toContain("Login successful")
-    expect(defaultAuthStore().getSecrets("test-api-key", "Test API Key")).toEqual({
+    expect(defaultAuthStore().getSecrets("test-api-key", "test-api-key-1")).toEqual({
       apiKey: "sk-test",
     })
   })

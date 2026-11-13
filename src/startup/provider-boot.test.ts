@@ -8,7 +8,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
+import {
+  defaultAuthStore,
+  resetDefaultAuthStoreForTests,
+} from "@minimal-agent/core/host/auth-store"
 import { getDiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
 import { clearModelRegistry, clearProviderRegistry } from "@minimal-agent/core/host/model-registry"
 import { clearProviderPlugins } from "@minimal-agent/core/host/provider-plugin"
@@ -111,6 +118,71 @@ describe("resolveStartupProviderState resume pin skip", () => {
     } finally {
       errSpy.mockRestore()
     }
+  })
+
+  describe("--credential-name by stable id", () => {
+    const prevAuthFile = process.env.MINIMAL_AGENT_AUTH_FILE
+    let dir: string
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), "ma-boot-cred-id-"))
+      process.env.MINIMAL_AGENT_AUTH_FILE = join(dir, "auth.jsonc")
+      resetDefaultAuthStoreForTests()
+      clearProviderPlugins()
+      clearModelRegistry()
+      clearProviderRegistry()
+      registerTestProvider({
+        id: "beta",
+        displayName: "Beta",
+        models: [{ id: "beta-fast", displayName: "Beta Fast" }],
+        apiKeyAuth: {
+          serviceId: "beta-key",
+          displayName: "Beta Key",
+          buildCredential: (apiKey) => ({
+            serviceId: "beta-key",
+            displayName: "Beta Key",
+            secrets: { apiKey },
+          }),
+          readApiKey: (s) => (typeof s.apiKey === "string" ? s.apiKey : null),
+        },
+      })
+      const store = defaultAuthStore()
+      store.set("beta-key", "beta-key-1", { apiKey: "k1", email: "me@example.com" })
+      store.set("beta-key", "beta-key-2", {
+        apiKey: "k2",
+        email: "dup@example.com",
+        accountId: "acc-2",
+      })
+      store.set("beta-key", "beta-key-3", { apiKey: "k3", email: "dup@example.com" })
+    })
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true })
+      resetDefaultAuthStoreForTests()
+      if (prevAuthFile === undefined) delete process.env.MINIMAL_AGENT_AUTH_FILE
+      else process.env.MINIMAL_AGENT_AUTH_FILE = prevAuthFile
+    })
+
+    const boot = (cliCredentialName: string) =>
+      resolveStartupProviderState({
+        opts: { model: "beta-fast", provider: "beta", cliCredentialName },
+        userConfig: {},
+        env: {},
+      })
+
+    it("resolves an email to the stored name and pins that name", async () => {
+      expect((await boot("ME@example.com")).credentialName).toBe("beta-key-1")
+    })
+
+    it("resolves an account id", async () => {
+      expect((await boot("acc-2")).credentialName).toBe("beta-key-2")
+    })
+
+    it("fails on an ambiguous id and lists the matches", async () => {
+      await expect(boot("dup@example.com")).rejects.toThrow(
+        'credential "dup@example.com" matches 2 credentials for provider "beta": beta-key-2, beta-key-3',
+      )
+    })
   })
 
   it("normalizes a former provider id to the canonical id and warns once", async () => {
