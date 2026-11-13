@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { chmod, copyFile, mkdtemp, rm } from "node:fs/promises"
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { Subprocess } from "bun"
@@ -207,7 +207,8 @@ describe("MdstreamCodeHighlighter", () => {
     const dir = await mkdtemp(join(tmpdir(), "ma-highlight-"))
     const wrapper = join(dir, "mdstream")
     try {
-      await copyFile(process.execPath, wrapper)
+      // spawn is faked, so any real executable file named mdstream will do.
+      await writeFile(wrapper, "#!/bin/sh\nexit 0\n")
       await chmod(wrapper, 0o755)
       const starts: string[] = []
       const highlighter = new MdstreamCodeHighlighter([wrapper], {
