@@ -4,6 +4,7 @@ import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { renderCommandList } from "./command-list.ts"
 import { renderCommandTable, writeCommandTable } from "./command-table.ts"
+import { c } from "./style/ansi.ts"
 
 describe("renderCommandList", () => {
   it("renders titled framed items with summary", () => {
@@ -72,6 +73,36 @@ describe("renderCommandTable", () => {
 
     for (const row of rows) expect(row).not.toContain("\x1b[")
     expect(rows).toEqual(["", "  provider", "    a     one", "  1 row"])
+  })
+
+  it("strips SGR that a cell already carries when color is off", () => {
+    // `plugins` pre-paints its on/off cells with c.green/c.dim, so the gate has
+    // to strip at the render boundary and not only skip its own painting.
+    const rows = renderCommandTable({
+      columns: [{ key: "id", minWidth: 4 }, { key: "state" }],
+      sections: [{ rows: [{ cells: { id: "alpha", state: c.green("on") } }] }],
+      color: false,
+    })
+
+    for (const row of rows) expect(row).not.toContain("\x1b[")
+    expect(rows).toEqual(["", "  alpha on"])
+  })
+
+  it("keeps alignment when a cell carries SGR and color is on", () => {
+    const rows = renderCommandTable({
+      columns: [{ key: "id", minWidth: 6 }, { key: "state" }],
+      sections: [
+        {
+          rows: [
+            { cells: { id: "a", state: c.green("on") } },
+            { cells: { id: "bb", state: "off" } },
+          ],
+        },
+      ],
+      color: true,
+    }).map(stripAnsi)
+
+    expect(rows).toEqual(["", "  a      on", "  bb     off"])
   })
 })
 
