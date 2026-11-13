@@ -20,7 +20,7 @@ class FakeOutput {
 describe("Formatter", () => {
   it("strips a leading formatter newline from the first stdout chunk", async () => {
     const output = new FakeOutput()
-    const formatter = new Formatter(["bun", "-e", 'process.stdout.write("\\nHELLO")'], output)
+    const formatter = new Formatter(["sh", "-c", "printf '\\nHELLO'"], output)
 
     formatter.start()
     await formatter.end()
@@ -30,7 +30,7 @@ describe("Formatter", () => {
 
   it("preserves formatter output when the first chunk does not start with a newline", async () => {
     const output = new FakeOutput()
-    const formatter = new Formatter(["bun", "-e", 'process.stdout.write("HELLO")'], output)
+    const formatter = new Formatter(["sh", "-c", "printf HELLO"], output)
 
     formatter.start()
     await formatter.end()
@@ -42,10 +42,7 @@ describe("Formatter", () => {
     const output = new FakeOutput()
     output.columns = 60
     output.rows = 17
-    const formatter = new Formatter(
-      ["bun", "-e", "process.stdout.write(`${process.env.COLUMNS}:${process.env.LINES}`)"],
-      output,
-    )
+    const formatter = new Formatter(["sh", "-c", 'printf "%s:%s" "$COLUMNS" "$LINES"'], output)
 
     formatter.start()
     await formatter.end()
@@ -55,10 +52,7 @@ describe("Formatter", () => {
 
   it("routes formatter stderr through the configured output sink", async () => {
     const output = new FakeOutput()
-    const formatter = new Formatter(
-      ["bun", "-e", "process.stderr.write('formatter warning')"],
-      output,
-    )
+    const formatter = new Formatter(["sh", "-c", "printf 'formatter warning' >&2"], output)
 
     formatter.start()
     await formatter.end()
@@ -69,11 +63,7 @@ describe("Formatter", () => {
   it("keeps split ANSI sequences intact across formatter stdout chunks", async () => {
     const output = new FakeOutput()
     const formatter = new Formatter(
-      [
-        "bun",
-        "-e",
-        "process.stdout.write('\\x1b[31'); setTimeout(() => process.stdout.write('mred\\x1b[0m'), 1)",
-      ],
+      ["sh", "-c", "printf '\\033[31'; sleep 0.01; printf 'mred\\033[0m'"],
       output,
     )
 
