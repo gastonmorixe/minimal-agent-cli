@@ -296,8 +296,7 @@ export async function runLoginCommand(opts: LoginCommandOptions = {}): Promise<n
       }
       const write = method.provider.buildCredential(key.trim())
       const store = defaultAuthStore()
-      const name =
-        opts.credentialName ?? store.suggestCredentialName(write.serviceId, write.displayName)
+      const name = opts.credentialName ?? store.suggestCredentialName(write.serviceId)
       store.set(write.serviceId, name, write.secrets as SecretBag)
       const modelHint = suggestModelForProvider(method.providerId)
       writeCommandRows(renderApiKeyLoginSuccess(name, method.providerId, modelHint), output)

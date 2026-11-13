@@ -11,6 +11,7 @@
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import {
   discoverCredentialedProviders,
+  resolveCredentialRef,
   storedProvidersHint,
   suggestModelForProvider,
 } from "@minimal-agent/core/host/auth-strategies"
@@ -29,6 +30,23 @@ import { printStartupRow } from "../ui/startup/tree.ts"
 import { c } from "../ui/style/ansi.ts"
 import { resolveBootModel, resolveSingleStoredProviderBootModel } from "./resolve-boot-model.ts"
 import { resolveCredentialName } from "./resolve-credential-name.ts"
+
+/**
+ * Map a typed credential ref (stored name, email, account id) to the stored
+ * name. The session pins the stored name, so resume survives an email change.
+ * An unknown ref passes through, and auth resolution reports it as missing.
+ */
+function resolveTypedCredential(providerId: string, ref: string | undefined): string | undefined {
+  if (ref === undefined) return undefined
+  const found = resolveCredentialRef(providerId, ref)
+  if (found.kind === "ambiguous") {
+    throw new Error(
+      `credential "${ref}" matches ${found.names.length} credentials for provider ` +
+        `"${providerId}": ${found.names.join(", ")}. Pass one of these names.`,
+    )
+  }
+  return found.kind === "none" ? ref : found.name
+}
 
 /** Resolved provider startup state needed by later boot phases. */
 export interface StartupProviderState {
@@ -143,7 +161,7 @@ export async function resolveStartupProviderState(
       },
     })
   }
-  const credentialName = cred.credentialName
+  const credentialName = resolveTypedCredential(selectedProviderId, cred.credentialName)
   const auth = await resolveStartupAuth(selectedProviderId, selectedModelBase, credentialName, {
     endpoint: input.opts.endpoint,
     format: input.opts.format,
