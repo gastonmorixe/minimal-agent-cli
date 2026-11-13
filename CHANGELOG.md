@@ -6,7 +6,7 @@ status: living
 scope: cli
 working-dir: "."
 created-at: "2026-08-07T13:45:26-0400"
-updated-at: "2026-11-03T00:00:00-0500"
+updated-at: "2026-11-13T00:00:00-0500"
 format: "Keep a Changelog (pragmatic, date-stamped)"
 ---
 
@@ -80,6 +80,14 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Fixed
 
+- 2026-11-13: a live area taller than the terminal no longer repeats in
+  scrollback. The compositor now clips the frame to the terminal rows
+  minus 2, drops footer rows first, and shows `… +N more rows`. Before,
+  a tall footer (for example a 6-worker fleet panel in a 13-row window)
+  left a copy of the status and queue rows in scrollback on each spinner
+  frame, a blank row on each footer tick, and blank rows between tool
+  output rows. With no row count from the terminal, the compositor reads
+  `$LINES`.
 - 2026-11-02: the CLI version comes from a static import of its
   `package.json`. A compiled binary now shows the same version as a run
   from source. Before, it read `package.json` from disk and a binary

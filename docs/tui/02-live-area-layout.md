@@ -1,9 +1,10 @@
 ---
 title: Live-area layout
 created_at: "2026-05-27T10:14:30.725679000-0400"
-updated_at: "2026-05-27T10:14:30.725679000-0400"
+updated_at: "2026-11-13T17:43:59-0500"
 tags: [tui, layout, status-row, footer-layers, indicator]
 taillog:
+ - "2026-11-13T17:43:59-0500 | Height budget: maxLiveHeight limits the editor rows only, the compositor clips the whole frame"
  - "2026-05-27T10:14:30.725679000-0400 | Initial: row-by-row layout, cursor math, footer-layer priorities"
 ---
 
@@ -145,7 +146,9 @@ finalCursor.row =
 maxLiveHeight = () => Math.max(2, Math.floor((process.stdout.rows ?? 24) / 2))
 ```
 
-The live area is capped at half the viewport (min 2 rows). With a 50-row terminal, the live area can grow to 25 rows.
+This value limits the EDITOR rows, not the whole live area. `repaint()` subtracts the status, gap and footer rows from it and gives the editor at least 1 row. So a tall footer or decoration band can make the live area taller than `maxLiveHeight`, and taller than the viewport.
+
+The compositor applies the hard limit. It clips the frame to `rows - 2` before it paints, drops footer rows first, and shows `… +N more rows`. See "Viewport fit" in chapter 01.
 
 `repaint()` divides that budget:
 

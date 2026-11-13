@@ -1,15 +1,16 @@
 ---
 title: Compositor internals
 created_at: "2026-05-27T10:14:30.725679000-0400"
-updated_at: "2026-05-27T10:14:30.725679000-0400"
+updated_at: "2026-11-13T17:43:59-0500"
 tags: [tui, compositor, ansi, redraw, sigwinch]
 taillog:
+ - "2026-11-13T17:43:59-0500 | Viewport fit: the live area is clipped to the terminal rows (live-area-fit.ts)"
  - "2026-05-27T10:14:30.725679000-0400 | Initial: redraw cycle, state machine, separator logic, cols-drift recovery"
 ---
 
 # Compositor internals
 
-Source: `src/ui/compositor.ts` (787 lines).
+Source: `src/ui/compositor.ts`.
 
 The compositor is the only thing that writes the live area. It exposes two write surfaces and one query surface:
 
@@ -87,11 +88,12 @@ This is what a `--tui-debug=hud` mode will want to dump. Field names match the s
 | `streamCol` | visual column of the last partial stream line (so `eraseLiveSeq` knows how many cells to walk right on row 0) |
 | `streamAnsi` | `AnsiStreamBuffer` holding partial CSI/OSC tail so redraw bytes never split an escape |
 | `consecutiveNewlines` | tail `\n` run counter, capped so scrollback never accumulates 3+ blanks |
-| `lastLines` / `lastCursor` | the previous frame, used to re-measure during cols-drift |
+| `lastLines` / `lastCursor` | the frame the owner asked for in the last `setLiveArea` call (not clipped) |
+| `drawnLines` / `drawnCursor` | the frame on screen now: `lastLines` after the viewport clip. `eraseLiveSeq` measures its walk-up from these |
 | `liveSepDrawn` | was the blank separator above the live area already drawn? (avoids drift) |
 | `sepRowsAboveLive` | 0, 1, or 2 - how many `\r\n` rows we put between scrollback and live area; `eraseLiveSeq` walks up exactly this far |
 | `lastDrawColumns` | cols at the last paint, for cols-drift recovery on SIGWINCH races |
-| `drawnLiveKey` | JSON-stringified `[lines, cursor]` from the last draw, for dedup short-circuit |
+| `drawnLiveKey` | JSON-stringified `[lines, cursor, rowBudget]` from the last draw, for dedup short-circuit. The row budget is in the key so a change of terminal height repaints |
 
 ## `writeStream` path (scrollback writes)
 
@@ -123,9 +125,10 @@ Why this matters: without the cap, every place that emits a trailing `\n` (forma
 setLiveArea(lines, cursor)
    |
    v
-snapshot prevLines/prevCursor   <- BEFORE overwriting lastLines/lastCursor,
-                                   because eraseLiveSeq needs them to
-                                   re-measure the still-on-screen live area
+store lastLines/lastCursor     <- the requested frame. The frame that is
+                                   still on screen stays in drawnLines /
+                                   drawnCursor (only drawLiveSeq writes
+                                   them), so eraseLiveSeq can re-measure it
                                    under CURRENT cols (which may differ from
                                    lastDrawColumns)
    |
@@ -138,8 +141,7 @@ maybeRecoverFromColsDrift()    <- if cols changed since last draw, emit
    |
    v
 BSU + hide cursor +
-eraseLiveSeq({includeSepRows: !repaintExisting,
-              drawnLines: prevLines, drawnCursor: prevCursor}) +
+eraseLiveSeq({includeSepRows: !repaintExisting}) +
 drawLiveSeq({reuseExistingGap: repaintExisting}) +
 ESU
 ```
@@ -190,10 +192,35 @@ The walk-up math has to mirror `EditorRenderer`'s wrap math (and `wrapRows()` in
 
 Falls back to `cursorRowInLive` (logical count) when the cursor / lines snapshot is unusable (cursor null, `effectiveColumns()` is 0, or drawn lines absent).
 
+## Viewport fit
+
+Source: `src/ui/live-area-fit.ts`.
+
+`eraseLiveSeq` uses relative moves only. A terminal stops `ESC[nA` at the top row of the viewport, so the erase reaches a row only while that row is on screen. The compositor owns up to 3 bands: the row of a partial stream line, one separator row, and the live area. All 3 must fit in the viewport.
+
+`drawLiveSeq` therefore clips the frame before it paints:
+
+```ts
+budget = liveAreaRowBudget(output.rows)       // rows - 2, min 1
+{ lines, cursor } = fitLiveAreaToRows(lastLines, lastCursor, budget, cols)
+drawnLines = lines; drawnCursor = cursor
+```
+
+- Rows drop from the bottom first (the footer). The status row and the prompt stay.
+- If the cursor row is below the budget, the window moves down until the cursor row is its last row.
+- The last visible row shows `… +N more rows`, unless that row holds the cursor or is the only row.
+- `lastLines` keeps the full frame. When the terminal grows, the next paint shows the hidden rows again.
+- Row count unknown (`output.rows` is 0 and `$LINES` is not set): no clip.
+
+Without the clip, a live area taller than the viewport pushes its own top rows into scrollback while the terminal paints it. Each repaint then leaves one more copy there: one status row per spinner frame, and one blank row per footer tick at idle. User-reported Nov 13 2026 with a 10-row footer (intercom, quota, schedule, a 6-worker fleet panel) in a 13-row window. `src/ui/compositor-viewport-fit.test.ts` covers it.
+
+The editor does not prevent this on its own. `maxLiveHeight` limits the editor rows only: status, decoration and footer rows are added on top of it.
+
 ## `drawLiveSeq` - separator + body + cursor
 
 ```ts
-if liveAreaKey is empty: return
+{ lines, cursor } = fitLiveAreaToRows(...)   // see "Viewport fit"
+if lines is empty: return
 
 if !reuseExistingGap:
   // Land on a fresh line at col 0. If the stream cursor is mid-line,

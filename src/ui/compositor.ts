@@ -32,6 +32,7 @@
 
 import { cursorVisualCol, displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 
+import { fitLiveAreaToRows, liveAreaRowBudget } from "./live-area-fit.ts"
 import { AnsiStreamBuffer } from "./terminal/ansi-stream.ts"
 
 export interface CompositorOutput {
@@ -147,8 +148,19 @@ export class Compositor {
    * making it the single source of truth.
    */
   private pinnedColumns: number | null = null
+  /** Live area the owner asked for in the last {@link setLiveArea} call. */
   private lastLines: string[] = []
   private lastCursor: { row: number; col: number } | null = null
+  /**
+   * Live area that is on screen now: {@link lastLines} after
+   * {@link drawLiveSeq} clipped it to the viewport. `eraseLiveSeq` measures
+   * its walk-up from these, never from `lastLines`, for 2 reasons:
+   *   - `setLiveArea` overwrites `lastLines` before it erases the old frame.
+   *   - A clipped frame is shorter than `lastLines`, and its cursor row can
+   *     differ.
+   */
+  private drawnLines: string[] = []
+  private drawnCursor: { row: number; col: number } | null = null
   private drawnLiveKey: string | null = null
   /**
    * When true, `writeStream` / `writeBufferedStream` append into
@@ -225,6 +237,8 @@ export class Compositor {
     this.lastDrawColumns = 0
     this.lastLines = []
     this.lastCursor = null
+    this.drawnLines = []
+    this.drawnCursor = null
     this.drawnLiveKey = null
   }
 
@@ -369,7 +383,31 @@ export class Compositor {
     parts.push(this.esu)
     this.output.write(parts.join(""))
     this.lastDrawColumns = this.effectiveColumns()
-    this.drawnLiveKey = liveAreaKey(this.lastLines, this.lastCursor)
+    this.drawnLiveKey = this.liveKey(this.lastLines, this.lastCursor)
+  }
+
+  /**
+   * Max rows the live area may use, so that every row the compositor owns
+   * stays inside the viewport. See `live-area-fit.ts`.
+   *
+   * Falls back to `$LINES` when the output reports no row count, the same
+   * way {@link effectiveColumns} falls back to `$COLUMNS` (`script(1)`
+   * gives a PTY with no window size). Infinity when both are unknown: the
+   * live area is then not clipped.
+   */
+  private liveRowBudget(): number {
+    const rows = this.output.rows ?? 0
+    if (rows > 0) return liveAreaRowBudget(rows)
+    const env = Number.parseInt(process.env.LINES ?? "", 10)
+    return liveAreaRowBudget(Number.isFinite(env) && env > 0 ? env : 0)
+  }
+
+  /**
+   * Dedup key for a live-area frame. It includes the row budget, so a
+   * viewport that changed height repaints the same lines at the new clip.
+   */
+  private liveKey(lines: string[], cursor: { row: number; col: number } | null): string {
+    return JSON.stringify([lines, cursor, this.liveRowBudget()])
   }
 
   /**
@@ -412,25 +450,20 @@ export class Compositor {
   }
 
   setLiveArea(lines: string[], cursor: { row: number; col: number } | null): void {
-    // Snapshot the PREVIOUSLY-drawn lines/cursor BEFORE overwriting
-    // `lastLines`/`lastCursor`. `eraseLiveSeq` needs them to re-measure
-    // the physical-row span of the still-on-screen live area under the
-    // CURRENT cols — which may be smaller than `lastDrawColumns`, in
-    // which case lines that exceeded the new cols have wrapped on the
-    // terminal side, putting the cursor at a lower physical row than
-    // the stored logical `cursorRowInLive`. Walking up by the stale
-    // logical count would leave the top of the reflowed live area
-    // unerased (orphan), which subsequent `writeBufferedStream` calls
-    // scroll into permanent scrollback as duplicated status / editor
-    // rows. The fallback in `eraseLiveSeq` reads `this.lastLines`/
-    // `this.lastCursor`, which is correct for `writeBufferedStream` /
-    // `withSuspendedLiveArea` (they don't reassign), but NOT for the
-    // `setLiveArea` path — hence the explicit hand-off here.
-    const prevLines = this.lastLines
-    const prevCursor = this.lastCursor
+    // `lastLines`/`lastCursor` are overwritten here, before the old frame
+    // is erased. That is safe: `eraseLiveSeq` re-measures the frame that is
+    // still on screen from `drawnLines`/`drawnCursor`, which only
+    // `drawLiveSeq` writes. It needs that frame to count physical rows
+    // under the CURRENT cols. When cols is now smaller than
+    // `lastDrawColumns`, lines wider than the new cols have wrapped on the
+    // terminal side, and the cursor sits on a lower physical row than the
+    // stored logical `cursorRowInLive`. A walk-up by the stale logical
+    // count would leave the top of the reflowed live area unerased, and
+    // later `writeBufferedStream` calls would scroll those rows into
+    // permanent scrollback as duplicated status / editor rows.
     const nextLines = [...lines]
     const nextCursor = cursor ? { ...cursor } : null
-    const nextKey = liveAreaKey(nextLines, nextCursor)
+    const nextKey = this.liveKey(nextLines, nextCursor)
     this.lastLines = nextLines
     this.lastCursor = nextCursor
     if (!this.tty || !this.mounted) {
@@ -468,13 +501,7 @@ export class Compositor {
     const parts: string[] = []
     parts.push(this.bsu)
     parts.push("\x1b[?25l")
-    parts.push(
-      this.eraseLiveSeq({
-        includeSepRows: !repaintExistingLiveArea,
-        drawnLines: prevLines,
-        drawnCursor: prevCursor,
-      }),
-    )
+    parts.push(this.eraseLiveSeq({ includeSepRows: !repaintExistingLiveArea }))
     if (hasHeld) {
       parts.push(heldPending)
       this.streamCol = updateStreamColAfterRedraw(
@@ -527,7 +554,7 @@ export class Compositor {
     } finally {
       this.streamCol = 0 // assume callback left a clean line
       this.output.write(this.bsu + "\x1b[?25l" + this.drawLiveSeq() + this.esu)
-      this.drawnLiveKey = liveAreaKey(this.lastLines, this.lastCursor)
+      this.drawnLiveKey = this.liveKey(this.lastLines, this.lastCursor)
     }
   }
 
@@ -689,30 +716,13 @@ export class Compositor {
 
   // ------------------------- internal sequences -------------------------
 
-  private eraseLiveSeq(
-    opts: {
-      includeSepRows?: boolean
-      /**
-       * Previously-drawn lines / cursor. Pass explicitly from
-       * `setLiveArea` because it overwrites `this.lastLines` /
-       * `this.lastCursor` BEFORE calling here.
-       * `writeBufferedStream` and `withSuspendedLiveArea` leave those
-       * fields intact (they hold the currently-on-screen lines), so
-       * they can omit the option and the fallback to `this.lastLines`
-       * / `this.lastCursor` is correct for them.
-       */
-      drawnLines?: string[]
-      drawnCursor?: { row: number; col: number } | null
-    } = {},
-  ): string {
+  private eraseLiveSeq(opts: { includeSepRows?: boolean } = {}): string {
     if (this.liveHeightValue === 0) {
       // No live area drawn yet; nothing to erase. Cursor is at the natural
       // stream position already.
       return ""
     }
     const includeSepRows = opts.includeSepRows !== false
-    const drawnLines = opts.drawnLines ?? this.lastLines
-    const drawnCursor = opts.drawnCursor !== undefined ? opts.drawnCursor : this.lastCursor
     const parts: string[] = []
     // Move from editor cursor row up to top of live area, col 0.
     //
@@ -728,7 +738,7 @@ export class Compositor {
     // into permanent scrollback as orphans. (User-reported May 21
     // 2026: duplicated status rows pile into scrollback when typing
     // / waiting for response in a narrowed terminal.)
-    const walkUpRows = this.computePhysicalCursorRowInLive(drawnLines, drawnCursor)
+    const walkUpRows = this.computePhysicalCursorRowInLive(this.drawnLines, this.drawnCursor)
     if (walkUpRows > 0) {
       parts.push(`\x1b[${walkUpRows}A`)
     }
@@ -768,6 +778,11 @@ export class Compositor {
     // Cols-drift risk: under silent cols change, `cursorRowInLive` is
     // stale by 1-2 rows. Walk-up overshoot lands in scrollback; `\x1b[J`
     // then clears 1-2 scrollback rows. Bounded; acceptable trade-off.
+    //
+    // Reach limit: a terminal stops `\x1b[<n>A` at the top row of the
+    // viewport. The walk-up only reaches the stream cursor when every
+    // owned row is still on screen. `drawLiveSeq` keeps that true: it
+    // clips the live area to `liveRowBudget()`.
     parts.push("\x1b[J")
     this.liveHeightValue = 0
     this.cursorRowInLive = 0
@@ -839,8 +854,21 @@ export class Compositor {
   }
 
   private drawLiveSeq(opts: { reuseExistingGap?: boolean } = {}): string {
-    const lines = this.lastLines
-    const cursor = this.lastCursor
+    // Clip to the viewport. A live area taller than the viewport pushes its
+    // own top rows into scrollback while the terminal paints it, and
+    // `eraseLiveSeq` cannot reach them there: each repaint then leaves one
+    // more copy of those rows in scrollback (user-reported Nov 13 2026: a
+    // 10-row footer in a 13-row window stacked a status row per spinner
+    // frame). `lastLines` keeps the full request, so the hidden rows come
+    // back when the viewport grows.
+    const { lines, cursor } = fitLiveAreaToRows(
+      this.lastLines,
+      this.lastCursor,
+      this.liveRowBudget(),
+      this.effectiveColumns(),
+    )
+    this.drawnLines = lines
+    this.drawnCursor = cursor
     if (lines.length === 0) {
       // Nothing to draw, just settle cursor visibility.
       return cursor ? "\x1b[?25h" : "\x1b[?25l"
@@ -957,8 +985,4 @@ function suffixAfterLastRedrawClear(chunk: string): string | null {
  */
 export function normalizeLfToCrlf(chunk: string): string {
   return chunk.replace(/\r?\n/g, "\r\n")
-}
-
-function liveAreaKey(lines: string[], cursor: { row: number; col: number } | null): string {
-  return JSON.stringify([lines, cursor])
 }
