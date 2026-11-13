@@ -136,6 +136,7 @@ import { isColdStart, maybeShowFirstRunWelcome } from "./ui/chrome/first-run.ts"
 import { formatQuotaWindows } from "./ui/chrome/quota-summary.ts"
 import { buildReadyBanner } from "./ui/chrome/ready-banner.ts"
 import { resolveFormatter } from "./ui/formatter/auto.ts"
+import { applyFormatterDefaults } from "./ui/formatter/defaults.ts"
 import { resolveSpinnerPreset } from "./ui/spinner/named-presets.ts"
 import { printStartupHeader, printStartupRow, startStartupRowSpinner } from "./ui/startup/tree.ts"
 import { c } from "./ui/style/ansi.ts"
@@ -504,17 +505,23 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   if (commandPlan.needsFormatter && stdioMode !== "protocol") {
     const formatterResolution = await resolveFormatter(formatterExplicitArg)
     if (formatterResolution.cmd) {
-      formatterCmd = formatterResolution.cmd
-      // Append user-supplied extra args (--formatter-args / env / config).
+      // Append user-supplied extra args (--formatter-args / env / config),
+      // then CLI defaults the user did not override (mdstream --table-fit).
       // Applied here (after resolution) so they ride along regardless of
       // whether the formatter came from PATH, the cache, an auto-download,
       // or an explicit --formatter override.
-      if (formatterExtraArgs.length > 0) {
-        formatterCmd = [...formatterCmd, ...formatterExtraArgs]
-      }
+      const withDefaults = applyFormatterDefaults(formatterResolution.cmd, formatterExtraArgs, env)
+      formatterCmd = withDefaults.cmd
       const extraLabel =
         formatterExtraArgs.length > 0 ? ` ${c.dim(formatterExtraArgs.join(" "))}` : ""
-      printStartupRow("formatter", `${c.dim(formatterResolution.label)}${extraLabel}`)
+      const defaultLabel =
+        withDefaults.defaulted.length > 0
+          ? ` ${c.dim(`${withDefaults.defaulted.join(" ")} (default)`)}`
+          : ""
+      printStartupRow(
+        "formatter",
+        `${c.dim(formatterResolution.label)}${extraLabel}${defaultLabel}`,
+      )
     } else {
       formatterCmd = undefined
       console.error(`  ${c.boldYellow("warn")} ${formatterResolution.warn}`)
