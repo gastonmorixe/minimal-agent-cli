@@ -30,6 +30,48 @@ describe("systemRefs", () => {
     ])
   })
 
+  it("labels a providerPreamble span with its provider, not 'origin not recorded'", () => {
+    const text = "You are Claude Code, Anthropic's official CLI for Claude."
+    const src: DumpOriginSource = {
+      loadedPackages: () => [{ id: "anthropic", packageDir: DIR }],
+      describeSystemBlock: () => [
+        {
+          slot: "providerPreamble",
+          start: 0,
+          end: text.length,
+          overridden: false,
+          providerId: "anthropic",
+        },
+      ],
+    }
+    expect(systemRefs(text, src)).toEqual([
+      {
+        atLine: 1,
+        ref: {
+          kind: "plugin-section",
+          tag: "provider preamble",
+          pluginId: "anthropic",
+          packageDir: DIR,
+        },
+      },
+    ])
+  })
+
+  it("labels an overridden providerPreamble span without a package dir", () => {
+    const src: DumpOriginSource = {
+      loadedPackages: () => [],
+      describeSystemBlock: () => [
+        { slot: "providerPreamble", start: 0, end: 3, overridden: true, providerId: "p" },
+      ],
+    }
+    expect(systemRefs("abc", src)).toEqual([
+      {
+        atLine: 1,
+        ref: { kind: "plugin-section", tag: "provider preamble overridden", pluginId: "p" },
+      },
+    ])
+  })
+
   it("matches a `-2` section name and unescapes the tag attribute", () => {
     const text = [
       '<ma::sys::behavior name="style">',
