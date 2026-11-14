@@ -1179,8 +1179,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // (see resume-mode.ts's isHostModeRun doc).
   const willEnterRepl = promptSource.kind === "none" && !isHostModeRun(commandPlan.command)
   if (willEnterRepl) {
-    const stdoutCols = (process.stdout as { columns?: number }).columns ?? 80
-    process.stdout.write(buildReadyBanner(modeManager, stdoutCols))
+    process.stdout.write(buildReadyBanner())
   }
 
   // Replay prior conversation to scrollback when resuming. We write
