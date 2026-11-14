@@ -209,7 +209,15 @@ export class LiveAreaScheduler {
   private stopped = false
 
   constructor(slots: ResolvedLiveAreaSlot[], sink: LiveAreaSink, deps: LiveAreaSchedulerDeps = {}) {
-    this.slots = slots.map((slot) => ({
+    // Paint order: ascending `definition.order` (default 0). `sort` is
+    // stable, so equal orders keep plugin load order. This lets ambient
+    // status rows (intercom, quota) pin themselves to the bottom of the
+    // footer while widget panels (jobs, fleet, schedule) stack above.
+    const ordered = slots
+      .map((slot, i) => ({ slot, i }))
+      .sort((a, b) => (a.slot.definition.order ?? 0) - (b.slot.definition.order ?? 0) || a.i - b.i)
+      .map((e) => e.slot)
+    this.slots = ordered.map((slot) => ({
       slot,
       tick: 0,
       // Reserve the row from t=0 with the manifest-declared placeholder
@@ -603,6 +611,10 @@ export class LiveAreaScheduler {
   private repaint(): void {
     const header: string[] = []
     const footer: string[] = []
+    // Row that receives the decoration suffix: the first row of the
+    // bottom-pinned block (slots with `order > 0`, e.g. the intercom
+    // roster). Falls back to row 0 when no slot is pinned.
+    let suffixRow = -1
     for (const s of this.slots) {
       const line = s.current
       if (line == null || line.length === 0) continue
@@ -612,12 +624,16 @@ export class LiveAreaScheduler {
       // area line the editor counts toward height. A single-line value yields
       // exactly one element. The slot owns its own row budget (cap rows +
       // "+N more").
-      const target = (s.slot.definition.position ?? "footer") === "header" ? header : footer
+      const isHeader = (s.slot.definition.position ?? "footer") === "header"
+      const target = isHeader ? header : footer
+      if (!isHeader && suffixRow < 0 && (s.slot.definition.order ?? 0) > 0) {
+        suffixRow = footer.length
+      }
       for (const row of line.split("\n")) target.push(row)
     }
 
     this.flushHeader(header)
-    this.flushFooter(footer)
+    this.flushFooter(footer, suffixRow < 0 ? 0 : suffixRow)
   }
 
   private flushHeader(header: string[]): void {
@@ -631,12 +647,16 @@ export class LiveAreaScheduler {
     if (this.sink.setDecorationLines) this.sink.setDecorationLines(header)
   }
 
-  private flushFooter(footer: string[]): void {
+  private flushFooter(footer: string[], suffixRow = 0): void {
     // Append any plugin-contributed decoration suffix (e.g. LSP status)
-    // to the first footer line so it shares the same row as the intercom
-    // roster text.
+    // to the first row of the bottom-pinned block so it shares the same
+    // row as the intercom roster text (not a widget panel header above).
     const suffix = getDecorationSuffix()
-    const modified = suffix && footer.length > 0 ? [footer[0] + suffix, ...footer.slice(1)] : footer
+    const modified = footer.slice()
+    if (suffix && modified.length > 0) {
+      const at = Math.min(suffixRow, modified.length - 1)
+      modified[at] = modified[at]! + suffix
+    }
     // Plugin-contributed tails (e.g. tps readout): append INLINE after the
     // LAST footer line's content, separated by two spaces — the same visual
     // grammar as the segments inside that line. No right-edge padding: the
