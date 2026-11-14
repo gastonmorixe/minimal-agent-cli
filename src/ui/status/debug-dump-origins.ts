@@ -24,6 +24,7 @@ export type SystemSlotId =
   | "toolOutputConventions"
   | "afterInstructions"
   | "sessionContext"
+  | "providerPreamble"
 
 /** A core slot span in one system block text (UTF-16 offsets, end exclusive). */
 export interface SystemSlotSpan {
@@ -31,6 +32,8 @@ export interface SystemSlotSpan {
   readonly start: number
   readonly end: number
   readonly overridden: boolean
+  /** Provider id that added the block. Set only for slot `providerPreamble`. */
+  readonly providerId?: string
 }
 
 /** One afterInstructions fragment span, offsets in the loader's afterInstructions text. */
@@ -174,6 +177,27 @@ function fragmentRefs(
 }
 
 /**
+ * The ref of a block that a provider hook added (core slot `providerPreamble`).
+ *
+ * Reuses the `plugin-section` kind, so the verbose printer shows
+ * `<provider> · provider preamble[ overridden] · <package dir>`. The package
+ * dir is found when a loaded package id equals the provider id.
+ */
+function providerPreambleRef(s: SystemSlotSpan, src: DumpOriginSource | undefined): OriginRef {
+  const tag = s.overridden ? "provider preamble overridden" : "provider preamble"
+  if (s.providerId === undefined) return { kind: "plugin-section", tag }
+  const id = s.providerId
+  const pkg =
+    src === undefined ? undefined : safe(() => src.loadedPackages())?.find((p) => p.id === id)
+  return {
+    kind: "plugin-section",
+    tag,
+    pluginId: id,
+    ...(pkg === undefined ? {} : { packageDir: pkg.packageDir }),
+  }
+}
+
+/**
  * The reference lines of one system block, each placed before its line.
  *
  * Sources: core slot spans, `<ma::sys::ROLE name="X">` open-tag lines matched
@@ -199,11 +223,16 @@ export function systemRefs(text: string, src: DumpOriginSource | undefined): Pla
     src !== undefined && typeof src.describeSystemBlock === "function"
       ? safe(() => src.describeSystemBlock?.(text))
       : undefined
+  let providerHead = false
   for (const s of spans ?? []) {
-    refs.push({
-      atLine: lineAt(starts, s.start),
-      ref: { kind: "core-slot", slot: s.slot, overridden: s.overridden },
-    })
+    const atLine = lineAt(starts, s.start)
+    if (s.slot === "providerPreamble") {
+      // Label text lives here, not in core (core records data only).
+      providerHead ||= atLine === 1
+      refs.push({ atLine, ref: providerPreambleRef(s, src) })
+      continue
+    }
+    refs.push({ atLine, ref: { kind: "core-slot", slot: s.slot, overridden: s.overridden } })
   }
 
   const prov = provenanceOf(src)
@@ -224,9 +253,11 @@ export function systemRefs(text: string, src: DumpOriginSource | undefined): Pla
     })
   }
 
-  const headed = refs.some(
-    (r) => r.atLine === 1 && (r.ref.kind === "core-slot" || r.ref.kind === "plugin-fragment"),
-  )
+  const headed =
+    providerHead ||
+    refs.some(
+      (r) => r.atLine === 1 && (r.ref.kind === "core-slot" || r.ref.kind === "plugin-fragment"),
+    )
   if (!headed) refs.unshift({ atLine: 1, ref: { kind: "unrecorded" } })
   // `sort` is stable (ECMAScript 2019), so refs on one line keep push order.
   return refs.sort((a, b) => a.atLine - b.atLine)
