@@ -4,7 +4,8 @@
  * Regression: after S29/S31 core tool definitions carry no icon or color.
  * The banner still passed the core tool list straight to the row formatter,
  * so every tool rendered as a bare name. The CLI must decorate the list from
- * its own presentation map (S41), the same map the transcript uses.
+ * its own presentation map (S41), the same map the transcript uses. A tool
+ * with no map row (or no icon) gets DEFAULT_TOOL_ICON.
  */
 
 import { afterEach, describe, expect, it } from "bun:test"
@@ -17,6 +18,7 @@ import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { formatStartupToolsRow } from "../ui/chrome/startup-tools-row.ts"
 import { setStartupTreeVisible } from "../ui/startup/tree.ts"
+import { DEFAULT_TOOL_ICON } from "../ui/tool-transcript/format.ts"
 import { closeStartupTreeWithLoadedTools, startupToolEntries } from "./startup-tool-entries.ts"
 import { TOOL_PRESENTATION } from "./tool-presentation.ts"
 
@@ -73,7 +75,7 @@ describe("startup tools row presentation (S41)", () => {
     }
   })
 
-  it("decorates loader tools with the CLI icon and color, bare name otherwise", async () => {
+  it("decorates loader tools with the CLI icon and color, default icon otherwise", async () => {
     const loader = await PluginLoader.load({
       roots: { embedded: [writePlugin()] },
       logger: () => {},
@@ -82,16 +84,18 @@ describe("startup tools row presentation (S41)", () => {
     const fetch = TOOL_PRESENTATION.get("Fetch")
     expect(entries).toEqual([
       { name: "Fetch", icon: fetch?.icon, color: fetch?.color },
-      { name: "Probe" },
+      { name: "Probe", icon: DEFAULT_TOOL_ICON },
     ])
-    expect(stripAnsi(formatStartupToolsRow(entries) ?? "")).toBe("⤓ Fetch · Probe")
+    expect(stripAnsi(formatStartupToolsRow(entries) ?? "")).toBe(
+      `⤓ Fetch · ${DEFAULT_TOOL_ICON} Probe`,
+    )
   })
 
   it("takes an explicit presentation map", () => {
     const map = new Map([["Probe", { icon: "*", color: "lime" }]])
     expect(startupToolEntries([{ name: "Probe" }, { name: "Fetch" }], map)).toEqual([
       { name: "Probe", icon: "*", color: "lime" },
-      { name: "Fetch" },
+      { name: "Fetch", icon: DEFAULT_TOOL_ICON },
     ])
   })
 
@@ -121,7 +125,7 @@ describe("startup tools row presentation (S41)", () => {
 
     it("prints the closing tools row with icons for the advertised tools", () => {
       const out = close([{ name: "Fetch" }, { name: "Probe" }], null)
-      expect(out).toEqual(["  ╰ tools      ⤓ Fetch · Probe"])
+      expect(out).toEqual([`  ╰ tools      ⤓ Fetch · ${DEFAULT_TOOL_ICON} Probe`])
     })
 
     it("applies the tool name policy before it prints", () => {
@@ -129,7 +133,7 @@ describe("startup tools row presentation (S41)", () => {
         kind: "allow-list",
         tools: ["Probe"],
       })
-      expect(out).toEqual(["  ╰ tools      Probe"])
+      expect(out).toEqual([`  ╰ tools      ${DEFAULT_TOOL_ICON} Probe`])
     })
   })
 })

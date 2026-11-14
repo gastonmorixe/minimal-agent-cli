@@ -2,8 +2,9 @@
  * The static tool presentation map of the CLI (S41).
  *
  * Core tool definitions and plugin manifests carry no cosmetic fields
- * (S29, S31). The CLI keeps the icon, color, and header key of each
- * first-party plugin tool here, keyed by the canonical tool name. The
+ * (S29, S31). The CLI keeps the icon, color, and header key of each core
+ * built-in tool and each first-party plugin tool here, keyed by the
+ * canonical tool name. The
  * live tool header (`ToolExecutorAdapter.presentation`) and the
  * `--resume` replay both read this map. It does not depend on loaded
  * plugin `ui` modules, so every route sees the same map.
@@ -13,7 +14,8 @@
  * - `headerKey`: an input field that heads the header at once. The live
  *   header then paints before the handler returns (long tools: Fetch).
  *
- * A tool that is not in the map gets the bare bold tool name.
+ * A tool that is not in the map (a user plugin, an alias) gets
+ * `DEFAULT_TOOL_ICON` in the default label color.
  *
  * @module plugins-ui/tool-presentation
  */
@@ -22,6 +24,16 @@ import type { ToolPresentation } from "../ui/tool-transcript/format.ts"
 
 /** Rows: canonical tool name, then its presentation. Plugin package in the comment. */
 const ROWS: ReadonlyArray<readonly [string, ToolPresentation]> = [
+  // Core built-ins (`TOOL_DEFINITIONS`). Same glyphs as before S29 (core 65b832d).
+  ["Bash", { icon: "»", color: "orange" }], // core
+  ["Read", { icon: "•", color: "sky" }], // core
+  ["Write", { icon: "✚", color: "lime" }], // core
+  ["Edit", { icon: "✦", color: "gold" }], // core
+  ["Glob", { icon: "✱", color: "violet" }], // core
+  ["Grep", { icon: "⌕", color: "pink" }], // core
+  ["FilesStats", { icon: "▦", color: "cyan" }], // core
+  ["Mode", { icon: "◐", color: "sky" }], // core
+  // Plugin tools.
   ["CloudCloudStatus", { icon: "☁", color: "sky" }], // ma-agent-cloud
   ["CloudCloudLogin", { icon: "☁", color: "sky" }], // ma-agent-cloud
   ["CloudCloudPush", { icon: "☁", color: "sky" }], // ma-agent-cloud
@@ -39,6 +51,7 @@ const ROWS: ReadonlyArray<readonly [string, ToolPresentation]> = [
   ["IntercomSend", { icon: "->", color: "magenta" }], // ma-intercom-plugin
   ["IntercomInbox", { icon: "↓", color: "cyan" }], // ma-intercom-plugin
   ["MemoryTool", { icon: "󰍩", color: "purple" }], // ma-memory-plugin
+  ["ModelInfo", { icon: "◇", color: "sky" }], // ma-model-info-plugin
   ["PromptNew", { icon: "❯", color: "lime" }], // ma-prompts-plugin
   ["PromptList", { icon: "❯", color: "lime" }], // ma-prompts-plugin
   ["PromptShow", { icon: "❯", color: "lime" }], // ma-prompts-plugin
@@ -48,6 +61,9 @@ const ROWS: ReadonlyArray<readonly [string, ToolPresentation]> = [
   ["ScheduleCronList", { icon: "⧗", color: "gold" }], // ma-schedule-plugin
   ["ScheduleCronDelete", { icon: "⧗", color: "gold" }], // ma-schedule-plugin
   ["ScheduleCronReschedule", { icon: "⧗", color: "gold" }], // ma-schedule-plugin
+  ["SecurityStatus", { icon: "▣", color: "gold" }], // ma-security-plugin
+  ["SessionHistory", { icon: "↺", color: "violet" }], // ma-session-history-plugin
+  ["SessionInfo", { icon: "◷", color: "cyan" }], // ma-session-info-plugin
   ["Skill", { icon: "✦", color: "violet" }], // ma-skills-plugin
   ["Speak", { icon: "♪", color: "sky" }], // ma-speak-plugin
   ["SpeakStatus", { icon: "◎", color: "violet" }], // ma-speak-plugin

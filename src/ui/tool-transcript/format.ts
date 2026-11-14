@@ -55,6 +55,17 @@ export interface ToolPresentation {
 }
 
 /**
+ * Icon for a tool with no presentation row or no row icon (a user plugin,
+ * an alias). Every tool header and startup row then shows an icon.
+ */
+export const DEFAULT_TOOL_ICON = "◆"
+
+/** The icon to draw for a tool: its row icon, else {@link DEFAULT_TOOL_ICON}. */
+export function toolIcon(presentation?: ToolPresentation | null): string {
+  return presentation?.icon || DEFAULT_TOOL_ICON
+}
+
+/**
  * Per-tool char cap for the bordered tool **header** line ("╭ Bash $ ..."),
  * applied only when the input field truly overflows. The cap is generous
  * (500 chars for Bash, 200 for the JSON fallback) : much wider than the
@@ -450,7 +461,8 @@ export function formatToolHeaderRows(opts: {
     presentation?.color && (c as Record<string, (s: string) => string>)[presentation.color]
       ? (c as Record<string, (s: string) => string>)[presentation.color]
       : c.orange
-  const icon = presentation?.icon ? `${c.bold(labelColor(presentation.icon))} ` : ""
+  const iconText = toolIcon(presentation)
+  const icon = `${c.bold(labelColor(iconText))} `
   const label = c.bold(labelColor(tool.name))
   const timeSuffix = timeText !== undefined ? ` · ${timeText}` : ""
   const TIME_HINT_GUTTER = 2
@@ -474,7 +486,7 @@ export function formatToolHeaderRows(opts: {
 
   const rows = [clampTranscriptRow(`  ${c.dimCyan("╭")} ${headerLine}`, cols)]
   if (headerOverride === undefined) {
-    const indent = " ".repeat(toolContinuationIndentCells(tool.name, presentation?.icon))
+    const indent = " ".repeat(toolContinuationIndentCells(tool.name, iconText))
     for (const cont of formatToolInputContinuation(tool, adjustedCols)) {
       rows.push(clampTranscriptRow(`  ${c.dimCyan("│")} ${indent}${c.dim(cont)}`, cols))
     }

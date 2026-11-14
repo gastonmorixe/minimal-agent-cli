@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test"
 import type { Message } from "@minimal-agent/core/sdk/messages"
 
 import { replayToScrollback } from "./session-replay.ts"
+import { DEFAULT_TOOL_ICON } from "./ui/tool-transcript/format.ts"
 
 class CaptureSink {
   out = ""
@@ -41,7 +42,7 @@ describe("replayToScrollback — tool presentation parity", () => {
     expect(plain).toMatch(/╭ » Bash/)
   })
 
-  it("falls back to the bare tool name (no icon) when no presentation map is supplied", async () => {
+  it("falls back to the default tool icon when no presentation map is supplied", async () => {
     const messages: Message[] = [
       { role: "user", content: [{ type: "text", text: "go" }] },
       {
@@ -56,8 +57,8 @@ describe("replayToScrollback — tool presentation parity", () => {
     const sink = new CaptureSink()
     await replayToScrollback(messages, sink)
     const plain = stripAnsi(sink.out)
-    // Bare bold name (no `»`) when the caller didn't pass a presentation map.
-    expect(plain).toMatch(/╭ Bash/)
+    // The default icon (no `»`) when the caller didn't pass a presentation map.
+    expect(plain).toContain(`╭ ${DEFAULT_TOOL_ICON} Bash`)
     expect(plain).not.toMatch(/╭ » Bash/)
   })
 
