@@ -30,6 +30,7 @@ import {
   type LogEvent,
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
+import { registerDiagnosticText } from "../../logging/diagnostic-text.ts"
 import { PALETTE } from "../../terminal-kit/palette.ts"
 
 import {
@@ -481,5 +482,149 @@ describe("ScrollbackDiagnosticSink — startup-banner buffering", () => {
     expect(strip(w.calls[0]!)).toContain("╰")
     expect(strip(w.calls[1]!)).toMatch(/\(×2/)
     expect(strip(w.calls[2]!)).toMatch(/\(×3/)
+  })
+})
+
+describe("ScrollbackDiagnosticSink: call-site parity (S14.2 step 0)", () => {
+  it("key still uses severity, source and message: same text dedupes, other text does not", () => {
+    const w = makeWriter()
+    const sink = new ScrollbackDiagnosticSink({
+      write: w.write,
+      now: () => T0,
+      dedupRepaintMinMs: 0,
+    })
+    sink.onEvent(event({ message: "alpha" }))
+    sink.onEvent(event({ message: "alpha" }))
+    sink.onEvent(event({ message: "beta" }))
+    expect(w.calls).toHaveLength(3)
+    expect(strip(w.calls[1])).toBe(`  ⚠ warn  api.stream-error (×2 · last ${localTs(T0)})\n`)
+    expect(strip(w.calls[2])).toBe(`  ⚠ warn  api.stream-error · ${localTs(T0)}\n  ╰ beta\n`)
+  })
+
+  it("renderBlock splits the message on newlines, one gutter arm per line", () => {
+    const out = strip(renderBlock(event({ message: "l1\nl2\nl3", structuredData: { k: "v" } })))
+    expect(out).toBe(
+      [
+        `  ⚠ warn  api.stream-error · ${localTs(T0)}`,
+        "  │ l1",
+        "  │ l2",
+        "  │ l3",
+        "  ╰ k: v",
+      ].join("\n"),
+    )
+  })
+})
+
+describe("empty message events (S14.2 step 0b)", () => {
+  const typed = (source: string, attrs: Record<string, string | number>): LogEvent =>
+    event({
+      source,
+      message: "",
+      diagnostic: { source, level: "warn", attrs },
+    } as Partial<LogEvent>)
+
+  it("(a) a volatile repeat collapses into one (xN) line", () => {
+    const w = makeWriter()
+    const sink = new ScrollbackDiagnosticSink({
+      write: w.write,
+      now: () => T0,
+      dedupRepaintMinMs: 0,
+    })
+    sink.onEvent(typed("zz.sb.retry", { curve: "x", elapsedMs: 10, attempt: 1 }))
+    sink.onEvent(typed("zz.sb.retry", { curve: "x", elapsedMs: 99, attempt: 2 }))
+    const all = w.calls.map(strip).join("")
+    expect(all).toContain("×2")
+    expect(all.match(/╰/g)).toHaveLength(1)
+  })
+
+  it("(b) a stable attr change does not collapse: two blocks", () => {
+    const w = makeWriter()
+    const sink = new ScrollbackDiagnosticSink({
+      write: w.write,
+      now: () => T0,
+      dedupRepaintMinMs: 0,
+    })
+    sink.onEvent(typed("zz.sb.stable", { curve: "x", attempt: 1 }))
+    sink.onEvent(typed("zz.sb.stable", { curve: "y", attempt: 1 }))
+    const all = w.calls.map(strip).join("")
+    expect(all.match(/╰/g)).toHaveLength(2)
+    expect(all).not.toContain("×2")
+  })
+
+  it("(d) no renderer and structuredData: data rows only, no empty first row", () => {
+    const plain = strip(
+      renderBlock(event({ source: "zz.sb.nor", message: "", structuredData: { a: 1, b: 2 } })),
+    )
+    const rows = plain.split("\n")
+    expect(rows).toHaveLength(3)
+    expect(rows[1]).toBe("  │ a: 1")
+    expect(rows[2]).toBe("  ╰ b: 2")
+  })
+
+  it("(d) no renderer, no data, attrs: the fallback is the one row", () => {
+    const plain = strip(renderBlock(typed("zz.sb.fb", { k: "v" })))
+    expect(plain.split("\n")[1]).toBe("  ╰ k=v")
+  })
+
+  it("(fixc) no renderer, attrs: the source shows once in the block", () => {
+    const plain = strip(renderBlock(typed("zz.sb.fixc", { k: "v" })))
+    const rows = plain.split("\n")
+    expect(rows[0]).toContain("zz.sb.fixc")
+    expect(rows[1]).toBe("  ╰ k=v")
+    expect(plain.split("zz.sb.fixc")).toHaveLength(2)
+  })
+
+  it("(fixd) no renderer, no attrs: no body row", () => {
+    const plain = strip(renderBlock(typed("zz.sb.fixd", {})))
+    expect(plain.split("zz.sb.fixd")).toHaveLength(2)
+    expect(plain.split("\n").slice(1).join("\n").trim()).toBe("")
+  })
+
+  it("(fixe) a message with attrs: the body is the message, bytes unchanged", () => {
+    const e = event({
+      source: "zz.sb.fixe",
+      message: "hello",
+      diagnostic: { source: "zz.sb.fixe", level: "warn", attrs: { k: "v" } },
+    } as Partial<LogEvent>)
+    expect(strip(renderBlock(e)).split("\n")[1]).toBe("  ╰ hello")
+  })
+
+  it("(fixf) a registered renderer: bytes unchanged", () => {
+    registerDiagnosticText("zz.sb.fixf", (a) => `registry says ${String(a.k)}`)
+    expect(strip(renderBlock(typed("zz.sb.fixf", { k: "v" }))).split("\n")[1]).toBe(
+      "  ╰ registry says v",
+    )
+  })
+
+  it("(e) a registered renderer: the first row is the registry text", () => {
+    registerDiagnosticText("zz.sb.reg", (a) => `registry says ${String(a.k)}`)
+    const plain = strip(renderBlock(typed("zz.sb.reg", { k: "v" })))
+    expect(plain.split("\n")[1]).toBe("  ╰ registry says v")
+  })
+
+  const withData = (source: string): LogEvent =>
+    event({
+      source,
+      message: "",
+      structuredData: { a: 1 },
+      diagnostic: { source, level: "warn", attrs: { k: "v" } },
+    } as Partial<LogEvent>)
+
+  it("(f8) attrs and structuredData, no renderer: the fallback row is hidden on purpose", () => {
+    // Pinned on purpose: the structuredData rows are the data and the attrs
+    // are derived from them, so printing the fallback too would repeat them.
+    const plain = strip(renderBlock(withData("zz.sb.f8")))
+    const rows = plain.split("\n")
+    expect(rows).toHaveLength(2)
+    expect(rows[1]).toBe("  ╰ a: 1")
+    expect(plain).not.toContain("k=v")
+  })
+
+  it("(f8b) attrs and structuredData, registered renderer: registry row, then data row", () => {
+    registerDiagnosticText("zz.sb.f8b", (a) => `registry says ${String(a.k)}`)
+    const rows = strip(renderBlock(withData("zz.sb.f8b"))).split("\n")
+    expect(rows).toHaveLength(3)
+    expect(rows[1]).toBe("  │ registry says v")
+    expect(rows[2]).toBe("  ╰ a: 1")
   })
 })

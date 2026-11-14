@@ -143,6 +143,32 @@ describe("stream: event order and sequence numbers", () => {
     expect(completed.output).toEqual([done])
   })
 
+  it("a retry-boundary event with live output prints the old marker bytes", () => {
+    const events: AgentEvent[] = [
+      { type: "turn_started", turn: 1 },
+      { type: "block_started", itemType: "text", id: "1:text" },
+      { type: "text_delta", id: "1:text", text: "partial" },
+      { type: "retry-boundary", id: "1:text", attempt: 2 },
+      { type: "text_delta", id: "1:text", text: "done" },
+      { type: "item_completed", itemType: "text", id: "t0", text: "done" },
+      {
+        type: "turn_completed",
+        turn: 1,
+        stopReason: "end_turn",
+        usage: { inputTokens: 1, outputTokens: 1 },
+      },
+      { type: "run_finished", outcome: "completed" },
+    ]
+    const deltas = parseSse(run({}, events).out).filter(
+      (f) => f.event === "response.output_text.delta",
+    )
+    expect(deltas.map((f) => f.data.delta)).toEqual([
+      "partial",
+      "\n↳ stream stalled — retrying (attempt 2)…\n",
+      "done",
+    ])
+  })
+
   it("hides tool calls: no function_call item anywhere", () => {
     const { out } = run({}, toolRunEvents(true))
     expect(out).not.toContain("function_call")

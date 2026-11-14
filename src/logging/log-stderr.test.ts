@@ -54,6 +54,36 @@ describe("StderrMirrorSink — write format", () => {
     expect(written[0]).toBe('[WARN] test.src: timeout slot="quota" timeout-ms="8000"\n')
   })
 
+  it("(fixb) no renderer, empty message, attrs: the source shows once", () => {
+    const written: string[] = []
+    const bus = createDiagnosticBus()
+    const sink = new StderrMirrorSink({ write: (s) => written.push(s) })
+    sink.attach(bus)
+    bus.emit(
+      event({
+        source: "zz.ls.fixb",
+        message: "",
+        diagnostic: { source: "zz.ls.fixb", level: "warn", attrs: { k: "v" } },
+      } as Partial<LogEvent>),
+    )
+    expect(written).toEqual(["[WARN] zz.ls.fixb: k=v\n"])
+  })
+
+  it("(fixe) a message with attrs: the message prints, bytes unchanged", () => {
+    const written: string[] = []
+    const bus = createDiagnosticBus()
+    const sink = new StderrMirrorSink({ write: (s) => written.push(s) })
+    sink.attach(bus)
+    bus.emit(
+      event({
+        source: "zz.ls.fixe",
+        message: "hello",
+        diagnostic: { source: "zz.ls.fixe", level: "warn", attrs: { k: "v" } },
+      } as Partial<LogEvent>),
+    )
+    expect(written).toEqual(["[WARN] zz.ls.fixe: hello\n"])
+  })
+
   it("uses correct level tags per severity", () => {
     const written: string[] = []
     const bus = createDiagnosticBus()

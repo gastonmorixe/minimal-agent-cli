@@ -10,6 +10,7 @@
 
 import { errorCode, errorHint } from "@minimal-agent/core/host/error-hint"
 
+import { errorText } from "../startup/core-text.ts"
 import { c } from "./style/ansi.ts"
 
 export { errorCode, errorHint }
@@ -25,7 +26,7 @@ export function formatErrorHintLine(err: unknown): string {
 
 /** `\n  error <message>\n` plus the dim hint line when the error has one. */
 export function formatTurnError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err)
+  const msg = errorText(err)
   return `\n  ${c.boldRed("error")} ${msg}\n${formatErrorHintLine(err)}`
 }
 
@@ -34,7 +35,7 @@ export function formatTurnError(err: unknown): string {
  * dim hint line when the error has one. No trailing newline.
  */
 export function formatFatalError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err)
+  const msg = errorText(err)
   const hint = errorHint(err)
   return hint ? `fatal: ${msg}\n  ${c.dim(hint)}` : `fatal: ${msg}`
 }

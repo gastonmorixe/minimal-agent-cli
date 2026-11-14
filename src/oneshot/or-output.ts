@@ -46,6 +46,8 @@
  */
 
 import type { AgentEvent } from "@minimal-agent/core/sdk/events"
+import { retryBoundaryText } from "../logging/retry-boundary-text.ts"
+import { errorEventText } from "../startup/core-text.ts"
 import type { ResultAccumulator, SchemaOutcome } from "./result-line.ts"
 import { resultText } from "./result-line.ts"
 
@@ -273,6 +275,12 @@ export class OrOutputWriter {
           this.addText(event.text)
         }
         break
+      case "retry-boundary":
+        if (this.live()) {
+          this.turnStreamed = true
+          this.addText(retryBoundaryText(event))
+        }
+        break
       case "item_completed":
         if (event.itemType === "text" && typeof event.text === "string") {
           this.turnTexts.push(event.text)
@@ -297,7 +305,7 @@ export class OrOutputWriter {
         this.newBlock = true
         break
       case "error":
-        this.lastError = { code: event.code ?? "agent_error", message: event.message }
+        this.lastError = { code: event.code ?? "agent_error", message: errorEventText(event) }
         break
       default:
         break
