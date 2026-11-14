@@ -32,6 +32,43 @@ export function importPackageModule(pkg: PluginPackage, rel: string): Promise<un
 }
 
 /**
+ * Pids of slot subprocesses in flight. Bun kills no child on exit, so ONE
+ * lazy `process.on("exit")` listener SIGKILLs them. The slot is not
+ * detached: it stays in the CLI process group, so a terminal close still
+ * sends it SIGHUP and `/dev/tty` still works. The core child registry is
+ * not exported to hosts, so the CLI keeps this small set itself.
+ */
+const liveSlotPids = new Set<number>()
+let slotExitListener = false
+
+/** Track `pid` until it exits, and install the exit listener once. */
+function trackSlotPid(pid: number): void {
+  if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) return
+  liveSlotPids.add(pid)
+  if (slotExitListener) return
+  slotExitListener = true
+  process.on("exit", () => {
+    for (const p of liveSlotPids) {
+      try {
+        process.kill(p, "SIGKILL")
+      } catch {
+        // already gone
+      }
+    }
+    liveSlotPids.clear()
+  })
+}
+
+/** SIGKILL a slot subprocess by pid. Never throws. */
+function killSlot(proc: { kill(sig?: number | string): void }): void {
+  try {
+    proc.kill("SIGKILL")
+  } catch {
+    // already gone
+  }
+}
+
+/**
  * Resolve a single {@link ManifestLiveAreaSlot} to invocable form.
  *
  * Module handlers must `export default` a {@link LiveAreaHandler}. The
@@ -126,6 +163,9 @@ export async function resolveLiveAreaSlot(
     packageDir,
     entryAbsolute: exeAbs,
     invoke: async (ctx: LiveAreaHandlerContext) => {
+      // Not detached: the slot stays in the CLI process group (terminal
+      // SIGHUP, `/dev/tty`). The timeout and `ctx.abort` kill it by pid, and
+      // the exit listener kills it if the CLI exits first.
       const proc = Bun.spawn([exeAbs, ...cmd.slice(1)], {
         stdin: "pipe",
         stdout: "pipe",
@@ -133,13 +173,26 @@ export async function resolveLiveAreaSlot(
         cwd: ctx.packageDir,
         env: ctx.env,
       })
-      const envelope = JSON.stringify({ tick: ctx.tick, cwd: ctx.cwd, env: ctx.env })
-      void proc.stdin.write(envelope + "\n")
-      void proc.stdin.end()
-      const out = await new Response(proc.stdout).text()
-      await proc.exited
-      const trimmed = out.replace(/\n+$/, "")
-      return trimmed.length === 0 ? null : trimmed
+      const pid = proc.pid
+      trackSlotPid(pid)
+      void proc.exited.then(() => liveSlotPids.delete(pid))
+      const kill = () => killSlot(proc)
+      const timer = setTimeout(kill, definition.timeoutMs ?? 5000)
+      const abort = ctx.abort
+      if (abort?.aborted) kill()
+      else abort?.addEventListener("abort", kill, { once: true })
+      try {
+        const envelope = JSON.stringify({ tick: ctx.tick, cwd: ctx.cwd, env: ctx.env })
+        void proc.stdin.write(envelope + "\n")
+        void proc.stdin.end()
+        const out = await new Response(proc.stdout).text()
+        await proc.exited
+        const trimmed = out.replace(/\n+$/, "")
+        return trimmed.length === 0 ? null : trimmed
+      } finally {
+        clearTimeout(timer)
+        abort?.removeEventListener("abort", kill)
+      }
     },
   }
 }
