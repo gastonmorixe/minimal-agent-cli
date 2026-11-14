@@ -114,6 +114,14 @@ export function parseLiveAreaSlot(
     position = obj.position as "header" | "footer"
   }
 
+  let order: number | undefined
+  if (obj.order != null) {
+    if (typeof obj.order !== "number" || !Number.isFinite(obj.order)) {
+      err(`order must be a finite number (got: ${JSON.stringify(obj.order)})`)
+    }
+    order = obj.order as number
+  }
+
   let refreshMs: number | undefined
   if (obj.refreshMs != null) {
     if (typeof obj.refreshMs !== "number" || !Number.isFinite(obj.refreshMs) || obj.refreshMs < 0) {
@@ -162,9 +170,16 @@ export function parseLiveAreaSlot(
 
   for (const k of Object.keys(obj)) {
     if (
-      !["id", "handler", "position", "refreshMs", "timeoutMs", "placeholder", "refreshOn"].includes(
-        k,
-      )
+      ![
+        "id",
+        "handler",
+        "position",
+        "order",
+        "refreshMs",
+        "timeoutMs",
+        "placeholder",
+        "refreshOn",
+      ].includes(k)
     ) {
       err(`unknown live-area slot key: ${JSON.stringify(k)}`)
     }
@@ -174,6 +189,7 @@ export function parseLiveAreaSlot(
     id,
     handler,
     position,
+    ...(order !== undefined ? { order } : {}),
     refreshMs,
     timeoutMs,
     placeholder,

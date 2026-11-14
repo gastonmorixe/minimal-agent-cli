@@ -83,6 +83,7 @@ export interface SlotSpec {
   /** Plugin id the slot belongs to. Defaults to "fake-plugin". */
   pluginId?: string
   position?: "header" | "footer"
+  order?: number
   refreshMs?: number
   timeoutMs?: number
   invoke: (ctx: LiveAreaHandlerContext) => Promise<string | null>
@@ -94,6 +95,7 @@ export function makeSlot(spec: SlotSpec): ResolvedLiveAreaSlot {
     id: spec.id,
     handler: { type: "module", path: "./fake.ts" },
     position: spec.position ?? "footer",
+    ...(spec.order !== undefined ? { order: spec.order } : {}),
     refreshMs: spec.refreshMs ?? 60_000,
     timeoutMs: spec.timeoutMs ?? 5000,
   }

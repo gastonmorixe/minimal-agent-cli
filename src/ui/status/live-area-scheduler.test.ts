@@ -146,6 +146,46 @@ describe("LiveAreaScheduler — repaint dedup & routing", () => {
     sched.stop()
   })
 
+  it("paints footer slots by ascending order, ties in load order", async () => {
+    const mk = (id: string, text: string, order?: number) =>
+      makeSlot({ id, ...(order !== undefined ? { order } : {}), invoke: async () => text })
+    const clock = new FakeClock()
+    const sink = makeSink()
+    const sched = new LiveAreaScheduler(
+      [
+        mk("intercom", "⇆ intercom", 90),
+        mk("quota", "5h quota", 100),
+        mk("jobs", "◆ jobs\n  j1"),
+        mk("fleet", "◈ fleet"),
+      ],
+      sink,
+      { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, logger: () => {} },
+    )
+    sched.start()
+    await clock.tick(0)
+    expect(sink.footerCalls.at(-1)).toEqual(["◆ jobs", "  j1", "◈ fleet", "⇆ intercom", "5h quota"])
+    sched.stop()
+  })
+
+  it("appends the decoration suffix to the first bottom-pinned row", async () => {
+    setDecorationSuffix(" +lsp")
+    const clock = new FakeClock()
+    const sink = makeSink()
+    const sched = new LiveAreaScheduler(
+      [
+        makeSlot({ id: "jobs", invoke: async () => "◆ jobs" }),
+        makeSlot({ id: "intercom", order: 90, invoke: async () => "⇆ intercom" }),
+      ],
+      sink,
+      { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, logger: () => {} },
+    )
+    sched.start()
+    await clock.tick(0)
+    expect(sink.footerCalls.at(-1)).toEqual(["◆ jobs", "⇆ intercom +lsp"])
+    sched.stop()
+    setDecorationSuffix("")
+  })
+
   it("leaves a single-line slot value as exactly one footer line", async () => {
     const slot = makeSlot({ id: "a", refreshMs: 1_000, invoke: async () => "one row" })
     const clock = new FakeClock()
