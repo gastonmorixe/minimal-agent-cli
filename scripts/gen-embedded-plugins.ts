@@ -17,13 +17,15 @@
  * Per package (contract: core `src/plugins/source.ts`, `EmbeddedPluginTable`):
  *
  *   - texts: `manifest.json`, `provider.json`, `PROMPT.md` (when present),
- *     and `manifest.prompt` (when set and present). Imported
+ *     `manifest.prompt` (when set and present), and every file under
+ *     `prompts/` (the templates `ctx.prompts.render` reads). Imported
  *     `with { type: "text" }`.
  *   - modules: every module the core loader or the CLI ui loader imports:
  *     each `{ type: "module", path }` entry anywhere in the manifest
  *     (tools, events, hooks, commands, fragments, host modes, setups,
  *     replay renderers, turn attachments, `ui.setup`, `ui.liveAreaSlots`,
- *     `cli.commands` handlers), `promptTemplate.entry`, `errorRenderers[].entry`,
+ *     `cli.commands` handlers), `promptTemplate.entry`, `systemPromptBase.entry`,
+ *     `errorRenderers[].entry`, `syntheticText[].entry`,
  *     `sidebandCodec.entry`, every `scripts` value, and `provider.json`
  *     `entry`. Literal `() => import("<abs path>")` thunks.
  *   - files: every relative subprocess `command[0]` that is not a `.ts`/`.js`
@@ -113,8 +115,10 @@ export function manifestRefs(manifest: unknown): Refs {
     if (isObject(v) && typeof v.entry === "string") refs.modules.push(v.entry)
   }
   entryOf(manifest.promptTemplate)
+  entryOf(manifest.systemPromptBase)
   entryOf(manifest.sidebandCodec)
   if (Array.isArray(manifest.errorRenderers)) manifest.errorRenderers.forEach(entryOf)
+  if (Array.isArray(manifest.syntheticText)) manifest.syntheticText.forEach(entryOf)
   if (isObject(manifest.scripts)) {
     for (const v of Object.values(manifest.scripts)) if (typeof v === "string") refs.modules.push(v)
   }
@@ -138,6 +142,33 @@ function isFile(path: string): boolean {
   } catch {
     return false
   }
+}
+
+/**
+ * Keys (`prompts/a.md`, `prompts/sub/b.md`) of every regular file under the
+ * `prompts/` dir of a package, sorted. Dot files are skipped. Empty when the
+ * package has no `prompts/` dir.
+ */
+export function promptAssetKeys(dir: string): string[] {
+  const keys: string[] = []
+  const walk = (rel: string): void => {
+    const abs = join(dir, rel)
+    let names: string[]
+    try {
+      if (!statSync(abs).isDirectory()) return
+      names = readdirSync(abs).sort()
+    } catch {
+      return
+    }
+    for (const name of names) {
+      if (name.startsWith(".")) continue
+      const child = `${rel}/${name}`
+      if (isFile(join(dir, child))) keys.push(child)
+      else walk(child)
+    }
+  }
+  walk("prompts")
+  return keys.sort()
 }
 
 /** Collect one package dir. Returns undefined when it has no manifest or provider. */
@@ -175,6 +206,9 @@ export function collectPackage(dir: string): CollectedPackage | undefined {
     const promptKey = keyOf(name, promptRel, "prompt")
     // A missing prompt is the loader's diagnostic, not a build failure.
     if (isFile(join(dir, promptKey))) texts.set(promptKey, join(dir, promptKey))
+    // Prompt templates: `ctx.prompts.render(name)` reads `prompts/<name>`
+    // through the package reader, so every file under `prompts/` is a text.
+    for (const key of promptAssetKeys(dir)) texts.set(key, join(dir, key))
   }
   if (hasProvider) {
     texts.set("provider.json", providerPath)
