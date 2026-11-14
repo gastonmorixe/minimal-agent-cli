@@ -122,6 +122,43 @@ describe("manifestRefs", () => {
     expect(refs.files).toEqual([])
     expect(refs.modules).toEqual([])
   })
+
+  test("collects the systemPromptBase and syntheticText entries", () => {
+    const refs = manifestRefs({
+      systemPromptBase: { id: "base", entry: "./base.ts" },
+      syntheticText: [{ id: "a", entry: "./st.ts", export: "make" }, { id: "b" }],
+    })
+    expect([...refs.modules].sort()).toEqual(["./base.ts", "./st.ts"])
+  })
+})
+
+describe("prompt assets", () => {
+  test("every file under prompts/ is a text, and the table serves it", () => {
+    pkg("ma-p-plugin", {
+      "manifest.json": JSON.stringify({
+        id: "ma-p",
+        systemPromptBase: { id: "base", entry: "./base.ts" },
+        syntheticText: [{ id: "a", entry: "./st.ts" }],
+      }),
+      "base.ts": "export default () => ({ identity: () => 'i' })\n",
+      "st.ts": "export default () => ({ kinds: [], text: () => 's' })\n",
+      "prompts/a.md": "prompt A",
+      "prompts/sub/b.tmpl.md": "prompt B",
+      "prompts/.hidden": "skip",
+    })
+    const p = collectPackages(root).find((x) => x.name === "ma-p-plugin")
+    expect([...(p?.texts.keys() ?? [])].sort()).toEqual([
+      "manifest.json",
+      "prompts/a.md",
+      "prompts/sub/b.tmpl.md",
+    ])
+    expect([...(p?.modules.keys() ?? [])].sort()).toEqual(["base.ts", "st.ts"])
+  })
+
+  test("a package with no prompts/ dir gets no prompt texts", () => {
+    const x = collectPackages(root).find((p) => p.name === "ma-x-plugin")
+    expect([...(x?.texts.keys() ?? [])].some((k) => k.startsWith("prompts/"))).toBe(false)
+  })
 })
 
 describe("renderEmbeddedPluginsModule", () => {
