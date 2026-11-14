@@ -25,12 +25,14 @@ import {
   getDiagnosticBus,
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
+import { describeSystemBlock } from "@minimal-agent/core/host/system-block-origins"
 import {
   type DumpBlock,
   isRequestDumpRow,
   RequestDumpCollector,
   renderDumpBlock,
 } from "./debug-dump.ts"
+import type { DumpOriginSource, SystemSlotSpan } from "./debug-dump-origins.ts"
 
 /** What the sink needs to paint. */
 export interface RequestDumpRenderOptions {
@@ -43,6 +45,24 @@ export interface RequestDumpRenderOptions {
    * to keep lines whole. Omitted: lines are never clipped.
    */
   readonly width?: () => number | undefined
+  /**
+   * Cells per line for the hanging-indent wrap of `--verbose` lines, read at
+   * paint time. Return undefined (or omit) for no wrap. Verbose lines are
+   * never clipped, only wrapped.
+   */
+  readonly wrapWidth?: () => number | undefined
+  /** Explicit verbose gate, read at paint time. False forces the compact form. */
+  readonly verbose?: () => boolean
+  /** Origin data for the `--verbose` reference lines. */
+  readonly origins?: DumpOriginSource
+}
+
+/** The terminal width from stdout, else `$COLUMNS`, else undefined. */
+function terminalColumns(): number | undefined {
+  const cols = process.stdout.columns ?? 0
+  if (cols > 0) return cols
+  const env = Number.parseInt(process.env.COLUMNS ?? "", 10)
+  return Number.isFinite(env) && env > 0 ? env : undefined
 }
 
 /**
@@ -51,10 +71,101 @@ export interface RequestDumpRenderOptions {
  */
 export function liveDumpWidth(): number | undefined {
   if (process.env.VERBOSE) return undefined
-  const cols = process.stdout.columns ?? 0
-  if (cols > 0) return cols
-  const env = Number.parseInt(process.env.COLUMNS ?? "", 10)
-  return Number.isFinite(env) && env > 0 ? env : undefined
+  return terminalColumns()
+}
+
+/**
+ * Wrap width for `--verbose` dump lines: the terminal width (stdout, else
+ * `$COLUMNS`), or undefined with no width, which means no wrap.
+ */
+export function liveDumpWrapWidth(): number | undefined {
+  return terminalColumns()
+}
+
+/**
+ * True when `--verbose` is on, so the dump renders real lines with a gutter.
+ *
+ * Read at paint time, like the widths. This is the explicit verbose decision:
+ * without it the renderer would infer verbose mode from the presence of typed
+ * `kind` rows, which core controls, not the user.
+ */
+export function liveDumpVerbose(): boolean {
+  return (process.env.VERBOSE ?? "") !== ""
+}
+
+/** The loader capability that gives the afterInstructions text (memoized in core). */
+interface PromptBlocksSource {
+  getPromptBlocksAsync?(): Promise<{ readonly afterInstructions: string | null }>
+}
+
+/** Options for {@link attachLiveAreaRequestDump}. */
+export interface LiveAreaDumpOptions {
+  /** Bus to read. Defaults to the process bus. */
+  readonly bus?: DiagnosticBus
+  /** Origin data, typically the plugin loader. */
+  readonly origins?: DumpOriginSource & PromptBlocksSource
+  /**
+   * Core slot spans of one system block text. Defaults to the core
+   * `describeSystemBlock`. Tests inject a fake.
+   */
+  readonly describeSystemBlock?: (text: string) => readonly SystemSlotSpan[] | undefined
+  /** Wrap width for verbose lines. Defaults to {@link liveDumpWrapWidth}. */
+  readonly wrapWidth?: () => number | undefined
+  /** Verbose gate. Defaults to {@link liveDumpVerbose}. */
+  readonly verbose?: () => boolean
+}
+
+/**
+ * Add the core slot describer and the afterInstructions text to the loader.
+ *
+ * The text is fetched once, in the background. `getPromptBlocksAsync` is
+ * memoized in core, so this call costs nothing after the first session
+ * prompt build. Until it resolves, fragment refs are not shown.
+ *
+ * The call is fully guarded: a synchronous throw or a non-thenable return must
+ * not escape this function. `attachLiveAreaRequestDump` runs during TUI
+ * startup, so an escape there aborts the whole session over a debug extra.
+ */
+function withOriginExtras(opts: LiveAreaDumpOptions): DumpOriginSource | undefined {
+  const base = opts.origins
+  const describe = opts.describeSystemBlock
+  if (base === undefined && describe === undefined) return undefined
+  let after: string | null | undefined
+  const fetchBlocks = base?.getPromptBlocksAsync
+  if (base !== undefined && typeof fetchBlocks === "function") {
+    try {
+      const pending: unknown = fetchBlocks.call(base)
+      if (
+        pending !== null &&
+        (typeof pending === "object" || typeof pending === "function") &&
+        typeof (pending as { then?: unknown }).then === "function"
+      ) {
+        ;(pending as Promise<{ readonly afterInstructions: string | null }>)
+          .then((b) => {
+            after = b.afterInstructions
+          })
+          .catch(() => undefined)
+      }
+    } catch {
+      // A loader that throws here is the same as one with no text: refs fall
+      // back to "origin not recorded" and the dump still renders.
+    }
+  }
+  return {
+    loadedPackages: () => (typeof base?.loadedPackages === "function" ? base.loadedPackages() : []),
+    ...(typeof base?.toolOwners === "function"
+      ? { toolOwners: () => base.toolOwners?.() ?? new Map() }
+      : {}),
+    ...(typeof base?.getPromptProvenance === "function"
+      ? { getPromptProvenance: () => base.getPromptProvenance?.() }
+      : {}),
+    ...(describe === undefined
+      ? typeof base?.describeSystemBlock === "function"
+        ? { describeSystemBlock: (t: string) => base.describeSystemBlock?.(t) }
+        : {}
+      : { describeSystemBlock: describe }),
+    afterInstructionsText: () => after ?? base?.afterInstructionsText?.(),
+  }
 }
 
 /** Live wiring handle. Call {@link RequestDumpRenderHandle.dispose} on teardown. */
@@ -77,16 +188,24 @@ export interface DumpStreamWriter {
  * wiring should not push it over.
  *
  * @param compositor - The live-area compositor.
+ * @param opts - Bus, origin data (the plugin loader), slot describer, wrap width.
  * @returns Handle whose `dispose()` unsubscribes and flushes the tail.
  */
 export function attachLiveAreaRequestDump(
   compositor: DumpStreamWriter,
-  bus: DiagnosticBus = getDiagnosticBus(),
+  opts: LiveAreaDumpOptions = {},
 ): RequestDumpRenderHandle {
+  const origins = withOriginExtras({
+    ...opts,
+    describeSystemBlock: opts.describeSystemBlock ?? describeSystemBlock,
+  })
   return attachRequestDumpRenderer({
-    bus,
+    bus: opts.bus ?? getDiagnosticBus(),
     write: (text) => compositor.writeStream(text),
     width: liveDumpWidth,
+    wrapWidth: opts.wrapWidth ?? liveDumpWrapWidth,
+    verbose: opts.verbose ?? liveDumpVerbose,
+    ...(origins === undefined ? {} : { origins }),
   })
 }
 
@@ -104,8 +223,15 @@ export function attachLiveAreaRequestDump(
 export function attachRequestDumpRenderer(opts: RequestDumpRenderOptions): RequestDumpRenderHandle {
   const collector = new RequestDumpCollector()
   const { write } = opts
-  const paint = (block: DumpBlock): void =>
-    write(`${renderDumpBlock(block, opts.width?.()).join("\n")}\n`)
+  const paint = (block: DumpBlock): void => {
+    const wrapWidth = opts.wrapWidth?.()
+    const verbose = {
+      ...(opts.verbose === undefined ? {} : { enabled: opts.verbose() }),
+      ...(opts.origins === undefined ? {} : { origins: opts.origins }),
+      ...(wrapWidth === undefined ? {} : { wrapWidth }),
+    }
+    write(`${renderDumpBlock(block, opts.width?.(), verbose).join("\n")}\n`)
+  }
 
   const off = opts.bus.on(
     (e) => e.source === "transport.request-dump" && e.severity === Severity.Debug,
