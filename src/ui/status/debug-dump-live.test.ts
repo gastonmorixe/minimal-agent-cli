@@ -269,3 +269,53 @@ describe("attachRequestDumpRenderer", () => {
     handle?.dispose()
   })
 })
+
+describe("attachRequestDumpRenderer: call-site parity (S14.2 step 0)", () => {
+  it("writes the message plus newline for a non-structured row, byte for byte", () => {
+    const bus = createDiagnosticBus()
+    const writes: string[] = []
+    const handle = attachRequestDumpRenderer({ bus, write: (t) => writes.push(t) })
+    bus.emit({
+      ts: Date.now(),
+      severity: Severity.Debug,
+      facility: 16,
+      source: "transport.request-dump",
+      message: "raw line\nwith break",
+    } as never)
+    expect(writes).toEqual(["raw line\nwith break\n"])
+    handle.dispose()
+  })
+
+  it("writes only k=v for a typed empty-message row with no renderer", () => {
+    const bus = createDiagnosticBus()
+    const writes: string[] = []
+    const handle = attachRequestDumpRenderer({ bus, write: (t) => writes.push(t) })
+    bus.emit({
+      ts: Date.now(),
+      severity: Severity.Debug,
+      facility: 16,
+      source: "transport.request-dump",
+      message: "",
+      diagnostic: { source: "transport.request-dump", level: "debug", attrs: { k: "v" } },
+    } as never)
+    // The source prefix is not printed on this stream by design. Pinned so a
+    // change is seen. This row shape is not reachable today: the only producer
+    // (core src/llm/transport/debug.ts:234-237) always sets the dump line as the
+    // message and a `row` index in the data, so it takes the structured path.
+    expect(writes).toEqual(["k=v\n"])
+    handle.dispose()
+  })
+
+  it("feeds the message of each structured row to the collector", () => {
+    const bus = createDiagnosticBus()
+    const writes: string[] = []
+    const handle = attachRequestDumpRenderer({ bus, write: (t) => writes.push(t) })
+    emitDump(bus, "parity")
+    expect(writes).toHaveLength(1)
+    const text = writes[0].replace(/\x1b\[[0-9;]*m/g, "")
+    expect(text).toContain("POST parity")
+    expect(text).toContain("model: parity")
+    expect(text.endsWith("\n")).toBe(true)
+    handle.dispose()
+  })
+})

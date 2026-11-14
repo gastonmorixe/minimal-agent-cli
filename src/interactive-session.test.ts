@@ -23,12 +23,12 @@ import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
 import type { Message } from "@minimal-agent/core/sdk/messages"
-import { formatTurnNoticePlain } from "@minimal-agent/core/sdk/turn-notice"
 import {
   InteractiveSession,
   type ReflectionCheckpointContext,
   TranscriptRouter,
 } from "./interactive-session.ts"
+import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 import type {
   TestSendParams as SendOptions,
   TestSendResult as StreamedResponse,
@@ -291,13 +291,37 @@ describe("InteractiveSession", () => {
     expect(line).toContain("auto-continuing (1/")
     // The same plain text core gives every text host.
     expect(line?.slice(3)).toBe(
-      formatTurnNoticePlain({
+      turnNoticePlainText({
         kind: "max_tokens_continuing",
         severity: "warn",
         attempt: 1,
         cap: Number(line?.match(/\(1\/(\d+)\)/)?.[1]),
       }),
     )
+  })
+
+  it("renders the retry-boundary marker, byte for byte, between the streamed text parts", async () => {
+    let calls = 0
+    const sendFn = async function* (): AsyncGenerator<string, StreamedResponse, undefined> {
+      calls++
+      if (calls === 1) {
+        yield "partial"
+        throw Object.assign(new Error("stall"), { errorClass: "transient" })
+      }
+      yield "done"
+      return response("done")
+    }
+    const session = await createSession(sendFn)
+    const chunks: string[] = []
+    const gen = session.run("go")
+    for (;;) {
+      const next = await gen.next()
+      if (next.done) break
+      chunks.push(next.value)
+    }
+    expect(calls).toBe(2)
+    // The old core marker, inline. Not imported from the module under test.
+    expect(chunks.join("")).toBe("partial\n↳ stream stalled — retrying (attempt 2)…\ndone")
   })
 
   it("keeps a tool row behind an async block-stop step", async () => {

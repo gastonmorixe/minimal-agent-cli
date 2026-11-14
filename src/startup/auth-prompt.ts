@@ -25,6 +25,7 @@ import {
   type StartupAuthPromptKind,
 } from "../ui/chrome/auth-prompt.ts"
 import { type CommandOutput, writeCommandRows } from "../ui/command-output.ts"
+import { errorText, isNoCredentials } from "./core-text.ts"
 
 export interface FirstTimeAuthPromptDeps {
   /** Resolve the credential of the selected provider. */
@@ -73,8 +74,9 @@ export async function getAuthWithFirstTimePrompt(
   try {
     return await auth()
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
+    const msg = errorText(err)
     const looksLikeMissing =
+      isNoCredentials(err) ||
       /No minimal-agent credentials|No credentials found|no credentials for provider|No OAuth access token|No refresh token/i.test(
         msg,
       )

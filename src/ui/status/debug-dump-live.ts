@@ -26,6 +26,7 @@ import {
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
 import { describeSystemBlock } from "@minimal-agent/core/host/system-block-origins"
+import { diagnosticText } from "../../logging/diagnostic-text.ts"
 import {
   type DumpBlock,
   isRequestDumpRow,
@@ -237,9 +238,10 @@ export function attachRequestDumpRenderer(opts: RequestDumpRenderOptions): Reque
     (e) => e.source === "transport.request-dump" && e.severity === Severity.Debug,
     (e) => {
       if (!isRequestDumpRow(e.source, e.structuredData)) {
-        write(`${e.message}\n`)
+        write(`${diagnosticText(e)}\n`)
         return
       }
+      // A dump row's message is its literal text, and "" is a blank line, so no diagnosticText fallback.
       const completed = collector.push(e.message, e.structuredData)
       if (completed !== null) paint(completed)
     },

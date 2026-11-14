@@ -28,7 +28,8 @@
 
 import type { AgentEvent, StatusEvent } from "@minimal-agent/core/sdk/events"
 import { serializeEvent } from "@minimal-agent/core/sdk/events"
-import { formatTurnNoticePlain } from "@minimal-agent/core/sdk/turn-notice"
+import { errorEventText } from "./startup/core-text.ts"
+import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 
 // ---------------------------------------------------------------------------
 // Output mode
@@ -150,6 +151,7 @@ export function renderHumanProgressLine(event: AgentEvent): string {
     }
     case "text_delta":
     case "thinking_delta":
+    case "retry-boundary":
     case "block_started":
     case "block_stopped":
       // Per-token deltas and their block edges are the realtime `stream-json` surface, not a human
@@ -169,10 +171,11 @@ export function renderHumanProgressLine(event: AgentEvent): string {
       // Reuse the core's style-free one-liner: `human` progress lines are
       // plain text, and the fallback formatter is exactly that.
       const marker = event.notice.severity === "error" ? "✗" : "·"
-      return `${marker} ${formatTurnNoticePlain(event.notice)}`
+      return `${marker} ${turnNoticePlainText(event.notice)}`
     }
     case "error":
-      return event.hint ? `✗ ${event.message}\n  hint: ${event.hint}` : `✗ ${event.message}`
+      const text = errorEventText(event)
+      return event.hint ? `✗ ${text}\n  hint: ${event.hint}` : `✗ ${text}`
     case "status":
       return renderStatusLine(event)
     case "ask_user":

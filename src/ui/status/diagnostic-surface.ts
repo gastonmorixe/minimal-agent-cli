@@ -51,6 +51,7 @@
  */
 
 import { type DiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
+import { diagnosticKey, diagnosticText } from "../../logging/diagnostic-text.ts"
 import { c } from "../style/ansi.ts"
 
 /**
@@ -175,7 +176,8 @@ function bumpOrReplace(slot: Slot, e: LogEvent): Slot {
   if (
     slot.event !== null &&
     slot.event.source === e.source &&
-    slot.event.message === e.message &&
+    // A set message keys the entry. An empty one keys on the sorted attrs.
+    diagnosticKey(slot.event) === diagnosticKey(e) &&
     slot.event.severity === e.severity
   ) {
     return { event: e, count: slot.count + 1 }
@@ -186,7 +188,8 @@ function bumpOrReplace(slot: Slot, e: LogEvent): Slot {
 function renderLine(kind: "warn" | "error", e: LogEvent, count: number): string {
   const icon = kind === "warn" ? c.gold("⚠") : c.red("✗")
   const src = c.faintWhite(e.source)
-  const msg = e.message
+  const msg = diagnosticText(e)
   const suffix = count > 1 ? " " + c.dim(`(×${count})`) : ""
+  if (msg === "") return `${icon} ${src}${suffix}`
   return `${icon} ${src}: ${msg}${suffix}`
 }

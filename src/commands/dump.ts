@@ -1,11 +1,9 @@
 /**
  * `--dump <sid|last>` command — print a session transcript to stdout.
  *
- * Thin shell over the SAME `sessions:read` capability provider that backs
- * the `session-history` plugin's `SessionHistory` tool
- * (`src/plugins/host/providers/sessions-read.ts`). One rendering path: the
- * CLI dump and the tool's `{action:"dump"}` are byte-identical for the
- * same session, and improvements to the provider serve both surfaces.
+ * Reads session data with the `sessions:read` capability (`records(sid)`)
+ * and builds the text with the local formatter (`session-dump.ts`). Core
+ * returns data only.
  *
  * @module commands/dump
  */
@@ -15,6 +13,7 @@ import { resolveSessionTarget } from "@minimal-agent/core/host/session-index"
 import { createSessionsReadApi } from "@minimal-agent/core/host/sessions-read"
 import { writeStdoutSafely } from "../infra/safe-stdout.ts"
 import { formatSessionArtifacts } from "./session-artifacts-format.ts"
+import { formatSessionAsMarkdown, formatSessionAsXml } from "./session-dump.ts"
 
 export interface DumpCommandInput {
   target: string
@@ -38,12 +37,12 @@ export async function runDumpCommand(input: DumpCommandInput): Promise<void> {
   }
 
   const sessions = createSessionsReadApi()
-  const result = await sessions.dump(sid, {
-    format: input.format === "xml" ? "xml" : "markdown",
-  })
-  if (!result) {
+  const data = await sessions.records(sid)
+  if (!data) {
     throw new DumpCommandError(`no session file on disk for sid ${JSON.stringify(sid)}`)
   }
   if (input.paths) await writeStdoutSafely(formatSessionArtifacts(inspectSessionArtifacts(sid)))
-  await writeStdoutSafely(result.text)
+  await writeStdoutSafely(
+    input.format === "xml" ? formatSessionAsXml(data) : formatSessionAsMarkdown(data),
+  )
 }
