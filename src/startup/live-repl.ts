@@ -259,7 +259,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
   // printed the dump itself and the interceptor turned it into scrollback;
   // this restores that through the compositor.
   const wantsDump = args.includes("--debug") || process.env.DEBUG === "1"
-  const dumpHandle = wantsDump ? attachLiveAreaRequestDump(compositor) : null
+  const dumpHandle = wantsDump ? attachLiveAreaRequestDump(compositor, { origins: loader }) : null
 
   try {
     await repl(agent, {

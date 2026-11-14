@@ -18,6 +18,7 @@ export const CORE_PUBLIC_CONTRACT = {
     "./sdk/agent-core",
     "./host/diagnostics",
     "./host/status-bus",
+    "./host/system-block-origins",
     "./plugin-api",
   ],
   events: ["AgentEvent", "EventSink"],

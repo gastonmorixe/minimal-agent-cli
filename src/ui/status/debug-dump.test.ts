@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from "bun:test"
 import { isRequestDumpRow, RequestDumpCollector, renderDumpBlock } from "./debug-dump.ts"
+import { rowKind } from "./debug-dump-contract.ts"
 
 /** Structured-data key the transport stamps on each dump row. */
 const DUMP_ROW_INDEX = "row"
@@ -60,6 +61,16 @@ describe("isRequestDumpRow", () => {
     expect(isRequestDumpRow("transport.request-dump", undefined)).toBe(false)
     expect(isRequestDumpRow("transport.request-dump", { foo: "bar" })).toBe(false)
     expect(isRequestDumpRow("auth.login", { row: 0 })).toBe(false)
+  })
+})
+
+describe("rowKind", () => {
+  it("accepts the four verbose kinds and nothing else", () => {
+    for (const k of ["part", "block", "line", "elided"])
+      expect(rowKind({ kind: k })).toBe(k as never)
+    expect(rowKind({ kind: "other" })).toBeUndefined()
+    expect(rowKind({})).toBeUndefined()
+    expect(rowKind(undefined)).toBeUndefined()
   })
 })
 
@@ -282,6 +293,102 @@ describe("renderDumpBlock", () => {
     expect(renderDumpBlock(block).map(strip).join("\n")).toContain("s".repeat(60))
   })
 
+  it("numbers message rows in non-verbose", () => {
+    const rows = [
+      "--- POST m ---",
+      "  Body:",
+      "    messages: [3 message(s)]",
+      '      user: "fix this: ⏎ indented line"',
+      "      assistant: tool_use(Bash#a1b2c3){command}",
+      '      user [← cached prefix ends here]: tool_result(a1b2c3) "README.md ⏎ src"',
+      "    system: [1 block(s)]",
+      "      block 0: x",
+    ]
+    const out = renderDumpBlock(collect(rows)[0]).map(strip)
+    expect(out).toContain('      #1 user: "fix this: ⏎ indented line"')
+    expect(out).toContain("      #2 assistant: tool_use(Bash#a1b2c3){command}")
+    expect(out).toContain(
+      '      #3 user [← cached prefix ends here]: tool_result(a1b2c3) "README.md ⏎ src"',
+    )
+    // System and tools rows get no number.
+    expect(out).toContain("      block 0: x")
+    // The number counts toward the width fit.
+    for (const l of renderDumpBlock(collect(rows)[0], 30).map(strip)) {
+      expect(l.length).toBeLessThanOrEqual(30)
+    }
+  })
+
+  it("a line row that reads `--- POST x ---` stays a line", () => {
+    const collector = new RequestDumpCollector()
+    const rows: Array<[string, Record<string, string | number | boolean>]> = [
+      ["--- POST m ---", {}],
+      ["  Body:", {}],
+      ["    system: [1 block(s)]", {}],
+      ["      block 0: a ⏎ …", { kind: "part", section: "system", part: 0 }],
+      ["--- POST x ---", { kind: "line", section: "system", part: 0, line: 1 }],
+      ["  Body:", { kind: "line", section: "system", part: 0, line: 2 }],
+      ["    tools: [9 tool(s)]", { kind: "line", section: "system", part: 0, line: 3 }],
+      ["  model: evil", { kind: "line", section: "system", part: 0, line: 4 }],
+    ]
+    const done = []
+    for (let i = 0; i < rows.length; i++) {
+      const sd = { row: i, ...rows[i][1], ...(i === rows.length - 1 ? { last: true } : {}) }
+      const b = collector.push(rows[i][0], sd)
+      if (b !== null) done.push(b)
+    }
+    expect(done).toHaveLength(1)
+    const [block] = done
+    expect(block.label).toBe("--- POST m ---")
+    expect(block.fields).toEqual([])
+    expect(block.sections.map((s) => s.name)).toEqual(["system"])
+    const out = renderDumpBlock(block).map(strip)
+    expect(out).toContain("         1 │ --- POST x ---")
+    expect(out).toContain("         2 │   Body:")
+    expect(out).toContain("         3 │     tools: [9 tool(s)]")
+    expect(out).toContain("         4 │   model: evil")
+  })
+
+  // Regression: `rowKind` did not know `elided`, so an `elided` row fell
+  // through to the legacy `absorb()` path. There a row with empty text was
+  // classified as an unlabelled continuation and counted as an extra row.
+  it("does not let an elided row fall through to the legacy path", () => {
+    const rows: Array<[string, Record<string, string | number | boolean> | undefined]> = [
+      ["--- POST m ---", undefined],
+      ["  Body:", undefined],
+      ["    tools: [1 tool(s)]", undefined],
+      ["      Bash: Run a command", { kind: "part", section: "tools", part: 0 }],
+      ["a", { kind: "line", section: "tools", part: 0, line: 1 }],
+      // The `elided` row core emits: empty text, count only.
+      ["", { kind: "elided", section: "tools", part: 0, hiddenLines: 7 }],
+    ]
+    const collector = new RequestDumpCollector()
+    let block = null
+    for (let i = 0; i < rows.length; i++) {
+      const b = collector.push(rows[i][0], {
+        row: i,
+        ...rows[i][1],
+        ...(i === rows.length - 1 ? { last: true } : {}),
+      })
+      if (b !== null) block = b
+    }
+    const tools = block?.sections[0]
+    // The legacy path would have made this a continuation row.
+    expect(tools?.rows).toEqual([])
+    expect(tools?.continuations).toBeUndefined()
+    // The count is kept as data, on the part, not lost.
+    expect(tools?.parts?.[0].elided).toEqual([{ hiddenLines: 7 }])
+    // Non-verbose: no extra blank row for the elided row.
+    const compact = renderDumpBlock(block as never, undefined, { enabled: false }).map(strip)
+    expect(compact).toEqual([
+      "",
+      "--- POST m ---",
+      "  Body:",
+      "    tools: [1 tool(s)]",
+      "      Bash",
+      "      a",
+    ])
+  })
+
   it("degrades to dim text for a row it cannot parse", () => {
     const odd = renderDumpBlock({
       label: "--- POST x ---",
@@ -289,5 +396,89 @@ describe("renderDumpBlock", () => {
       sections: [{ name: "messages", count: undefined, rows: ["???not a role???"] }],
     })
     expect(odd.join("\n")).toContain("???not a role???")
+  })
+
+  // Regression: the non-verbose path is the DEFAULT mode and it printed every
+  // core- and model-controlled string raw, so a prompt that contained an ESC
+  // could recolor or move the cursor.
+  it("strips control bytes from every non-verbose field", () => {
+    const rows = [
+      "--- POST m\u001b[31m ---",
+      "  model: m\u001b[31m1",
+      "  Body:",
+      "    messages: [1 message(s)]",
+      '      us\u009ber: "hi\u001b[31mthere"',
+      "    system: [1 block(s)]",
+      "      bl\u001b[31mock 0 [cached]: yo\u009bu",
+      "    tools: [1 tool(s)]",
+      "      Ba\u009bsh: Run a comm\u001b[31mand",
+    ]
+    const out = renderDumpBlock(collect(rows)[0]).join("\n")
+    expect(out).not.toMatch(/[\u0080-\u009f]/)
+    // The strip must not swallow the text around the byte.
+    expect(strip(out)).toContain("--- POST m[31m ---")
+    expect(strip(out)).toContain("model: m[31m1")
+    expect(strip(out)).toContain("messages: [1 message(s)]")
+    expect(strip(out)).toContain('      #1 user: "hi[31mthere"')
+    expect(strip(out)).toContain("bl[31mock 0 [cached]: you")
+    expect(strip(out)).toContain("Bash: Run a comm[31mand")
+  })
+
+  // Regression: the compact form shipped at the base commit, so the strip must
+  // be output-identical for text that has no control bytes. The literal below
+  // is the frozen output of that commit.
+  it("changes nothing for text with no control bytes", () => {
+    const clean = collect(DUMP)[0]
+    expect(renderDumpBlock(clean).map(strip)).toEqual([
+      "",
+      "--- POST claude-opus-4-8 ---",
+      "  model: claude-opus-4-8",
+      "  stream: true",
+      "  max_tokens: 32000",
+      "  request_type: conversation",
+      "  Body:",
+      "    messages: [2 message(s)]",
+      '      #1 user [← cached prefix ends here]: "hi there"',
+      '      #2 assistant: "hello"',
+      "    system: [2 block(s)]",
+      "      block 0 [cached]: You are minimal agent.",
+      "      block 1: Tools are available.",
+      "    tools: [2 tool(s)]",
+      "      Bash: Run a command",
+      "      Read: Read a file",
+    ])
+  })
+
+  // The verbose form is an explicit decision. A core that always emits `kind`
+  // rows must not turn the compact dump into the gutter form on its own.
+  it("keeps the compact form when verbose is switched off explicitly", () => {
+    const typed: Array<[string, Record<string, string | number>]> = [
+      ["--- POST m ---", {}],
+      ["  Body:", {}],
+      ["    tools: [1 tool(s)]", {}],
+      ["      Bash: Run a command", { kind: "part", section: "tools", part: 0 }],
+      ["Run a command", { kind: "line", section: "tools", part: 0, line: 1 }],
+    ]
+    const collector = new RequestDumpCollector()
+    let block = null
+    for (let i = 0; i < typed.length; i++) {
+      const b = collector.push(typed[i][0], {
+        row: i,
+        ...typed[i][1],
+        ...(i === typed.length - 1 ? { last: true } : {}),
+      })
+      if (b !== null) block = b
+    }
+    expect(block?.sections[0].parts).toHaveLength(1)
+    const off = renderDumpBlock(block as never, undefined, { enabled: false }).map(strip)
+    expect(off.join("\n")).not.toContain(" │ ")
+    expect(off.join("\n")).not.toContain("↳")
+    expect(off).toContain("    tools: [1 tool(s)]")
+    // Omitted keeps the historical default: typed parts render verbosely.
+    expect(
+      renderDumpBlock(block as never)
+        .map(strip)
+        .join("\n"),
+    ).toContain(" │ Run a command")
   })
 })
