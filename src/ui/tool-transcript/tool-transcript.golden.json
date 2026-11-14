@@ -1,7 +1,7 @@
 {
   "bash-stream": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ printf 'one\\ntwo\\nthree\\n'\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208m»\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ printf 'one\\ntwo\\nthree\\n'\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[2mone\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[2mtwo\u001b[22m",
@@ -12,7 +12,7 @@
   },
   "bash-long": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ seq 1 30\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208m»\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ seq 1 30\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m",
@@ -32,7 +32,7 @@
   },
   "bash-empty": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ true\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208m»\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ true\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m╰\u001b[22;39m \u001b[2m(no output)\u001b[22m"
     ],
@@ -41,7 +41,7 @@
   },
   "bash-error": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ echo oops >&2; exit 3\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208m»\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ echo oops >&2; exit 3\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m╰\u001b[22;39m \u001b[31moops\u001b[39m"
     ],
@@ -50,7 +50,7 @@
   },
   "read-plain": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mRead\u001b[39m\u001b[22m  \u001b[2m<ROOT>/example.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;45m•\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;45mRead\u001b[39m\u001b[22m  \u001b[2m<ROOT>/example.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[2m1   const x: number = 1\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[2m2   return x\u001b[22m",
@@ -61,7 +61,7 @@
   },
   "read-highlight": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mRead\u001b[39m\u001b[22m  \u001b[2m<ROOT>/example.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;45m•\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;45mRead\u001b[39m\u001b[22m  \u001b[2m<ROOT>/example.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m   \u001b[38;2;10;20;30mconst x: number = 1\u001b[0m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m   \u001b[38;2;10;20;30mreturn x\u001b[0m",
@@ -72,7 +72,7 @@
   },
   "edit-diff": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/edit.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;214m✦\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;214mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/edit.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[1m--- a/<ROOT>/edit.ts\u001b[0m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[1m+++ b/<ROOT>/edit.ts\u001b[0m",
@@ -87,7 +87,7 @@
   },
   "edit-diff-highlight": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/edit-hl.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;214m✦\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;214mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/edit-hl.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[0m\u001b[1m--- a/<ROOT>/edit-hl.ts\u001b[0m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[0m\u001b[1m+++ b/<ROOT>/edit-hl.ts\u001b[0m",
@@ -102,7 +102,7 @@
   },
   "write-new": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mWrite\u001b[39m\u001b[22m  \u001b[2m<ROOT>/new.txt\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;118m✚\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;118mWrite\u001b[39m\u001b[22m  \u001b[2m<ROOT>/new.txt\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[1mNew file: <ROOT>/new.txt\u001b[0m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[2m────────────────────────────────────────────────────────────\u001b[0m",
@@ -117,7 +117,7 @@
   },
   "input-error": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mRead\u001b[39m\u001b[22m  \u001b[2m\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;45m•\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;45mRead\u001b[39m\u001b[22m  \u001b[2m\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m"
     ],
     "content": "Read error: (root): missing required property \"file_path\"",
@@ -125,7 +125,7 @@
   },
   "policy-deny": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ echo never\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208m»\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ echo never\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[1;31m⊘\u001b[22;39m \u001b[2mblocked here\u001b[22m",
       "  \u001b[2;36m╰\u001b[22;39m \u001b[2m(refused by policy)\u001b[22m"
@@ -135,7 +135,7 @@
   },
   "mode-refusal": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ echo never\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208m»\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;208mBash\u001b[39m\u001b[22m  \u001b[2m$ echo never\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[1;31m⊘\u001b[22;39m \u001b[2mTool \"Bash\" is not permitted in ASK mode.\u001b[22m",
       "  \u001b[2;36m╰\u001b[22;39m \u001b[2m(refused by ask)\u001b[22m"
@@ -145,7 +145,7 @@
   },
   "mode-tool": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mMode\u001b[39m\u001b[22m  \u001b[2m\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;45m◐\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;45mMode\u001b[39m\u001b[22m  \u001b[2m\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m╰\u001b[22;39m \u001b[2mactive mode: ASK\u001b[22m"
     ],
@@ -154,7 +154,7 @@
   },
   "diagnostics": {
     "rows": [
-      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;208mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/diag.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
+      "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;214m✦\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;214mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/diag.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[1m--- a/<ROOT>/diag.ts\u001b[0m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[1m+++ b/<ROOT>/diag.ts\u001b[0m",

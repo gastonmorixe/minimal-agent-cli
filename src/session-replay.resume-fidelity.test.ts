@@ -36,6 +36,7 @@ import type {
   TestSendResult as StreamedResponse,
   TestTransport as TransportFn,
 } from "./test-utils/transport-types.ts"
+import { DEFAULT_TOOL_ICON } from "./ui/tool-transcript/format.ts"
 
 const ANSI_RE = new RegExp(`${String.fromCodePoint(0x1b)}\\[[0-9;?]*[ -/]*[@-~]`, "g")
 
@@ -147,9 +148,9 @@ describe("--resume fidelity: tool display payload survives the JSONL round-trip"
     expect(plain).toContain("+NEW")
     expect(plain).not.toMatch(/^\s*│\s+File edited:/m)
 
-    // 4. The header carries the tool name. (Edit has no icon: the CLI's
-    // static presentation map, S41, holds plugin tools only.)
-    expect(plain).toMatch(/╭ Edit/)
+    // 4. The header carries the default icon and the tool name. (The map
+    // is empty here, so Edit gets DEFAULT_TOOL_ICON.)
+    expect(plain).toContain(`╭ ${DEFAULT_TOOL_ICON} Edit`)
   })
 
   it("old session files (no `display` persisted) replay with the original content fallback", () => {

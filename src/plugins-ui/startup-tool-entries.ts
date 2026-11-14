@@ -16,12 +16,12 @@ import { applyToolNamePolicy, type ToolNamePolicy } from "@minimal-agent/core/sd
 
 import type { StartupToolEntry } from "../ui/chrome/startup-tools-row.ts"
 import { closeStartupTree, closeStartupTreeWithTools } from "../ui/startup/tree.ts"
-import type { ToolPresentation } from "../ui/tool-transcript/format.ts"
+import { type ToolPresentation, toolIcon } from "../ui/tool-transcript/format.ts"
 import { TOOL_PRESENTATION } from "./tool-presentation.ts"
 
 /**
  * Map each tool to a startup row entry. A tool with a map row gets its icon
- * and color. A tool with no row (or a row with no icon) keeps the bare name.
+ * and color. A tool with no row (or a row with no icon) gets the default icon.
  *
  * @param tools - The tools in advertised order (only `name` is read).
  * @param presentation - The presentation map. Default: {@link TOOL_PRESENTATION}.
@@ -33,8 +33,8 @@ export function startupToolEntries(
 ): StartupToolEntry[] {
   return tools.map(({ name }) => {
     const p = presentation.get(name)
-    if (!p?.icon) return { name }
-    return p.color ? { name, icon: p.icon, color: p.color } : { name, icon: p.icon }
+    const icon = toolIcon(p)
+    return p?.color ? { name, icon, color: p.color } : { name, icon }
   })
 }
 
