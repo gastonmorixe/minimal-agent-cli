@@ -101,7 +101,7 @@ function trimAtWordBoundary(s: string, max: number): string {
  * Generous enough to show typical heredocs / for-loops / function bodies
  * without dominating the screen.
  */
-const BASH_CONT_MAX_LINES = 8
+const BASH_CONT_MAX_LINES = 16
 
 /**
  * Format a `tool_use` block's input for the bordered tool header. Picks
@@ -335,7 +335,7 @@ export function formatToolInput(tool: ToolUseBlock, cols?: number, headerKey?: s
  *   ╰ (no output)
  * ```
  *
- * Capped at {@link BASH_CONT_MAX_LINES} (default 8). Beyond the cap, a
+ * Capped at {@link BASH_CONT_MAX_LINES} (default 16). Beyond the cap, a
  * synthetic last row reads `> ... +NL more` so the user knows the rest
  * was elided. Per-line word-boundary trim mirrors `formatToolInput`'s
  * 500-char Bash budget.

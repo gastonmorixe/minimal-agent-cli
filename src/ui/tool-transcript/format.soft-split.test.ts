@@ -134,14 +134,14 @@ describe("formatToolInputContinuation — Bash soft-split (↳ rows)", () => {
   })
 
   it("caps soft-split rows at BASH_CONT_MAX_LINES with synthetic '↳ ...(+NL) more' last row", () => {
-    // 10 segments → 1 lead + 9 rest; cap is 8 visible + 1 elision row.
-    const segments = Array.from({ length: 10 }, (_, i) => `cmd${i}`)
+    // 18 segments → 1 lead + 17 rest; cap is 16 visible + 1 elision row.
+    const segments = Array.from({ length: 18 }, (_, i) => `cmd${i}`)
     const cmd = segments.join(" | ")
     const cont = formatToolInputContinuation(tu("Bash", { command: cmd }), 40)
-    expect(cont.length).toBe(9) // 8 visible + 1 elision
+    expect(cont.length).toBe(17) // 16 visible + 1 elision
     expect(cont[0]).toBe("↳ | cmd1")
-    expect(cont[7]).toBe("↳ | cmd8")
-    expect(cont[8]).toBe("↳ ...(+1L) more")
+    expect(cont[15]).toBe("↳ | cmd16")
+    expect(cont[16]).toBe("↳ ...(+1L) more")
   })
 
   it("word-boundary-trims a single very-long soft-split segment", () => {
@@ -190,23 +190,23 @@ describe("formatToolInputContinuation — Bash combined soft-split + PS2 tail", 
 
   it("applies the cap across combined ↳ + > rows (single elision row, ↳ prefix when cut in soft-split zone)", () => {
     // Long first line → many ↳ rows. Then a few PS2 lines. Combined
-    // length > 8 → cap with one trailing elision row whose prefix
+    // length > 16 → cap with one trailing elision row whose prefix
     // matches whichever zone the cut landed in.
-    const longFirst = Array.from({ length: 10 }, (_, i) => `cmd${i}`).join(" && ")
+    const longFirst = Array.from({ length: 20 }, (_, i) => `cmd${i}`).join(" && ")
     const cmd = `${longFirst}\ntail1\ntail2\ntail3`
     const cont = formatToolInputContinuation(tu("Bash", { command: cmd }), 40)
-    expect(cont.length).toBe(9) // 8 visible + 1 elision (BASH_CONT_MAX_LINES = 8)
-    // Cap landed inside the ↳ zone (10 segments > 8) → elision prefix is ↳.
+    expect(cont.length).toBe(17) // 16 visible + 1 elision (BASH_CONT_MAX_LINES = 16)
+    // Cap landed inside the ↳ zone (19 segments > 16) → elision prefix is ↳.
     expect(cont[cont.length - 1]).toMatch(/^↳ \.\.\.\(\+\d+L\) more$/)
   })
 
   it("uses > prefix on the elision row when the cut lands inside the PS2 zone", () => {
-    // Short first line (3 ↳ rows) + 10 PS2 lines → cap at 8 means
-    // [↳, ↳, ↳, >, >, >, >, >] visible. The cut is inside the PS2 zone,
+    // Short first line (3 ↳ rows) + 20 PS2 lines → cap at 16 means
+    // 3 ↳ + 13 > visible. The cut is inside the PS2 zone,
     // so the elision row uses > to keep the eye oriented.
-    const cmd = "a && b && c && d\n" + Array.from({ length: 10 }, (_, i) => `tail${i}`).join("\n")
+    const cmd = "a && b && c && d\n" + Array.from({ length: 20 }, (_, i) => `tail${i}`).join("\n")
     const cont = formatToolInputContinuation(tu("Bash", { command: cmd }), 30)
-    expect(cont.length).toBe(9)
+    expect(cont.length).toBe(17)
     expect(cont[cont.length - 1]).toMatch(/^> \.\.\.\(\+\d+L\) more$/)
   })
 })
