@@ -161,25 +161,25 @@ describe("formatToolInputContinuation — Bash", () => {
     expect(cont).toEqual([">   echo $i", "> done"])
   })
 
-  it("caps at BASH_CONT_MAX_LINES=8 with synthetic `... +NL more` last row", () => {
-    // 12 continuation lines → render 8, elide 4.
+  it("caps at BASH_CONT_MAX_LINES=16 with synthetic `... +NL more` last row", () => {
+    // 20 continuation lines → render 16, elide 4.
     const lines = ["echo first"]
-    for (let i = 1; i <= 12; i++) lines.push(`echo line${i}`)
+    for (let i = 1; i <= 20; i++) lines.push(`echo line${i}`)
     const cmd = lines.join("\n")
     const cont = formatToolInputContinuation(tu("Bash", { command: cmd }))
-    expect(cont.length).toBe(9) // 8 visible + 1 synthetic
+    expect(cont.length).toBe(17) // 16 visible + 1 synthetic
     expect(cont[0]).toBe("> echo line1")
-    expect(cont[7]).toBe("> echo line8")
-    expect(cont[8]).toBe("> ...(+4L) more")
+    expect(cont[15]).toBe("> echo line16")
+    expect(cont[16]).toBe("> ...(+4L) more")
   })
 
   it("does NOT add a synthetic last row when continuation fits exactly within the cap", () => {
-    // 8 continuation lines = exactly the cap → no elision row.
+    // 16 continuation lines = exactly the cap → no elision row.
     const lines = ["first"]
-    for (let i = 1; i <= 8; i++) lines.push(`l${i}`)
+    for (let i = 1; i <= 16; i++) lines.push(`l${i}`)
     const cont = formatToolInputContinuation(tu("Bash", { command: lines.join("\n") }))
-    expect(cont.length).toBe(8)
-    expect(cont[7]).toBe("> l8")
+    expect(cont.length).toBe(16)
+    expect(cont[15]).toBe("> l16")
     expect(cont.some((l) => l.includes("more"))).toBe(false)
   })
 
