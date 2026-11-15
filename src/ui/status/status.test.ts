@@ -4,10 +4,14 @@ import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { Spinner } from "../spinner/index.ts"
 
 import {
+  displayLabelFor,
+  EntryClock,
   formatActivityInfix,
   formatElapsed,
   formatElapsedSuffix,
+  RateWindow,
   STALL_THRESHOLD_MS,
+  stallThresholdFor,
 } from "./format.ts"
 import { StatusRenderer } from "./line-renderer.ts"
 
@@ -622,9 +626,11 @@ describe("formatActivityInfix", () => {
     expect(stripAnsi(out)).toContain("3.0 tok/s")
   })
 
-  it("STALL_THRESHOLD_MS is exported and reasonable (1-5s range)", () => {
-    expect(STALL_THRESHOLD_MS).toBeGreaterThanOrEqual(1_000)
-    expect(STALL_THRESHOLD_MS).toBeLessThanOrEqual(5_000)
+  it("STALL_THRESHOLD_MS is exported and reasonable (5-15s range)", () => {
+    // 2 s flickered on healthy text streams (deltas every few hundred ms
+    // with occasional multi-second gaps); see research/2026-11-15-stream-stall-10404ddc.
+    expect(STALL_THRESHOLD_MS).toBeGreaterThanOrEqual(5_000)
+    expect(STALL_THRESHOLD_MS).toBeLessThanOrEqual(15_000)
   })
 
   it("upload-direction picks sentTokens not recvTokens for the tokens segment", () => {
@@ -650,12 +656,12 @@ describe("formatActivityInfix", () => {
       const a: StatusActivity = {
         direction: "down",
         recvBytes: 10,
-        lastChunkAt: NOW - STALL_THRESHOLD_MS - 500, // 2.5s ago
+        lastChunkAt: NOW - STALL_THRESHOLD_MS - 500,
       }
       const out = formatActivityInfix(a, { now: NOW })
       const plain = stripAnsi(out)
       expect(plain).toContain("⋯ stalled")
-      expect(plain).toContain("last byte 2s ago")
+      expect(plain).toContain(`last byte ${Math.floor((STALL_THRESHOLD_MS + 500) / 1000)}s ago`)
       expect(out).toContain("\x1b[38;5;214m") // gold SGR open
       // The arrow should NOT be the green ↓ — stalled wins over direction.
       expect(out).not.toContain("\x1b[38;5;118m↓")
@@ -743,6 +749,139 @@ describe("formatActivityInfix", () => {
       expect(stripAnsi(out)).toContain("last byte 1s ago")
       expect(stripAnsi(out)).not.toContain("last byte 0s")
     })
+  })
+})
+
+describe("block-aware status (core activity.phase contract)", () => {
+  const NOW = 1_000_000
+
+  it("displayLabelFor maps open content blocks to CLI words", () => {
+    expect(displayLabelFor("Receiving stream", { phase: "thinking" })).toBe("Reasoning")
+    expect(displayLabelFor("Receiving stream", { phase: "writing" })).toBe("Writing response")
+    expect(displayLabelFor("Receiving stream", { phase: "tool-input", toolName: "Write" })).toBe(
+      "Streaming Write input",
+    )
+    expect(displayLabelFor("Receiving stream", { phase: "tool-input", toolName: null })).toBe(
+      "Streaming tool input",
+    )
+    expect(displayLabelFor("Receiving stream", { phase: "stream" })).toBe("Receiving stream")
+    expect(displayLabelFor("Running Bash", undefined)).toBe("Running Bash")
+  })
+
+  it("stallThresholdFor uses half the watchdog budget, never below the fallback", () => {
+    expect(stallThresholdFor({})).toBe(STALL_THRESHOLD_MS)
+    expect(stallThresholdFor({ idleBudgetMs: 30_000 })).toBe(15_000)
+    expect(stallThresholdFor({ idleBudgetMs: 300_000 })).toBe(150_000)
+    expect(stallThresholdFor({ idleBudgetMs: 4_000 })).toBe(STALL_THRESHOLD_MS)
+    expect(stallThresholdFor({ idleBudgetMs: 0 })).toBe(STALL_THRESHOLD_MS)
+  })
+
+  it("a 40s silent thinking block is NOT stalled (session 10404ddc shape)", () => {
+    const a: StatusActivity = {
+      direction: "down",
+      phase: "thinking",
+      phaseStartedAt: NOW - 40_000,
+      recvBytes: 724,
+      lastChunkAt: NOW - 40_000,
+      lastContentAt: NOW - 40_000,
+      idleBudgetMs: 300_000,
+    }
+    const plain = stripAnsi(formatActivityInfix(a, { now: NOW }))
+    expect(plain).not.toContain("stalled")
+    expect(plain).toBe(" ↓ 40s · 724 B")
+  })
+
+  it("a thinking block past half its budget IS stalled, with the content age", () => {
+    const a: StatusActivity = {
+      direction: "down",
+      phase: "thinking",
+      phaseStartedAt: NOW - 200_000,
+      lastChunkAt: NOW - 1_000, // a ping just arrived
+      lastContentAt: NOW - 200_000,
+      idleBudgetMs: 300_000,
+    }
+    const plain = stripAnsi(formatActivityInfix(a, { now: NOW }))
+    expect(plain).toContain("⋯ stalled")
+    expect(plain).toContain("last output 3m 20s ago")
+  })
+
+  it("a keep-alive ping does not hide a stall when lastContentAt is known", () => {
+    const a: StatusActivity = {
+      direction: "down",
+      phase: "stream",
+      lastChunkAt: NOW - 200, // ping
+      lastContentAt: NOW - 20_000,
+      idleBudgetMs: 30_000,
+    }
+    expect(stripAnsi(formatActivityInfix(a, { now: NOW }))).toContain("⋯ stalled")
+  })
+
+  it("falls back to lastChunkAt when core reports no lastContentAt", () => {
+    const a: StatusActivity = { direction: "down", lastChunkAt: NOW - 1_000 }
+    expect(stripAnsi(formatActivityInfix(a, { now: NOW }))).not.toContain("stalled")
+  })
+
+  it("no phase-duration segment outside a content block or under 1s", () => {
+    const stream: StatusActivity = {
+      direction: "down",
+      phase: "stream",
+      phaseStartedAt: NOW - 9_000,
+    }
+    expect(stripAnsi(formatActivityInfix(stream, { now: NOW }))).toBe(" ↓")
+    const fresh: StatusActivity = { direction: "down", phase: "writing", phaseStartedAt: NOW - 400 }
+    expect(stripAnsi(formatActivityInfix(fresh, { now: NOW }))).toBe(" ↓")
+  })
+})
+
+describe("RateWindow", () => {
+  it("reports the recent rate, not the lifetime average", () => {
+    const w = new RateWindow(3_000)
+    // 40 s of silence at 724 B (a thinking block)…
+    expect(w.observe(1, { direction: "down", recvBytes: 724 }, 0)).toBeNull()
+    expect(w.observe(1, { direction: "down", recvBytes: 724 }, 40_000)).toBeNull()
+    // …then 20 KB arrives within one second.
+    w.observe(1, { direction: "down", recvBytes: 724 }, 40_000)
+    const rate = w.observe(1, { direction: "down", recvBytes: 21_204 }, 41_000)
+    // Lifetime average would be ~517 B/s; the window shows the burst.
+    expect(rate).not.toBeNull()
+    const kbs = Number.parseFloat(rate ?? "0")
+    expect(rate).toContain("KB/s")
+    expect(kbs).toBeGreaterThan(5)
+  })
+
+  it("prefers tokens and resets on a new entry", () => {
+    const w = new RateWindow(3_000)
+    w.observe(1, { direction: "down", recvTokens: 100 }, 0)
+    expect(w.observe(1, { direction: "down", recvTokens: 300 }, 2_000)).toBe("100 tok/s")
+    // New entry: no baseline yet.
+    expect(w.observe(2, { direction: "down", recvTokens: 10 }, 2_100)).toBeNull()
+  })
+
+  it("returns nothing once the stream goes quiet past the window", () => {
+    const w = new RateWindow(1_000)
+    w.observe(1, { direction: "down", recvBytes: 100 }, 0)
+    w.observe(1, { direction: "down", recvBytes: 5_000 }, 500)
+    for (let t = 750; t <= 4_000; t += 250) w.observe(1, { direction: "down", recvBytes: 5_000 }, t)
+    expect(w.observe(1, { direction: "down", recvBytes: 5_000 }, 4_000)).toBeNull()
+  })
+})
+
+describe("EntryClock", () => {
+  it("keeps the first-seen start per id and forgets on clear", () => {
+    const c = new EntryClock()
+    expect(c.startOf(7, 100)).toBe(100)
+    expect(c.startOf(8, 500)).toBe(500)
+    expect(c.startOf(7, 900)).toBe(100)
+    c.clear()
+    expect(c.startOf(7, 1_000)).toBe(1_000)
+  })
+
+  it("bounds its size", () => {
+    const c = new EntryClock(2)
+    c.startOf(1, 1)
+    c.startOf(2, 2)
+    c.startOf(3, 3)
+    expect(c.startOf(1, 99)).toBe(99) // evicted
   })
 })
 

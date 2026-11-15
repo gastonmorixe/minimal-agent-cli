@@ -9,7 +9,14 @@ import {
   type SpinnerNotification,
 } from "../spinner/index.ts"
 
-import { formatActivityInfix, formatElapsedSuffix, LABEL_BYTES_RE } from "./format.ts"
+import {
+  displayLabelFor,
+  EntryClock,
+  formatActivityInfix,
+  formatElapsedSuffix,
+  LABEL_BYTES_RE,
+  RateWindow,
+} from "./format.ts"
 
 export interface StatusSpinnerTheme extends BlinkingNerdSpinnerTheme {
   accent?: (text: string) => string
@@ -44,6 +51,9 @@ export class StatusRenderer {
   private suspended = false
   private statusId: number | null = null
   private statusStartedAt = 0
+  /** Per-entry start times (same rule as `LiveAreaStatusController`). */
+  private readonly clock = new EntryClock()
+  private readonly rateWindow = new RateWindow()
 
   constructor(
     bus: StatusBus,
@@ -88,6 +98,8 @@ export class StatusRenderer {
     this.clearLine()
     this.statusId = null
     this.statusStartedAt = 0
+    this.clock.clear()
+    this.rateWindow.reset()
   }
 
   suspend(): void {
@@ -134,12 +146,14 @@ export class StatusRenderer {
       if (!this.suspended) this.clearLine()
       this.statusId = null
       this.statusStartedAt = 0
+      this.clock.clear()
+      this.rateWindow.reset()
       return
     }
 
     if (status.id !== this.statusId) {
       this.statusId = status.id
-      this.statusStartedAt = this.now()
+      this.statusStartedAt = this.clock.startOf(status.id, this.now())
     }
 
     this.spinnerManager.ensureMounted()
@@ -189,18 +203,21 @@ export class StatusRenderer {
     const elapsedMs = this.statusStartedAt > 0 ? now - this.statusStartedAt : 0
     const suffix = formatElapsedSuffix(elapsedMs)
     const status = this.bus.currentStatus()
-    const labelHasBytes = LABEL_BYTES_RE.test(this.label)
+    const label = displayLabelFor(this.label, status?.activity)
+    const labelHasBytes = LABEL_BYTES_RE.test(label)
     const cols = (this.output as { columns?: number }).columns
     const maxWidth = typeof cols === "number" && cols > 0 ? cols : Number.POSITIVE_INFINITY
-    const fixedWidth = displayWidth(prefix) + displayWidth(this.label) + displayWidth(suffix)
+    const fixedWidth = displayWidth(prefix) + displayWidth(label) + displayWidth(suffix)
     const infixBudget = Number.isFinite(maxWidth) ? Math.max(0, maxWidth - fixedWidth) : undefined
     const infix = formatActivityInfix(status?.activity, {
       now,
       entryStartedAt: this.statusStartedAt,
       hideBytes: labelHasBytes,
       maxWidth: infixBudget,
+      rateWindow: this.rateWindow,
+      ...(status ? { entryId: status.id } : {}),
     })
-    const composed = `${prefix}${c.dim(this.label)}${infix}${suffix}`
+    const composed = `${prefix}${c.dim(label)}${infix}${suffix}`
     const clamped = Number.isFinite(maxWidth)
       ? truncateDisplayWidth(composed, maxWidth, "")
       : composed
