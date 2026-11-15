@@ -204,9 +204,9 @@ function publishGenericEndpointEnv(opts: ResolveStartupProviderStateInput["opts"
 /** Start provider-specific best-effort warm-ups for the selected provider. */
 export function startProviderWarmups(state: StartupProviderState): void {
   void (async () => {
-    const { legacyAuthToProviderAuth } = await import("@minimal-agent/core/host/auth")
+    const { authResultToProviderAuth } = await import("@minimal-agent/core/host/auth")
     const probeCtx = {
-      auth: legacyAuthToProviderAuth(state.auth),
+      auth: authResultToProviderAuth(state.auth),
       modelId: state.selectedModelBase,
     }
     for (const plugin of listProviderPlugins()) {
