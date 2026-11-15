@@ -124,6 +124,9 @@ function replExecutor(rows: string[], opts: CaseOptions): ToolExecutorAdapter {
       toolTimeTracker: new FixedTimeTracker(),
       codeHighlighter: opts.highlighter ?? null,
       columns: () => 100,
+      // A fixed cwd outside the fixture root, so header paths stay absolute
+      // and the `<ROOT>` scrub still sees them.
+      cwd: "/nonexistent-golden-cwd",
     }),
     loader: opts.loader ?? null,
     modeManager: opts.modeManager ?? null,

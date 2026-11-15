@@ -35,6 +35,8 @@ import type {
   HostRuntime,
   HostSession,
   HostSystemPromptOption,
+  HostTargetSelection,
+  HostTargetView,
 } from "@minimal-agent/core/host-kit/host-mode"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import type { ModelInfoSnapshot } from "@minimal-agent/core/plugin-api/types/plugin"
@@ -44,6 +46,15 @@ import { applyTurnWillStart } from "../repl-editor-hooks.ts"
 import { errorText } from "./core-text.ts"
 
 import { withHostPorts } from "./host-ports.ts"
+import {
+  credentialNamesFrom,
+  type DiscoverTargets,
+  defaultDiscoverTargets,
+  defaultResolveTargetAuth,
+  listHostTargets,
+  type ResolveTargetAuth,
+  setHostTarget,
+} from "./host-targets.ts"
 import { turnBlockedError } from "./run-non-interactive.ts"
 
 /** Default time the entry has to end after the first shutdown signal. */
@@ -99,6 +110,10 @@ export interface RunHostModeInput {
    * emits a real process signal. Defaults to `process`.
    */
   readonly signalSource?: Pick<NodeJS.Process, "on" | "removeListener">
+  /** Stored credentials for `listTargets` and the core credential check. Injectable for tests. */
+  readonly discoverTargets?: DiscoverTargets
+  /** Auth resolution for `setTarget`. Injectable for tests. Defaults to `resolveStartupAuth`. */
+  readonly resolveTargetAuth?: ResolveTargetAuth
 }
 
 /**
@@ -361,11 +376,25 @@ function buildHostRuntime(
   capabilities: HostRuntimeCapabilities,
 ): HostRuntimeWithCapabilities {
   const { sessionDeps } = input
+  const discover = input.discoverTargets ?? defaultDiscoverTargets
+  const resolveAuth = input.resolveTargetAuth ?? defaultResolveTargetAuth
   let opened = false
   // Set once `openSession` builds the session; `getModel`/`setModel` read
   // and write THIS core instance from then on (the host-mode escape hatch
   // `Session.agentCore()` — a plugin never gets it directly).
   let liveAgentCore: AgentCore | null = null
+  const liveProviderId = (): string | undefined =>
+    liveAgentCore ? liveAgentCore.getProviderId() : sessionDeps.providerId
+  const currentTarget = (): { providerId?: string; credentialName?: string } => {
+    const providerId = liveProviderId()
+    const credentialName = liveAgentCore
+      ? liveAgentCore.getCredentialName()
+      : sessionDeps.credentialName
+    return {
+      ...(providerId !== undefined ? { providerId } : {}),
+      ...(credentialName !== undefined ? { credentialName } : {}),
+    }
+  }
 
   return {
     capabilities,
@@ -385,6 +414,8 @@ function buildHostRuntime(
         // S23/S28: status rows and plugin-bus telemetry, like the human path.
         ...withHostPorts(withSystemPromptOption(sessionDeps, options?.systemPrompt, stderr)),
         wireModelInfoSource: true,
+        // switchTarget checks an explicit credential name against the store.
+        credentialNames: credentialNamesFrom(discover),
         sessionId: input.sessionId,
       })
       liveAgentCore = session.agentCore()
@@ -407,14 +438,23 @@ function buildHostRuntime(
       }
     },
     listModels(): readonly HostModelView[] {
-      const providerId = sessionDeps.providerId
+      // The LIVE provider: setTarget can change it after openSession.
+      const providerId = liveProviderId()
       return listRegisteredModels()
         .filter((m) => providerId === undefined || m.providerId === providerId)
         .map((m) => ({ id: m.id, label: m.displayName }))
     },
     modelInfo(id: string): ModelInfoSnapshot | undefined {
-      const snap = buildModelInfoSnapshot(id, sessionDeps.providerId)
+      const snap = buildModelInfoSnapshot(id, liveProviderId())
       return snap.resolved ? snap : undefined
+    },
+    listTargets(): readonly HostTargetView[] {
+      return listHostTargets(discover, currentTarget())
+    },
+    getTarget: currentTarget,
+    async setTarget(target: HostTargetSelection): Promise<void> {
+      if (!liveAgentCore) throw new Error("setTarget: no session open yet (call openSession first)")
+      await setHostTarget(liveAgentCore, target, resolveAuth)
     },
     getModel(): string {
       return liveAgentCore?.getModel() ?? sessionDeps.model

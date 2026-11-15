@@ -52,9 +52,9 @@
     "rows": [
       "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;45m•\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;45mRead\u001b[39m\u001b[22m  \u001b[2m<ROOT>/example.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1   const x: number = 1\u001b[22m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2   return x\u001b[22m",
-      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m3   \u001b[22m"
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1  const x: number = 1\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2  return x\u001b[22m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m3  \u001b[22m"
     ],
     "content": "1\tconst x: number = 1\n2\treturn x\n3\t",
     "isError": false
@@ -63,9 +63,9 @@
     "rows": [
       "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;45m•\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;45mRead\u001b[39m\u001b[22m  \u001b[2m<ROOT>/example.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m   \u001b[38;2;10;20;30mconst x: number = 1\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m   \u001b[38;2;10;20;30mreturn x\u001b[0m",
-      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m3\u001b[22m   \u001b[38;2;10;20;30m\u001b[0m"
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m  \u001b[38;2;10;20;30mconst x: number = 1\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m  \u001b[38;2;10;20;30mreturn x\u001b[0m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m3\u001b[22m  \u001b[38;2;10;20;30m\u001b[0m"
     ],
     "content": "1\tconst x: number = 1\n2\treturn x\n3\t",
     "isError": false
@@ -74,13 +74,11 @@
     "rows": [
       "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;214m✦\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;214mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/edit.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[1m--- a/<ROOT>/edit.ts\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[1m+++ b/<ROOT>/edit.ts\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[36m@@ -1,3 +1,3 @@\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m  alpha",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;199m-beta\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;118m+BETA\u001b[0m",
-      "  \u001b[2;36m╰\u001b[22;39m  gamma"
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m+1 −1\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m  alpha",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m \u001b[38;5;199m-beta\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m \u001b[38;5;118m+BETA\u001b[0m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m3\u001b[22m  gamma"
     ],
     "content": "File edited: <ROOT>/edit.ts (1 replacement(s))",
     "isError": false
@@ -89,13 +87,11 @@
     "rows": [
       "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;214m✦\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;214mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/edit-hl.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[0m\u001b[1m--- a/<ROOT>/edit-hl.ts\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[0m\u001b[1m+++ b/<ROOT>/edit-hl.ts\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[0m\u001b[36m@@ -1,3 +1,3 @@\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[0m \u001b[38;2;10;20;30mone\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[48;2;56;0;38m\u001b[38;5;199m-\u001b[0m\u001b[48;2;56;0;38m\u001b[38;2;10;20;30mtwo\u001b[0m\u001b[48;2;56;0;38m\u001b[49m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[48;2;29;56;0m\u001b[38;5;118m+\u001b[0m\u001b[48;2;29;56;0m\u001b[38;2;10;20;30mTWO\u001b[0m\u001b[48;2;29;56;0m\u001b[49m",
-      "  \u001b[2;36m╰\u001b[22;39m \u001b[0m \u001b[38;2;10;20;30mthree\u001b[0m"
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m+1 −1\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m \u001b[0m \u001b[38;2;10;20;30mone\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m \u001b[48;2;56;0;38m\u001b[38;5;199m-\u001b[0m\u001b[48;2;56;0;38m\u001b[38;2;10;20;30mtwo\u001b[0m\u001b[48;2;56;0;38m\u001b[49m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m2\u001b[22m \u001b[48;2;29;56;0m\u001b[38;5;118m+\u001b[0m\u001b[48;2;29;56;0m\u001b[38;2;10;20;30mTWO\u001b[0m\u001b[48;2;29;56;0m\u001b[49m",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m3\u001b[22m \u001b[0m \u001b[38;2;10;20;30mthree\u001b[0m"
     ],
     "content": "File edited: <ROOT>/edit-hl.ts (1 replacement(s))",
     "isError": false
@@ -104,13 +100,9 @@
     "rows": [
       "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;118m✚\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;118mWrite\u001b[39m\u001b[22m  \u001b[2m<ROOT>/new.txt\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[1mNew file: <ROOT>/new.txt\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[2m────────────────────────────────────────────────────────────\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[1m--- a/<ROOT>/new.txt\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[1m+++ b/<ROOT>/new.txt\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[36m@@ -1,0 +1,2 @@\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;118m+fresh\u001b[0m",
-      "  \u001b[2;36m╰\u001b[22;39m \u001b[38;5;118m+file\u001b[0m"
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2mnew file · 2 lines\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m  fresh",
+      "  \u001b[2;36m╰\u001b[22;39m \u001b[2m2\u001b[22m  file"
     ],
     "content": "File written: <ROOT>/new.txt",
     "isError": false
@@ -156,11 +148,9 @@
     "rows": [
       "\n  \u001b[2;36m╭\u001b[22;39m \u001b[1m\u001b[38;5;214m✦\u001b[39m\u001b[22m \u001b[1m\u001b[38;5;214mEdit\u001b[39m\u001b[22m  \u001b[2m<ROOT>/diag.ts\u001b[22m\u001b[2m · 12:00:00\u001b[22m",
       "  \u001b[2;36m│\u001b[22;39m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[1m--- a/<ROOT>/diag.ts\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[1m+++ b/<ROOT>/diag.ts\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[36m@@ -1,1 +1,1 @@\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;199m-let a = 1\u001b[0m",
-      "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;118m+const a = 1\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m+1 −1\u001b[22m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m \u001b[38;5;199m-let a = 1\u001b[0m",
+      "  \u001b[2;36m│\u001b[22;39m \u001b[2m1\u001b[22m \u001b[38;5;118m+const a = 1\u001b[0m",
       "  \u001b[2;36m│\u001b[22;39m \u001b[38;5;214m●\u001b[39m \u001b[2m1\u001b[22m a is unused",
       "  \u001b[2;36m╰\u001b[22;39m \u001b[38;5;214m▲\u001b[39m \u001b[38;5;214m1 warning\u001b[39m"
     ],

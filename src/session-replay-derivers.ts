@@ -28,8 +28,8 @@
  *        `new_string` and colorize through the core-local
  *        {@link renderUnifiedDiff}, so the pink/lime hunk styling
  *        matches the live tool.
- *      - **Write** — same idea with `before=""`, so the whole input
- *        renders as `+`-prefixed addition lines.
+ *      - **Write** — the whole input as a created file, in the same
+ *        Read-style capped preview the live view draws for a new file.
  *
  * Each re-deriver is a pure function `(input, content) -> overrides?`.
  * The return shape mirrors `ToolResultRecord`'s presentation fields.
@@ -49,6 +49,8 @@ import {
   writePathFromInput,
 } from "@minimal-agent/core/host/tool-input-aliases"
 import { renderUnifiedDiff } from "./ui/render/unified-diff.ts"
+import { c } from "./ui/style/ansi.ts"
+import { diffSummary, displayPatch, newFileDisplay } from "./ui/tool-transcript/diff-rows.ts"
 
 // The shared replay input shape and the renderer registry live in core, so
 // the plugin loader and this host read one registry. The result shape is
@@ -159,7 +161,8 @@ export function deriveEditDisplay(input: Record<string, unknown>): DerivedDispla
   // about WHAT changed, and that's preserved verbatim.
   const patch = buildEditDiff(filePath, oldString, oldString, newString, replaceAll, 0)
   if (patch === "") return undefined
-  const display = renderUnifiedDiff(patch)
+  // Same shape as the live view: a dim summary row, no file headers.
+  const display = `${c.dim(diffSummary(patch, false))}\n${renderUnifiedDiff(displayPatch(patch))}`
   return { display }
 }
 
@@ -171,21 +174,30 @@ export function deriveEditDisplay(input: Record<string, unknown>): DerivedDispla
  * additions (i.e. treat it as a brand-new file).
  *
  * Visually this differs from the live render when the Write actually
- * modified an existing file : pre-fix sessions show "+" for every
- * line of the new content instead of a focused hunk on the edited
- * region. The structural information is still faithful (the user can
- * see the file's final state in green) and there's no false-negative
- * (we don't omit anything that did change).
+ * modified an existing file : replay shows the head of the file's final
+ * content instead of a focused hunk on the edited region. A created file
+ * renders the same rows live and on replay (the replay highlights the
+ * same `N\t<code>` body when a highlighter is warm).
  */
 export function deriveWriteDisplay(input: Record<string, unknown>): DerivedDisplay | undefined {
+  const patch = writeNewFilePatch(input)
+  if (patch === undefined) return undefined
+  // Same Read-style preview the live view draws for a created file.
+  const { display, footer } = newFileDisplay(patch)
+  return footer === undefined ? { display } : { display, displayFooter: footer }
+}
+
+/**
+ * The all-additions patch a replayed `Write` renders from: the whole input
+ * content as a new file. `undefined` when the input has no path or content.
+ */
+export function writeNewFilePatch(input: Record<string, unknown>): string | undefined {
   const pathArg = writePathFromInput(input)
   const contentArg = writeContentFromInput(input)
   if (pathArg.status !== "ok" || contentArg.status !== "ok") return undefined
   if (contentArg.value.length === 0) return undefined
   const patch = buildFileDiff(pathArg.value, "", contentArg.value, 0)
-  if (patch === "") return undefined
-  const display = renderUnifiedDiff(patch, `New file: ${pathArg.value}`)
-  return { display }
+  return patch === "" ? undefined : patch
 }
 
 /**
