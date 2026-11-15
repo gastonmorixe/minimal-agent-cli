@@ -85,6 +85,11 @@ export function statusRowFor(fields: HostStatusFields): StatusRow {
         category: "network",
       }
     case "waiting_for_host":
+      // Kept for exhaustiveness and for hosts that drive a port from SDK
+      // `status` events. Core itself only EMITS this phase as an event
+      // (agent-core run end, outcome `waiting`) and never opens it on the
+      // port: the run is over, the REPL shows the error, and a live row
+      // would have nothing to spin for.
       return {
         label: `Paused after ${cause} — waiting for the next prompt`,
         notificationId: "network.retry",
