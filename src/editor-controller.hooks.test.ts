@@ -353,7 +353,7 @@ describe("EditorController — editor.buffer.changed hook", () => {
 //      without modifyOtherKeys. Parsed by `parseMetaSequence`.
 //   2. `\x1b[109;3u` (kitty CSI-u, code=109='m', modifiers=3=alt) : iTerm
 //      3.5+ with kitty proto enabled (which the agent enables at start
-//      via `\x1b[>31u`). Parsed by `parseCsiUKey` →
+//      via `\x1b[>1u`; flag 1 still CSI-u-encodes Alt+m). Parsed by `parseCsiUKey` →
 //      `parseModifiedKeySequence`.
 //   3. `\x1b[27;3;109~` (xterm modifyOtherKeys=2) : xterm-like terminals.
 //      Parsed by `parseXtermOtherKey` → `parseModifiedKeySequence`.

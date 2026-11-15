@@ -108,6 +108,22 @@ export function isPrintableCodePoint(cp: number): boolean {
 }
 
 /**
+ * Whether a CSI-u key code is a kitty "functional key": modifiers (Shift
+ * 57441, Alt 57443, Super 57444, …), keypad, media and lock keys. Kitty
+ * encodes these in the Unicode Private Use Area starting at 57344. They are
+ * not text, so a CSI-u event carrying one must never be inserted as a
+ * character (a bare Cmd press used to insert U+E064).
+ */
+export function isKittyFunctionalKey(cp: number): boolean {
+  return cp >= 57344 && cp <= 63743
+}
+
+/** A CSI-u key code that should be inserted as typed text. */
+export function isTypableKeyCode(cp: number): boolean {
+  return isPrintableCodePoint(cp) && !isKittyFunctionalKey(cp)
+}
+
+/**
  * Index of the final byte of a CSI sequence starting at `input[0]`
  * (`ESC [`): the first byte in `0x40..0x7e` at position 2 or later. Returns
  * `null` while the sequence is still incomplete (caller waits for more

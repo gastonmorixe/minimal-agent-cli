@@ -13,7 +13,7 @@ describe("EditorController — start/stop", () => {
     expect(stdin.rawModes).toEqual([true])
     expect(stdin.resumed).toBe(true)
     expect(output.text()).toContain("\x1b[?2004h") // bracketed paste
-    expect(output.text()).toContain("\x1b[>31u") // kitty
+    expect(output.text()).toContain("\x1b[>1u") // kitty, flag 1 only
     // Idle layout (no status): just the editor row. Status row is omitted
     // when empty — see editor-controller `repaint` layout comments.
     expect(compositor.last().lines).toEqual(["> "])

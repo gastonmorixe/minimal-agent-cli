@@ -5,7 +5,8 @@ import { make } from "../editor-controller.fixtures.ts"
 import type { EditorKeyPayload } from "../editor-controller.ts"
 
 // Regression (2026-11-11): iTerm with the kitty keyboard protocol on
-// (`\x1b[>31u`, sent at startup) ships Tab, Enter and typed characters as
+// (`\x1b[>31u`, sent at startup until 2026-11-15; now `\x1b[>1u`, but
+// other terminals/configs may still report all keys) ships Tab, Enter and typed characters as
 // CSI-u sequences. The legacy byte path dispatches `editor.key` for Tab,
 // Enter, "/" and "$". The CSI-u path did not. So the slash menu did not open
 // on "/", Tab inserted a literal tab instead of completing a "&" prompt or an
