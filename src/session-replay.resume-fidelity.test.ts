@@ -139,11 +139,11 @@ describe("--resume fidelity: tool display payload survives the JSONL round-trip"
 
     const plain = stripAnsi(sink.out)
 
-    // 3. The replayed body MUST carry the diff hunk markers, not the
+    // 3. The replayed body MUST carry the diff rows, not the
     //    model-facing summary text. This is the regression-defining
     //    assertion : pre-fix this would have been "File edited: ..."
-    //    on a single body line.
-    expect(plain).toContain("@@")
+    //    on a single body line. The `@@` row is hidden for Edit.
+    expect(plain).not.toContain("@@")
     expect(plain).toContain("-OLD")
     expect(plain).toContain("+NEW")
     expect(plain).not.toMatch(/^\s*│\s+File edited:/m)

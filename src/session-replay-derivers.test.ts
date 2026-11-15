@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test"
-
+import { buildFileDiff } from "@minimal-agent/core/host/diff"
 import {
   clearReplayRenderers,
   deriveDisplayFallback,
@@ -10,6 +10,7 @@ import {
   type ReplayToolRenderInput,
   registerReplayRenderer,
 } from "./session-replay-derivers.ts"
+import { newFileDisplay } from "./ui/tool-transcript/diff-rows.ts"
 
 function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[0-9;]*m/g, "")
@@ -259,8 +260,9 @@ describe("deriveEditDisplay", () => {
     })
     expect(d?.display).toBeDefined()
     const plain = stripAnsi(d!.display!)
-    expect(plain).toContain("--- a//abs/x.json")
-    expect(plain).toContain("+++ b//abs/x.json")
+    // The header row names the file, so the display drops the file headers.
+    expect(plain).not.toContain("--- a/")
+    expect(plain).toMatch(/^\+\d+ −\d+\n@@ /)
     // The exact whole-line replacement: both lines surface as -/+.
     expect(plain).toContain('-"foo": 1')
     expect(plain).toContain('+"foo": 2')
@@ -308,10 +310,27 @@ describe("deriveWriteDisplay", () => {
     })
     expect(d?.display).toBeDefined()
     const plain = stripAnsi(d!.display!)
-    expect(plain).toContain("New file: /abs/new.txt")
-    expect(plain).toContain("+line a")
-    expect(plain).toContain("+line b")
-    expect(plain).toContain("+line c")
+    expect(plain.split("\n")[0]).toBe("new file · 3 lines")
+    // Read-style rows: no `+` marker, no footer at 10 lines or fewer.
+    expect(plain.split("\n").slice(1)).toEqual(["1\tline a", "2\tline b", "3\tline c"])
+    expect(d?.displayFooter).toBeUndefined()
+  })
+
+  it("caps a long new file at 10 rows with a shown 10/N L footer", () => {
+    const content = Array.from({ length: 12 }, (_, i) => `row ${i + 1}`).join("\n")
+    const d = deriveWriteDisplay({ file_path: "/abs/long.txt", content })
+    const plain = stripAnsi(d!.display!).split("\n")
+    expect(plain[0]).toBe("new file · 12 lines")
+    expect(plain.slice(1)).toHaveLength(10)
+    expect(plain.at(-1)).toBe("10\trow 10")
+    expect(stripAnsi(d!.displayFooter!)).toBe("shown 10/12 L")
+  })
+
+  it("gives the same display as the live new-file view", () => {
+    const content = "a\nb"
+    const live = newFileDisplay(buildFileDiff("/abs/x.txt", "", content, 0))
+    const d = deriveWriteDisplay({ file_path: "/abs/x.txt", content })
+    expect(d?.display).toBe(live.display)
   })
 
   it("returns undefined for empty content (nothing useful to render)", () => {
@@ -356,7 +375,7 @@ describe("deriveDisplayFallback (dispatch)", () => {
       isError: false,
     })
     expect(d?.display).toBeDefined()
-    expect(stripAnsi(d!.display!)).toContain("+hello")
+    expect(stripAnsi(d!.display!)).toContain("1\thello")
   })
 
   it("returns undefined for unknown tool names (no derivation, falls back to content)", () => {

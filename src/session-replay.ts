@@ -22,6 +22,7 @@
 
 import { isRuntimeAttachmentBlock } from "@minimal-agent/core/host/runtime-attachments"
 import type { CompactDisplayBoundary } from "@minimal-agent/core/host/session-restore"
+import { writePathFromInput } from "@minimal-agent/core/host/tool-input-aliases"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { SessionRecord } from "@minimal-agent/core/host-kit/session-store"
 import type {
@@ -32,7 +33,11 @@ import type {
 } from "@minimal-agent/core/sdk/messages"
 import { buildCompactNoticeBlock } from "./commands/compact.ts"
 import { formatMarkdownLines } from "./commands/compact-stream.ts"
-import { deriveDisplayFallback, type ReplaySidecarTask } from "./session-replay-derivers.ts"
+import {
+  deriveDisplayFallback,
+  type ReplaySidecarTask,
+  writeNewFilePatch,
+} from "./session-replay-derivers.ts"
 import { buildModeChangeChip, type ChipRenderInput } from "./ui/chrome/mode-change-chip.ts"
 import { renderCommandNoticeBlock } from "./ui/command-notice.ts"
 import { resolveFileLanguage } from "./ui/formatter/file-language.ts"
@@ -46,6 +51,11 @@ import {
 import { c, faintThinkingChunk } from "./ui/style/ansi.ts"
 import { modeLabelFgOpen, modePromptPrefixForId } from "./ui/style/mode-prompt.ts"
 import { highlightReadBody } from "./ui/tool-transcript/code-highlight-render.ts"
+import {
+  isNewFileDisplay,
+  newFileDisplay,
+  newFileNumberedBody,
+} from "./ui/tool-transcript/diff-rows.ts"
 import {
   formatToolHeaderRows,
   formatToolPreview,
@@ -178,6 +188,11 @@ export interface ReplayOptions {
    * Not injected into model history.
    */
   compactBoundaries?: readonly CompactDisplayBoundary[]
+  /**
+   * The dir that replayed tool header paths are shown relative to.
+   * Omitted: the formatter uses `process.cwd()`.
+   */
+  cwd?: string
 }
 
 /**
@@ -245,6 +260,18 @@ export async function replayToScrollback(
   const toolDisplays = opts.toolDisplays ?? null
   const toolPresentation = opts.toolPresentation ?? null
   const compactBoundaries = opts.compactBoundaries ?? []
+  // What the sink ends with: a blank row, a text row, or a tool card row.
+  // Replay writes to raw stdout, with no compositor to cap or add blank rows,
+  // so each block reads this to keep exactly one blank row between neighbors.
+  // Mirrors `lastKind` in repl-live-area.ts. The caller's resume header ends
+  // with a blank row, hence the initial value.
+  let tail: "blank" | "text" | "card" = "blank"
+  /** Write the blank row below a tool card, when the card is the last output. */
+  const closeCard = (): void => {
+    if (tail !== "card") return
+    sink.write("\n")
+    tail = "blank"
+  }
   const emitCompactAt = async (index: number): Promise<void> => {
     for (const b of compactBoundaries) {
       if (b.afterMessageIndex !== index) continue
@@ -274,6 +301,7 @@ export async function replayToScrollback(
       if (formatted) block = { ...block, body: formatted }
       const lines = renderCommandNoticeBlock(block)
       sink.write(`\n${lines.join("\n")}\n\n`)
+      tail = "blank"
     }
   }
 
@@ -305,7 +333,9 @@ export async function replayToScrollback(
       toFgOpen,
       at: at ?? new Date(0),
     }
+    closeCard()
     sink.write(`${buildModeChangeChip(chipInput)}\n\n`)
+    tail = "blank"
   }
   // Wrap the sink as a `FormatterOutput` so a spawned Formatter can pipe
   // its rendered stdout back into the same scrollback target. `columns`
@@ -383,17 +413,19 @@ export async function replayToScrollback(
         const lines = [`${arrow}${text}`]
         const renderedLines =
           showSubmittedAt && msgTs ? prefixSubmittedAtLines(lines, msgTs) : lines
+        closeCard()
         sink.write(`${renderedLines.join("\n")}\n\n`)
+        tail = "blank"
       }
       continue
     }
 
     // Assistant
     const blocks = Array.isArray(msg.content) ? msg.content : []
-    let wroteAnyText = false
     for (const b of blocks) {
       if (b.type === "text") {
         if (b.text.length === 0) continue
+        closeCard()
         if (formatterCmd && textFormatterOutput) {
           // Per-text-block formatter cycle: spawn → write → end (await
           // drain). End-and-respawn at every text-block boundary mirrors
@@ -402,7 +434,7 @@ export async function replayToScrollback(
           // would share one mdstream `partial` buffer and get smashed
           // together by `finish()`'s erase_partial + render_line on EOF.
           // mdstream's natural trailing `\n` provides the line-end. The
-          // outer `if (wroteAnyText) sink.write("\n")` below provides
+          // `tail === "text"` write at the end of the message provides
           // the blank-line separator between turns.
           const f = new Formatter(formatterCmd, textFormatterOutput)
           f.start()
@@ -411,7 +443,7 @@ export async function replayToScrollback(
         } else {
           sink.write(`${b.text}\n`)
         }
-        wroteAnyText = true
+        tail = "text"
       } else if (b.type === "thinking") {
         // Live thinking renders via writeDirectSink + faintThinkingChunk
         // (faint italic). When a formatter is configured the live agent
@@ -421,6 +453,7 @@ export async function replayToScrollback(
         // replay.
         const thinkingText = (b as { thinking?: string }).thinking ?? ""
         if (thinkingText.length === 0) continue
+        closeCard()
         if (formatterCmd && thinkingFormatterOutput) {
           const f = new Formatter(formatterCmd, thinkingFormatterOutput)
           f.start()
@@ -429,10 +462,11 @@ export async function replayToScrollback(
           // The live thinking `block_stopped` step writes a trailing `\n` for breathing
           // room between the thinking block and whatever follows.
           sink.write("\n")
+          tail = "blank"
         } else {
           sink.write(`${faintThinkingChunk(thinkingText)}\n`)
+          tail = "text"
         }
-        wroteAnyText = true
       } else if (b.type === "tool_use") {
         const tu = b as ToolUseBlock
         const replayCols = process.stdout.columns
@@ -454,8 +488,11 @@ export async function replayToScrollback(
           headerOverride: displays?.displayHeader,
           timeText,
           cols: replayCols,
+          pathContext: opts.cwd !== undefined ? { cwd: opts.cwd } : undefined,
         }).entries()) {
-          sink.write(idx === 0 ? `\n${row}\n` : `${row}\n`)
+          // The blank row above the card. Skip it when the sink already
+          // ends with one (after a prompt, a chip, or formatted thinking).
+          sink.write(idx === 0 && tail !== "blank" ? `\n${row}\n` : `${row}\n`)
         }
         if (result) {
           const content =
@@ -467,6 +504,31 @@ export async function replayToScrollback(
                   .join("")
           let previewContent = content
           let previewHasAnsi = false
+          let display = displays?.display
+          // A derived new-file Write preview gets the same highlight the live
+          // view gives it, so both draw the same rows.
+          if (
+            tu.name === "Write" &&
+            !result.is_error &&
+            display !== undefined &&
+            isNewFileDisplay(display) &&
+            codeHighlighter
+          ) {
+            const patch = writeNewFilePatch(tu.input)
+            const pathArg = writePathFromInput(tu.input)
+            const language =
+              patch !== undefined && pathArg.status === "ok"
+                ? resolveFileLanguage({ path: pathArg.value, content })
+                : null
+            if (patch !== undefined && language) {
+              const highlighted = await highlightReadBody(
+                newFileNumberedBody(patch),
+                language,
+                codeHighlighter,
+              )
+              if (highlighted !== null) display = newFileDisplay(patch, highlighted).display
+            }
+          }
           if (
             tu.name === "Read" &&
             !result.is_error &&
@@ -514,25 +576,26 @@ export async function replayToScrollback(
           // footer (instead of computing one from a `_truncInfo` we
           // don't have on disk). This is what makes Edit's unified diff
           // and the tasks plugin's tree survive `--resume` intact.
-          for (const line of formatToolPreview(
-            previewContent,
-            !!result.is_error,
-            displays?.display,
-            {
-              tool: tu.name,
-              cols: replayCols,
-              footer: displays?.displayFooter,
-              ansiContent: previewHasAnsi,
-            },
-          )) {
+          for (const line of formatToolPreview(previewContent, !!result.is_error, display, {
+            tool: tu.name,
+            cols: replayCols,
+            footer: displays?.displayFooter,
+            ansiContent: previewHasAnsi,
+          })) {
             sink.write(`${line}\n`)
           }
         } else {
           sink.write(`  ${c.dimCyan("╰")} ${c.dim("(no result on disk)")}\n`)
         }
+        tail = "card"
       }
     }
-    if (wroteAnyText) sink.write("\n")
+    // Blank row between turns. A message that ends with a tool card leaves
+    // `tail` as "card", and the next block writes the separator.
+    if (tail === "text") {
+      sink.write("\n")
+      tail = "blank"
+    }
   }
   await emitCompactAt(messages.length)
 }

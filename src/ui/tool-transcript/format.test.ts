@@ -49,6 +49,11 @@ function tu(name: string, input: Record<string, unknown>): ToolUseBlock {
   return { type: "tool_use", id: "test", name, input } as ToolUseBlock
 }
 
+/** Fixed path context, so no header depends on the host cwd or home. */
+const FIXED_PATHS = { cwd: "/nonexistent-cwd", home: "/nonexistent-home" }
+/** {@link formatToolInput} with no width and {@link FIXED_PATHS}. */
+const fip = (t: ToolUseBlock): string => formatToolInput(t, undefined, undefined, FIXED_PATHS)
+
 // ---------------------------------------------------------------------------
 // formatToolInput
 // ---------------------------------------------------------------------------
@@ -198,31 +203,29 @@ describe("formatToolInputContinuation — Bash", () => {
 })
 
 describe("formatToolInput — non-Bash tools", () => {
-  it("Read/Write/Edit show file_path as-is (no trim under typical paths)", () => {
+  it("Read/Write/Edit show file_path as-is outside cwd and home (no width signal)", () => {
     const path = "/Users/dev/Projects/minimal-agent/src/tools.ts"
-    expect(formatToolInput(tu("Read", { file_path: path }))).toBe(path)
-    expect(formatToolInput(tu("Write", { file_path: path, content: "x" }))).toBe(path)
-    expect(formatToolInput(tu("Edit", { file_path: path, old_string: "a", new_string: "b" }))).toBe(
-      path,
-    )
+    const ctx = { cwd: "/work", home: "/home/other" }
+    const at = (t: ToolUseBlock): string => formatToolInput(t, undefined, undefined, ctx)
+    expect(at(tu("Read", { file_path: path }))).toBe(path)
+    expect(at(tu("Write", { file_path: path, content: "x" }))).toBe(path)
+    expect(at(tu("Edit", { file_path: path, old_string: "a", new_string: "b" }))).toBe(path)
   })
 
   it("Glob shows the pattern", () => {
-    expect(formatToolInput(tu("Glob", { pattern: "**/*.ts" }))).toBe("**/*.ts")
+    expect(fip(tu("Glob", { pattern: "**/*.ts" }))).toBe("**/*.ts")
   })
 
   it("Glob shows Cursor `glob_pattern` the same as `pattern`", () => {
-    expect(formatToolInput(tu("Glob", { glob_pattern: "src/lib/*.test.ts" }))).toBe(
-      "src/lib/*.test.ts",
-    )
+    expect(fip(tu("Glob", { glob_pattern: "src/lib/*.test.ts" }))).toBe("src/lib/*.test.ts")
   })
 
   it("Grep shows /pattern/ with optional ` · in PATH`", () => {
-    expect(formatToolInput(tu("Grep", { pattern: "foo" }))).toBe("/foo/")
+    expect(fip(tu("Grep", { pattern: "foo" }))).toBe("/foo/")
     // The "in PATH" form uses the project-wide ` · ` separator — same one
     // used in the truncation footer (`shown 15/1831 L · 8.0 KB/1.5 MB ·
     // cut at L1000`), keeping a single visual language inside the block.
-    expect(formatToolInput(tu("Grep", { pattern: "foo", path: "/src" }))).toBe("/foo/ · in /src")
+    expect(fip(tu("Grep", { pattern: "foo", path: "/src" }))).toBe("/foo/ · in /src")
   })
 
   it("unknown tool renders compact key:value pairs (Option A)", () => {
@@ -282,60 +285,52 @@ describe("formatToolInput — non-Bash tools", () => {
 
 describe("formatToolInput — Read with offset/limit (Style A `· L<a>-<b>`)", () => {
   it("bare Read renders byte-identical to no-extras form", () => {
-    expect(formatToolInput(tu("Read", { file_path: "/x" }))).toBe("/x")
+    expect(fip(tu("Read", { file_path: "/x" }))).toBe("/x")
   })
   it("`limit` only → 1-indexed closed range starting at L1", () => {
     // Common case the user reported: model asks for "first 4 lines",
     // header should reflect it. `execRead` body prints 1-indexed line
     // numbers, so the header range matches what the user sees in the body.
-    expect(formatToolInput(tu("Read", { file_path: "/x", limit: 4 }))).toBe("/x · L1-4")
+    expect(fip(tu("Read", { file_path: "/x", limit: 4 }))).toBe("/x · L1-4")
   })
   it("`offset` only → open-ended `· from L<n>` (n is 1-indexed)", () => {
     // `offset` is zero-based in the schema; we lift it to 1-indexed for
     // the header (offset=100 → "from L101") so the user's mental model
     // stays consistent with the body's line gutter.
-    expect(formatToolInput(tu("Read", { file_path: "/x", offset: 100 }))).toBe("/x · from L101")
+    expect(fip(tu("Read", { file_path: "/x", offset: 100 }))).toBe("/x · from L101")
   })
   it("offset + limit → closed range, both 1-indexed", () => {
-    expect(formatToolInput(tu("Read", { file_path: "/x", offset: 100, limit: 5 }))).toBe(
-      "/x · L101-105",
-    )
+    expect(fip(tu("Read", { file_path: "/x", offset: 100, limit: 5 }))).toBe("/x · L101-105")
   })
   it("offset=0 + limit → identical to limit-only form", () => {
     // Edge case: explicit offset=0 should not differ from omitted offset.
-    expect(formatToolInput(tu("Read", { file_path: "/x", offset: 0, limit: 4 }))).toBe("/x · L1-4")
+    expect(fip(tu("Read", { file_path: "/x", offset: 0, limit: 4 }))).toBe("/x · L1-4")
   })
 })
 
 describe("formatToolInput — Edit replace_all (Style A `· g`)", () => {
   it("default Edit (no replace_all) renders byte-identical to no-extras form", () => {
-    expect(formatToolInput(tu("Edit", { file_path: "/x", old_string: "a", new_string: "b" }))).toBe(
-      "/x",
-    )
+    expect(fip(tu("Edit", { file_path: "/x", old_string: "a", new_string: "b" }))).toBe("/x")
   })
   it("replace_all=true appends sed-style `· g`", () => {
     expect(
-      formatToolInput(
-        tu("Edit", { file_path: "/x", old_string: "a", new_string: "b", replace_all: true }),
-      ),
+      fip(tu("Edit", { file_path: "/x", old_string: "a", new_string: "b", replace_all: true })),
     ).toBe("/x · g")
   })
   it("replace_all=false renders byte-identical to no-extras form (the schema default)", () => {
     expect(
-      formatToolInput(
-        tu("Edit", { file_path: "/x", old_string: "a", new_string: "b", replace_all: false }),
-      ),
+      fip(tu("Edit", { file_path: "/x", old_string: "a", new_string: "b", replace_all: false })),
     ).toBe("/x")
   })
 })
 
 describe("formatToolInput — Glob with path", () => {
   it("`path` appends as `· in <path>`", () => {
-    expect(formatToolInput(tu("Glob", { pattern: "*.ts", path: "/src" }))).toBe("*.ts · in /src")
+    expect(fip(tu("Glob", { pattern: "*.ts", path: "/src" }))).toBe("*.ts · in /src")
   })
 
   it("`target_directory` alias appends the same `· in <path>`", () => {
-    expect(formatToolInput(tu("Glob", { glob_pattern: "*.ts", target_directory: "/src" }))).toBe(
+    expect(fip(tu("Glob", { glob_pattern: "*.ts", target_directory: "/src" }))).toBe(
       "*.ts · in /src",
     )
   })
@@ -346,46 +341,38 @@ describe("formatToolInput — Grep flags (Style A)", () => {
     // Critical: case-insensitivity is a property of the regex, so it
     // attaches inline to the pattern atom rather than floating as a
     // separate chunk. `/foo/i · in /src` — not `/foo/ · -i · in /src`.
-    expect(formatToolInput(tu("Grep", { pattern: "foo", "-i": true }))).toBe("/foo/i")
+    expect(fip(tu("Grep", { pattern: "foo", "-i": true }))).toBe("/foo/i")
   })
   it("`multiline` lifts to `m` flag (alone and combinable with `i`)", () => {
-    expect(formatToolInput(tu("Grep", { pattern: "foo", multiline: true }))).toBe("/foo/m")
-    expect(formatToolInput(tu("Grep", { pattern: "foo", "-i": true, multiline: true }))).toBe(
-      "/foo/im",
-    )
+    expect(fip(tu("Grep", { pattern: "foo", multiline: true }))).toBe("/foo/m")
+    expect(fip(tu("Grep", { pattern: "foo", "-i": true, multiline: true }))).toBe("/foo/im")
   })
   it("`-A/-B/-C/context` context flags → `↓N`/`↑N`/`↕N`, -C beats -A/-B", () => {
-    expect(formatToolInput(tu("Grep", { pattern: "foo", "-A": 5 }))).toBe("/foo/ · ↓5")
-    expect(formatToolInput(tu("Grep", { pattern: "foo", "-B": 2 }))).toBe("/foo/ · ↑2")
-    expect(formatToolInput(tu("Grep", { pattern: "foo", "-C": 3 }))).toBe("/foo/ · ↕3")
-    expect(formatToolInput(tu("Grep", { pattern: "foo", context: 3 }))).toBe("/foo/ · ↕3")
-    expect(formatToolInput(tu("Grep", { pattern: "foo", "-A": 5, "-B": 2, "-C": 3 }))).toBe(
-      "/foo/ · ↕3",
-    )
-    expect(formatToolInput(tu("Grep", { pattern: "foo", "-A": 5, "-B": 2 }))).toBe(
-      "/foo/ · ↓5 · ↑2",
-    )
+    expect(fip(tu("Grep", { pattern: "foo", "-A": 5 }))).toBe("/foo/ · ↓5")
+    expect(fip(tu("Grep", { pattern: "foo", "-B": 2 }))).toBe("/foo/ · ↑2")
+    expect(fip(tu("Grep", { pattern: "foo", "-C": 3 }))).toBe("/foo/ · ↕3")
+    expect(fip(tu("Grep", { pattern: "foo", context: 3 }))).toBe("/foo/ · ↕3")
+    expect(fip(tu("Grep", { pattern: "foo", "-A": 5, "-B": 2, "-C": 3 }))).toBe("/foo/ · ↕3")
+    expect(fip(tu("Grep", { pattern: "foo", "-A": 5, "-B": 2 }))).toBe("/foo/ · ↓5 · ↑2")
   })
   it("`head_limit` → `· ≤N`", () => {
-    expect(formatToolInput(tu("Grep", { pattern: "foo", head_limit: 100 }))).toBe("/foo/ · ≤100")
+    expect(fip(tu("Grep", { pattern: "foo", head_limit: 100 }))).toBe("/foo/ · ≤100")
   })
   it("output_mode: count → `· count`, files_with_matches → `· paths`, content (default) → omitted", () => {
-    expect(formatToolInput(tu("Grep", { pattern: "foo", output_mode: "count" }))).toBe(
-      "/foo/ · count",
-    )
-    expect(formatToolInput(tu("Grep", { pattern: "foo", output_mode: "files_with_matches" }))).toBe(
+    expect(fip(tu("Grep", { pattern: "foo", output_mode: "count" }))).toBe("/foo/ · count")
+    expect(fip(tu("Grep", { pattern: "foo", output_mode: "files_with_matches" }))).toBe(
       "/foo/ · paths",
     )
-    expect(formatToolInput(tu("Grep", { pattern: "foo", output_mode: "content" }))).toBe("/foo/")
+    expect(fip(tu("Grep", { pattern: "foo", output_mode: "content" }))).toBe("/foo/")
   })
   it("`glob` filter renders as a bare chunk after path", () => {
-    expect(formatToolInput(tu("Grep", { pattern: "foo", path: "/src", glob: "*.ts" }))).toBe(
+    expect(fip(tu("Grep", { pattern: "foo", path: "/src", glob: "*.ts" }))).toBe(
       "/foo/ · in /src · *.ts",
     )
   })
   it("composed: pattern with flags, path, glob, context, head, mode (full chain)", () => {
     expect(
-      formatToolInput(
+      fip(
         tu("Grep", {
           pattern: "foo",
           "-i": true,
@@ -401,7 +388,7 @@ describe("formatToolInput — Grep flags (Style A)", () => {
   it("`-n` (line numbers) is intentionally NOT surfaced — it's the default", () => {
     // Surfacing -n would clutter the header for zero information gain
     // (it's on by default; the body already shows numbers via the gutter).
-    expect(formatToolInput(tu("Grep", { pattern: "foo", "-n": true }))).toBe("/foo/")
+    expect(fip(tu("Grep", { pattern: "foo", "-n": true }))).toBe("/foo/")
   })
 })
 
@@ -856,15 +843,12 @@ describe("formatToolPreview — terminal-cols clamp on body lines", () => {
       tool: "Edit",
       cols: 80,
     })
-    expect(lines.length).toBe(1)
-    const visible = stripAnsi(lines[0])
-    expect(displayWidth(visible)).toBeLessThanOrEqual(80)
-    // `clampToolPreviewBodyLine` now delegates to `clampBodyWithHint`
-    // so the display branch produces the SAME `...(+Nch)` marker the
-    // content-path body lines have. One canonical truncation idiom
-    // across both branches.
-    expect(visible).toContain("...(+")
-    expect(visible).toMatch(/\.{3}\(\+\d+ch\)/)
+    // Diff rows wrap instead of clipping: 200 cells at a 75-cell body is
+    // 3 rows, under the 5-row cap, so nothing is cut.
+    expect(lines.length).toBe(3)
+    for (const line of lines) expect(displayWidth(stripAnsi(line))).toBeLessThanOrEqual(80)
+    expect(lines.map((l) => stripAnsi(l)).join("")).not.toContain("...(+")
+    expect(stripAnsi(lines.join("")).match(/a/g)?.length).toBe(199)
   })
 
   it("ignores cols=0 / NaN / negative and falls back to the hard cap", () => {
@@ -1017,22 +1001,58 @@ describe("clampTranscriptRow — outer-row width clamp for header lines", () => 
     expect(clamped).toContain("...(+")
   })
 
+  // Read and Grep headers now size their path and pattern to the row, so the
+  // clamp no longer fires for them: the filename and the closing `/` stay.
   it.each([
-    ["Read", { file_path: `/Users/dev/Projects/${"very-long/".repeat(20)}file.ts` }],
-    ["Grep", { pattern: "mention|autocomplete|".repeat(20), path: "/Users/dev/Projects" }],
-    ["Bash", { command: `printf ${"very-long-argument".repeat(30)}` }],
-  ])(
+    ["Read", { file_path: `/Users/dev/Projects/${"very-long/".repeat(20)}file.ts` }, "file.ts"],
+    [
+      "Grep",
+      { pattern: "mention|autocomplete|".repeat(20), path: "/Users/dev/Projects" },
+      "/ · in ",
+    ],
+  ] as const)(
+    "sizes a long %s header to the row with no clamp marker (BUG #192851)",
+    (name, input, kept) => {
+      const header =
+        formatToolHeaderRows({
+          tool: tu(name, input),
+          cols: 90,
+          pathContext: { cwd: "/work", home: "/home/dev" },
+        })[0] ?? ""
+      expect(header).not.toContain("...(+")
+      expect(header).toContain(kept)
+      expect(displayWidth(header)).toBeLessThanOrEqual(90)
+    },
+  )
+
+  // When the safety clamp does fire (Bash, or a plugin `headerKey` value),
+  // its marker must keep the dim style of the input run.
+  it.each([
+    ["Bash", undefined, { command: `printf ${"very-long-argument".repeat(30)}` }],
+    ["Fetch", "url", { url: `https://example.com/${"very-long-segment/".repeat(20)}` }],
+  ] as const)(
     "keeps a %s header truncation marker inside the dim input run (BUG #192851)",
-    (name, input) => {
-      const header = formatToolHeaderRows({ tool: tu(name, input), cols: 90 })[0] ?? ""
+    (name, headerKey, input) => {
+      const cols = 90
+      const header =
+        formatToolHeaderRows({
+          tool: tu(name, input),
+          cols,
+          presentation: headerKey ? { headerKey } : null,
+          pathContext: { cwd: "/work", home: "/home/dev" },
+        })[0] ?? ""
       const marker = header.indexOf("...(+")
       expect(marker).toBeGreaterThan(0)
-      // The outer row clamp copies the dim input and appends a synthetic full
-      // reset. The marker must precede that reset, otherwise it renders in the
-      // terminal default bright color while the path/command before it is faded.
+      // The marker must ride inside the dim input run, never after a reset:
+      // otherwise it renders in the terminal default bright color while the
+      // path/command before it is faded. Two producers satisfy that, and
+      // either is correct: the inner formatter appending the marker to the dim
+      // body (Bash once the plan budgets the row itself), or the outer row
+      // clamp re-inserting it before `truncateDisplayWidth`'s synthetic reset.
       expect(header.slice(0, marker)).toContain("\x1b[2m")
-      expect(header.slice(marker)).toMatch(/^\.\.\.\(\+\d+ch\)\x1b\[0m$/)
+      expect(header.slice(marker)).toMatch(/^\.\.\.\(\+\d+ch\)(?:\x1b\[(?:0|22)m|\x1b\[22;39m?)+$/)
       expect(header.slice(0, marker)).not.toEndWith("\x1b[0m")
+      expect(displayWidth(header)).toBeLessThanOrEqual(cols)
     },
   )
 })

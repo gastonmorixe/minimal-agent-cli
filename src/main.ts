@@ -40,7 +40,6 @@ import { fileURLToPath } from "node:url"
 import { createAgentContext } from "@minimal-agent/core/host/agent-context"
 import { resolveAgentName } from "@minimal-agent/core/host/agent-identity"
 import { setBashCwdChangeListener } from "@minimal-agent/core/host/bash-cwd"
-import { defaultBinDir } from "@minimal-agent/core/host/binaries"
 import { loadModeUserOverrides, loadPluginEnabledOverrides } from "@minimal-agent/core/host/config"
 import { setGlobalEventBus } from "@minimal-agent/core/host/global-bus"
 import {
@@ -125,6 +124,7 @@ import { isHostModeRun, isInteractiveResumeRun, isReplRun } from "./startup/resu
 import { runHostMode } from "./startup/run-host-mode.ts"
 import { runNonInteractivePrompt, selectStdioMode } from "./startup/run-non-interactive.ts"
 import { runStartupSubcommand } from "./startup/run-subcommand.ts"
+import { publishSessionEnv } from "./startup/session-env.ts"
 import { bootSessionStores, resumeTargetOf } from "./startup/session-store-boot.ts"
 import {
   printStartupConfigRows,
@@ -141,6 +141,7 @@ import { applyFormatterDefaults } from "./ui/formatter/defaults.ts"
 import { resolveSpinnerPreset } from "./ui/spinner/named-presets.ts"
 import { printStartupHeader, printStartupRow, startStartupRowSpinner } from "./ui/startup/tree.ts"
 import { c } from "./ui/style/ansi.ts"
+import { parseDiffWrapLines, setDiffWrapLines } from "./ui/tool-transcript/diff-rows.ts"
 import { ToolTimeTracker } from "./ui/tool-transcript/tool-time.ts"
 import { formatFatalError } from "./ui/turn-error.ts"
 
@@ -251,6 +252,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   })
   const { args, userConfig, opts, commandPlan, showHeader: SHOW_HEADER, readFlagValue } = entry
   const extractPrompt = entry.extractPrompt
+  // Diff row wrap cap: env > config > default (5).
+  setDiffWrapLines(
+    parseDiffWrapLines(env.MINIMAL_AGENT_DIFF_WRAP_LINES) ?? userConfig.diffWrapLines,
+  )
   const {
     model,
     provider,
@@ -594,49 +599,23 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     version: agentVersion,
   })
 
-  // Mirror MINIMAL_AGENT_MODEL into process.env for legacy direct readers
-  // (notably `plugins/quota-status/handler.ts`, which reads
-  // `process.env.MINIMAL_AGENT_MODEL`, not `ctx.env`). The loader will
-  // also emit MINIMAL_AGENT_* via `agentContextToEnv` into every dispatched
-  // ctx.env, but those values are scoped to one handler call and don't
-  // reach a `process.env`-only reader.
-  env.MINIMAL_AGENT_MODEL = selectedModel
-  env.MINIMAL_AGENT_PROVIDER = selectedProviderId
-  if (endpoint) env.MINIMAL_AGENT_ENDPOINT = endpoint
-  if (format) env.MINIMAL_AGENT_FORMAT = format
-  if (authType) env.MINIMAL_AGENT_AUTH_TYPE = authType
-  if (apiKey) env.MINIMAL_AGENT_API_KEY = apiKey
-  if (authHeader) env.MINIMAL_AGENT_AUTH_HEADER = authHeader
-  if (providerModel) env.MINIMAL_AGENT_PROVIDER_MODEL = providerModel
-  if (effortLevels && effortLevels.length > 0) {
-    env.MINIMAL_AGENT_EFFORT_LEVELS = effortLevels.join(",")
-  }
-  env.MINIMAL_AGENT_SESSION_ID = agentContext.sessionId
-  env.MINIMAL_AGENT_PID = String(agentContext.pid)
-  env.MINIMAL_AGENT_VERSION = agentContext.version
-  // Publish the opt-in per-session agent name (resolved once up front, beside
-  // the startup `name` row) for the `agent-identity` plugin to read (the loader
-  // spreads process.env into every prompt-fragment ctx.env). The name is frozen
-  // for the session: it lands in the system prompt, so changing it mid-run would
-  // bust the conversation's prompt cache. Off by default (resolver returned
-  // undefined → we clear the env so the plugin emits nothing and the system
-  // prompt is byte-identical to today's).
-  if (resolvedAgentName) {
-    env.MINIMAL_AGENT_AGENT_NAME = resolvedAgentName
-  } else {
-    delete env.MINIMAL_AGENT_AGENT_NAME
-  }
-  // Advertise the managed-binary directory (`~/.minimal-agent/bin`) to every
-  // plugin, every session. The host OWNS this dir and provisions binaries into
-  // it (see `binaries/store.ts`); plugins must NOT scan the filesystem or
-  // hard-code a home path of their own, because the home dir differs per
-  // install and the agent is the single party that knows where it put things.
-  // The loader already spreads `process.env` into every dispatched `ctx.env`,
-  // so setting it here makes `MINIMAL_AGENT_BIN_DIR` reach module handlers and
-  // any subprocess they spawn. Set UNCONDITIONALLY (not gated on header /
-  // provisioning): a previously-installed binary must still resolve on a
-  // scripted `--prompt` run where the provisioning phase is skipped.
-  env.MINIMAL_AGENT_BIN_DIR = defaultBinDir()
+  // Mirror the session values into process.env for legacy `process.env`
+  // readers and plugins (agent name, managed bin dir). See startup/session-env.ts.
+  publishSessionEnv(env, {
+    model: selectedModel,
+    providerId: selectedProviderId,
+    endpoint,
+    format,
+    authType,
+    apiKey,
+    authHeader,
+    providerModel,
+    effortLevels,
+    sessionId: agentContext.sessionId,
+    pid: agentContext.pid,
+    version: agentContext.version,
+    agentName: resolvedAgentName,
+  })
   // Publish the RESOLVED effort + fast-mode state into process.env as the
   // authoritative output the quota-status footer / session-info read.
   publishResolvedRequestEnv(hidesReasoning, effort, speedFast)
@@ -776,9 +755,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     void hostLifecycle.instructionsDidLoad?.({ source: "agents-md" })
   }
   if (promptBlocks.sessionContext) {
-    void hostLifecycle.instructionsDidLoad?.({
-      source: "plugin-session-context",
-    })
+    void hostLifecycle.instructionsDidLoad?.({ source: "plugin-session-context" })
   }
   // Sticky Bash cwd → `cwd.didChange` for observe-only plugins.
   setBashCwdChangeListener((from, to) => {
@@ -902,9 +879,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     // path issued a provider-specific quota POST here and hard-exited on a bad
     // token; that boot-time, single-provider gate is intentionally gone — auth
     // failures now surface on the first real turn with a proper error.
-    await primeProviderSessionInfo(selectedModel, {
-      providerId: selectedProviderId,
-    })
+    await primeProviderSessionInfo(selectedModel, { providerId: selectedProviderId })
     // Banner quota summary: provider-NEUTRAL path. The prime above populated the
     // quota cache; the provider plugin's session-info seam parses its own header
     // shapes into neutral QuotaWindows, and core renders those (header-name
@@ -1147,11 +1122,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     codeHighlighter,
     systemPromptOverrides: opts.systemPromptOverrides,
   })
-  void hostLifecycle.sessionStart?.({
-    sid: getSessionId(),
-    cwd: cwd,
-    model: selectedModel,
-  })
+  void hostLifecycle.sessionStart?.({ sid: getSessionId(), cwd, model: selectedModel })
   // Host slash commands that need a live agent (not plugin-declared).
   // Must run after session construction so `/compact` and `/continue` appear in
   // listCommands / slash-menu and dispatch through CommandRegistry.
@@ -1234,6 +1205,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         toolPresentation,
         scrollbackSubmittedAt: userConfig.scrollback?.submittedAt,
         compactBoundaries: resumeCompactBoundaries,
+        // Start cwd. The session meta cwd is not on ResumeState yet.
+        cwd,
       })
       stdoutSink.write("\n")
     }
@@ -1310,11 +1283,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
           ),
       })
     } finally {
-      void hostLifecycle.sessionEnd?.({
-        sid: getSessionId(),
-        cwd: cwd,
-        model: agent.getModel(),
-      })
+      void hostLifecycle.sessionEnd?.({ sid: getSessionId(), cwd, model: agent.getModel() })
       await codeHighlighter?.close()
       setBashCwdChangeListener(null)
     }
@@ -1368,11 +1337,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       })
     }
   } finally {
-    void hostLifecycle.sessionEnd?.({
-      sid: getSessionId(),
-      cwd: cwd,
-      model: agent.getModel(),
-    })
+    void hostLifecycle.sessionEnd?.({ sid: getSessionId(), cwd, model: agent.getModel() })
     await codeHighlighter?.close()
     setBashCwdChangeListener(null)
   }

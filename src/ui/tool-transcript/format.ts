@@ -9,11 +9,13 @@
  * @module ui/tool-transcript/format
  */
 
+import { homedir } from "node:os"
 import {
   globPathFromInput,
   globPatternFromInput,
 } from "@minimal-agent/core/host/tool-input-aliases"
 import { countLines, type TruncationInfo } from "@minimal-agent/core/host/truncation"
+import { formatPathCompact } from "@minimal-agent/core/plugin-api/utils/path-compact"
 import {
   displayWidth,
   expandTabs,
@@ -23,9 +25,15 @@ import {
 } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { ToolUseBlock } from "@minimal-agent/core/sdk/messages"
 import type { Finding, FindingSeverity } from "@minimal-agent/core/sdk/tool-lifecycle"
-import { shouldSoftSplit, splitBashSegments } from "../../cli/bash-split.ts"
+import {
+  BASH_HEADER_PREFIX_CELLS_DEFAULT,
+  shouldSoftSplit,
+  splitBashSegments,
+} from "../../cli/bash-split.ts"
+import { detectInlineScript, type InlineScript } from "../../cli/inline-script.ts"
 import { c } from "../style/ansi.ts"
 import { truncHint } from "../style/truncate-hint.ts"
+import { isNewFileDisplay, renderDiffRows, renderNewFileRows, renderReadRows } from "./diff-rows.ts"
 
 // Colors a plain Edit/Write diff when no code highlighter runs (S41: core
 // emits the plain patch).
@@ -77,6 +85,20 @@ const HEADER_BASH_MAX = 500
 const HEADER_JSON_MAX = 200
 
 /**
+ * Max continuation rows rendered for a multi-line Bash command in the
+ * bordered block before collapsing the rest into a `> ... +NL more` row.
+ * Generous enough to show typical heredocs / for-loops / function bodies
+ * without dominating the screen.
+ *
+ * An **inline script** (`python -c '…'`, `node -e '…'`, `jq '…'`) raises the
+ * budget to {@link BASH_CONT_MAX_LINES_SCRIPT}: its payload is the content
+ * worth reading, and a one-line script that unwraps into 20 statements would
+ * otherwise show 16 and hide the rest behind a count.
+ */
+const BASH_CONT_MAX_LINES = 16
+export const BASH_CONT_MAX_LINES_SCRIPT = 30
+
+/**
  * Trim `s` to at most `max` characters, preferring a word boundary so we
  * don't cut mid-token. The primary failure mode of the old hard slice
  * was things like `… | head...(+4ch)` : four characters short of
@@ -96,12 +118,416 @@ function trimAtWordBoundary(s: string, max: number): string {
 }
 
 /**
- * Max continuation lines we render for a multi-line Bash command in the
- * bordered block before collapsing the rest into a `> ... +NL more` row.
- * Generous enough to show typical heredocs / for-loops / function bodies
- * without dominating the screen.
+ * The two parts a bordered Bash block is built from: the text that follows
+ * `$ ` on the header row, and the continuation rows underneath it (each
+ * already carrying its own `> ` or `↳ ` sigil, without the frame gutter).
+ *
+ * {@link formatToolInput} and {@link formatToolInputContinuation} both consume
+ * the same plan, built by {@link planBashInput}, so the header and its rows can
+ * never disagree about how a command was decomposed.
  */
-const BASH_CONT_MAX_LINES = 16
+interface BashInputPlan {
+  /** Header body : the command text that follows the `$ ` sigil. */
+  body: string
+  /** Continuation rows, sigil-prefixed, in source order. */
+  rows: string[]
+}
+
+/**
+ * Cells a row spends before its body starts: `  ╭ ` / `  │ ` frame (4),
+ * the icon + label + gap, and the `$ ` sigil (or the continuation indent that
+ * lines the sigil up under it). Both the header row and its continuation rows
+ * spend the same 14 cells, so one constant covers both.
+ */
+const BASH_ROW_CHROME_CELLS = BASH_HEADER_PREFIX_CELLS_DEFAULT
+
+/** Narrowest header body worth painting; below this we let the row clamp win. */
+const BASH_MIN_BODY_CELLS = 40
+
+/**
+ * Trim `s` to `budget` chars at a word boundary and append the canonical
+ * `...(+Nch)` hint. Returns `s` untouched when it already fits.
+ *
+ * Every place that shortens a Bash fragment funnels through here so the
+ * elision marker stays consistent with the body previews and the row clamp.
+ */
+function fit(s: string, budget: number): string {
+  if (s.length <= budget) return s
+  const trimmed = trimAtWordBoundary(s, Math.max(1, budget - TOOL_PREVIEW_HINT_RESERVE_WIDTH))
+  const cut = s.length - trimmed.length
+  return cut > 0 ? `${trimmed}${truncHint(cut, "ch")}` : trimmed
+}
+
+/**
+ * Elide the **middle** of an over-long command, keeping a word-aligned head
+ * and tail. Used when a command must be shortened for the terminal: the head
+ * says what runs, the tail keeps the final arguments (the `| head -50`, the
+ * closing `'`), and the marker reports what went missing in between.
+ *
+ * Returns `null` when the line cannot be split honestly: no whitespace at all
+ * (a base64 blob or a minified bundle argument), or no whitespace far enough
+ * back for the tail to fit its share of the budget. A mid-token cut of such a
+ * line would just be a wall of noise, so the caller falls back to a plain trim.
+ */
+function elideMiddle(line: string, budget: number): string | null {
+  if (!/\s/.test(line)) return null
+  const hintReserve = TOOL_PREVIEW_HINT_RESERVE_WIDTH
+  const tailBudget = Math.max(8, Math.floor(budget * 0.35))
+  const headBudget = budget - tailBudget - hintReserve
+  if (headBudget < 16) return null
+
+  const head = trimAtWordBoundary(line, headBudget)
+  // Start the tail at the earliest whitespace that still leaves the tail
+  // inside its budget, so the tail is as long as it can be. Walking backwards
+  // from the end instead would grab the innermost space (`-50` rather than
+  // `| head -50`), which reads as noise.
+  let tailStart = Math.max(0, line.length - tailBudget)
+  while (tailStart < line.length && line[tailStart] !== " ") tailStart++
+  tailStart += 1
+  if (tailStart >= line.length || tailStart <= head.length) return null
+  const tail = line.slice(tailStart)
+  const cut = line.length - head.length - tail.length
+  if (cut <= 0) return null
+  return `${head} ${truncHint(cut, "ch")} ${tail}`
+}
+
+/**
+ * Decide how a Bash `command` renders: which text stays on the header row and
+ * which (if any) rows follow it.
+ *
+ * Four strategies, tried in order, each keyed on **what the command contains**
+ * rather than on how the model happened to format it:
+ *
+ *  1. **Inline script** (`python -c '…'`, `node -e '…'`, `jq '…'`) that
+ *     overflows, or carries 3+ statements. The prologue stays on the header
+ *     row and each depth-0 statement becomes a `> ` row, so the payload reads
+ *     exactly like a genuinely multi-line command. This is the case that
+ *     previously lost the whole script to a mid-token cut.
+ *  2. **Top-level operators** (`&&`, `||`, `|`, `;`) via
+ *     {@link shouldSoftSplit}: lead on the header row, one `↳ <op> …` row per
+ *     segment.
+ *  3. **Plain overflow** with neither of the above: flow the line at
+ *     whitespace with trailing `\` markers, bash's own line-continuation
+ *     convention, instead of slicing mid-token.
+ *  4. **Everything else**: the existing `\n` path, where the header holds the
+ *     first line and the tail lines become `> ` PS2 rows.
+ *
+ * `cols` non-finite means "width unknown" (non-TTY, piped output, most unit
+ * tests) and keeps strategies 1–3 inert, so those callers see a stable
+ * single-line header.
+ */
+function planBashInput(command: string, cols?: number): BashInputPlan {
+  const nlIdx = command.indexOf("\n")
+  const firstLine = nlIdx === -1 ? command : command.slice(0, nlIdx)
+  const tailLines = nlIdx === -1 ? [] : command.slice(nlIdx + 1).split("\n")
+  const effectiveCols = cols ?? process.stdout.columns ?? Number.POSITIVE_INFINITY
+  const known = Number.isFinite(effectiveCols)
+
+  // Budgets. With a real width, the header body must fit the row (`cols` minus
+  // the `  ╭ » Bash  $ ` chrome), so the outer `clampTranscriptRow` becomes a
+  // safety net instead of the primary cutter. With no width signal we keep the
+  // historical 500-char budget so non-TTY callers stay deterministic.
+  const budget = known
+    ? Math.max(BASH_MIN_BODY_CELLS, Math.floor(effectiveCols) - BASH_ROW_CHROME_CELLS)
+    : HEADER_BASH_MAX
+  const rowBudget = known
+    ? Math.max(BASH_MIN_BODY_CELLS, Math.floor(effectiveCols) - BASH_ROW_CHROME_CELLS - 2)
+    : HEADER_BASH_MAX
+
+  /** Shorten a single-line fragment for the header: middle-elide, else trim. */
+  const header = (s: string): string => elideMiddle(s, budget) ?? fit(s, budget)
+  /** Shorten a continuation fragment for its row. */
+  const row = (s: string): string => fit(s, rowBudget)
+  const tail = (): string[] => tailLines.map((l) => `> ${row(l)}`)
+
+  // Strategy 1 — inline script payload.
+  const script = known ? detectInlineScript(firstLine) : null
+  if (script !== null) {
+    const overflows = displayWidth(firstLine) + BASH_HEADER_PREFIX_CELLS_DEFAULT > effectiveCols
+    const structured = script.statements.length >= MIN_STRUCTURED_SCRIPT_STATEMENTS
+    if (overflows || structured) {
+      const rows = scriptRows(script).map(row)
+      return {
+        body: header(script.prologue),
+        rows: capRows(rows, tail(), BASH_CONT_MAX_LINES_SCRIPT),
+      }
+    }
+  }
+
+  // Strategy 2 — top-level shell operators.
+  const { lead, rest } = splitBashSegments(firstLine)
+  if (shouldSoftSplit(firstLine, effectiveCols) && rest.length > 0) {
+    const rows = rest.map(({ op, body: seg }) => `↳ ${row(`${op} ${seg}`)}`)
+    return { body: header(lead || firstLine), rows: capRows(rows, tail()) }
+  }
+
+  // Strategy 3 — no decomposition available: shorten honestly (middle-elide
+  // keeps the trailing arguments visible), never slice mid-token.
+  // Strategy 4 — same treatment for the first line of a multi-line command.
+  return { body: header(firstLine), rows: capRows([], tail()) }
+}
+
+/**
+ * Statements from which an inline script is worth unwrapping even when the
+ * one-liner fits the terminal. Mirrors `MULTI_OP_SOFT_SPLIT_MIN`'s reasoning:
+ * at three or more parts, a structured shape reads better row-by-row than an
+ * inline run-on, regardless of available width.
+ */
+const MIN_STRUCTURED_SCRIPT_STATEMENTS = 3
+
+/**
+ * `> ` rows for an inline script: one per depth-0 statement, with the closing
+ * quote (and any shell tail, e.g. `' | head -20`) attached to the last row so
+ * the block still reconstructs the original command visually.
+ */
+function scriptRows(script: InlineScript): string[] {
+  return script.statements.map((stmt, i) =>
+    i === script.statements.length - 1 ? `> ${stmt}${script.epilogue}` : `> ${stmt}`,
+  )
+}
+
+/**
+ * Concatenate the leading rows with the trailing `\n` rows and clip the total
+ * to `max`, replacing the overflow with one elision row that carries the count.
+ *
+ * The elision row reuses the sigil of the last visible row so the eye stays
+ * oriented, and reports lines (not characters) because a clipped row budget is
+ * a line-count story.
+ */
+function capRows(lead: string[], tail: string[], max = BASH_CONT_MAX_LINES): string[] {
+  const combined = [...lead, ...tail]
+  if (combined.length <= max) return combined
+  const visible = combined.slice(0, max)
+  const elided = combined.length - visible.length
+  const sigil = visible[visible.length - 1]?.startsWith("↳ ") ? "↳" : ">"
+  visible.push(`${sigil} ${truncHint(elided, "L")} more`)
+  return visible
+}
+
+/**
+ * Where a header path is shown from. A path inside `cwd` becomes relative,
+ * a path inside `home` becomes `~/...`. Defaults: `process.cwd()` and
+ * `os.homedir()`.
+ */
+export interface ToolHeaderPathContext {
+  cwd?: string
+  home?: string
+}
+
+/** Cells of the `  ╭ ` frame before the icon. */
+const HEADER_FRAME_CELLS = 4
+/** Cells of the two-space gap after the label in a default header. */
+const HEADER_LABEL_GAP_CELLS = 2
+/** Narrowest path-header body we size for. Below it the row clamp wins. */
+const HEADER_MIN_BODY_CELLS = 12
+/** Cells a shortened Grep pattern keeps before the path gives way. */
+const GREP_PATTERN_MIN_CELLS = 24
+/** Separator between header chunks, same as the truncation footer. */
+const HEADER_SEP = " · "
+/** Single-cell ellipsis for compacted header parts. */
+const HEADER_ELLIPSIS = "\u2026"
+/** Tools whose default header body is sized to the row. */
+const PATH_HEADER_TOOLS: ReadonlySet<string> = new Set(["Read", "Write", "Edit", "Glob", "Grep"])
+
+/** Fill in the `cwd` and `home` defaults. */
+function resolvePathContext(ctx?: ToolHeaderPathContext): Required<ToolHeaderPathContext> {
+  return { cwd: ctx?.cwd ?? process.cwd(), home: ctx?.home ?? homedir() }
+}
+
+/**
+ * Cells left for a header body after `chromeCells` of frame, icon, label and
+ * gap, and the 1-cell wrap safety that {@link clampTranscriptRow} keeps.
+ * Unknown `cols` gives `Infinity`: no width cut, deterministic non-TTY rows.
+ */
+function headerBodyBudget(cols: number | undefined, chromeCells: number): number {
+  if (cols === undefined || !Number.isFinite(cols) || cols <= 0) return Number.POSITIVE_INFINITY
+  // The real room, never more: `formatPathCompact` handles a tiny budget.
+  return Math.max(1, Math.floor(cols) - chromeCells - 1)
+}
+
+/** Relativize `path`, and compact it to `budget` cells when it is finite. */
+function compactPath(path: string, ctx: Required<ToolHeaderPathContext>, budget: number): string {
+  const cells = Number.isFinite(budget) ? Math.max(1, budget) : undefined
+  return formatPathCompact(path, { cwd: ctx.cwd, home: ctx.home, budget: cells })
+}
+
+/** Cut the middle of `s` to `budget` cells with one `…`. */
+function elideMiddleCells(s: string, budget: number): string {
+  if (displayWidth(s) <= budget) return s
+  if (budget <= 1) return HEADER_ELLIPSIS
+  const avail = budget - 1
+  const head = truncateDisplayWidth(s, Math.ceil((avail * 2) / 3), "")
+  const chars = Array.from(s)
+  let tailWidth = avail - displayWidth(head)
+  let start = chars.length
+  while (start > 0 && displayWidth(chars[start - 1]) <= tailWidth) {
+    tailWidth -= displayWidth(chars[start - 1])
+    start -= 1
+  }
+  return `${head}${HEADER_ELLIPSIS}${chars.slice(start).join("")}`
+}
+
+/**
+ * Split a regex at its top-level `|` only. A `|` after a backslash, inside a
+ * `[...]` class, or inside a `(...)` group does not split.
+ */
+function splitTopLevelAlternatives(pattern: string): string[] {
+  const chars = Array.from(pattern)
+  const alts: string[] = []
+  let current = ""
+  let depth = 0
+  let classStart = -1
+  for (let i = 0; i < chars.length; i += 1) {
+    const ch = chars[i]
+    if (ch === "\\") {
+      current += ch + (chars[i + 1] ?? "")
+      i += 1
+      continue
+    }
+    if (classStart >= 0) {
+      // A `]` first in the class (after `[` or `[^`) is a literal.
+      const first = i === classStart + 1 || (i === classStart + 2 && chars[classStart + 1] === "^")
+      if (ch === "]" && !first) classStart = -1
+    } else if (ch === "[") {
+      classStart = i
+    } else if (ch === "(") {
+      depth += 1
+    } else if (ch === ")") {
+      depth = Math.max(0, depth - 1)
+    } else if (ch === "|" && depth === 0) {
+      alts.push(current)
+      current = ""
+      continue
+    }
+    current += ch
+  }
+  alts.push(current)
+  return alts
+}
+
+/**
+ * Shorten a Grep pattern to `budget` cells. With top-level `|` alternatives,
+ * keep the leading whole alternatives and append `|…`. Else cut the middle.
+ */
+function shortenGrepPattern(pattern: string, budget: number): string {
+  if (displayWidth(pattern) <= budget) return pattern
+  const alts = splitTopLevelAlternatives(pattern)
+  if (alts.length > 1) {
+    let kept = ""
+    for (const alt of alts) {
+      const next = kept === "" ? alt : `${kept}|${alt}`
+      if (displayWidth(`${next}|${HEADER_ELLIPSIS}`) > budget) break
+      kept = next
+    }
+    if (kept !== "") return `${kept}|${HEADER_ELLIPSIS}`
+  }
+  return elideMiddleCells(pattern, budget)
+}
+
+/**
+ * Fit a Grep header to `budget` cells. Steps, in order: drop the lowest
+ * modifiers (a `+N` chunk counts them), shrink the `in <path>` part, then
+ * shorten the pattern. The `/` delimiters and the flags always stay.
+ */
+function fitGrepHeader(opts: {
+  pattern: string
+  flags: string
+  path: string | undefined
+  modifiers: string[]
+  ctx: Required<ToolHeaderPathContext>
+  budget: number
+}): string {
+  const { pattern, flags, ctx, budget } = opts
+  const atom = (p: string): string => `/${p}/${flags}`
+  const fullPath = opts.path === undefined ? undefined : compactPath(opts.path, ctx, Infinity)
+  const join = (p: string, path: string | undefined, mods: string[], dropped: number): string => {
+    const parts = [atom(p)]
+    if (path !== undefined) parts.push(`in ${path}`)
+    parts.push(...mods)
+    if (dropped > 0) parts.push(`+${dropped}`)
+    return parts.join(HEADER_SEP)
+  }
+  let mods = opts.modifiers
+  let dropped = 0
+  let line = join(pattern, fullPath, mods, dropped)
+  if (!Number.isFinite(budget) || displayWidth(line) <= budget) return line
+
+  // 1. Drop modifiers, lowest priority (the tail) first.
+  while (mods.length > 0 && displayWidth(line) > budget) {
+    mods = mods.slice(0, -1)
+    dropped += 1
+    line = join(pattern, fullPath, mods, dropped)
+  }
+  if (displayWidth(line) <= budget) return line
+
+  // 2. Shrink the path into the cells the pattern leaves, down to a floor.
+  let path = fullPath
+  if (opts.path !== undefined && fullPath !== undefined) {
+    const others = displayWidth(join(pattern, "", mods, dropped))
+    const floor = Math.min(displayWidth(fullPath), HEADER_MIN_BODY_CELLS)
+    path = compactPath(opts.path, ctx, Math.max(floor, budget - others))
+    line = join(pattern, path, mods, dropped)
+  }
+  if (displayWidth(line) <= budget) return line
+
+  // 3. Shorten the pattern into what the floor path leaves, but keep a fair
+  //    share for it. The pattern is sized as if every modifier came back, so
+  //    it does not take the cells that step 4 gives back to the modifiers.
+  const atomCells = displayWidth(atom(""))
+  const rest = displayWidth(join("", path, opts.modifiers, 0)) - atomCells
+  const patBudget = Math.max(
+    Math.min(displayWidth(pattern), GREP_PATTERN_MIN_CELLS, budget - atomCells),
+    budget - rest - atomCells,
+  )
+  const shortPattern = shortenGrepPattern(pattern, patBudget)
+  // 4. Give back the highest dropped modifiers that now fit beside the floor
+  //    path, then give the path the cells that are left.
+  while (dropped > 0) {
+    const next = opts.modifiers.slice(0, mods.length + 1)
+    if (displayWidth(join(shortPattern, path, next, dropped - 1)) > budget) break
+    mods = next
+    dropped -= 1
+  }
+  if (opts.path !== undefined) {
+    const others = displayWidth(join(shortPattern, "", mods, dropped))
+    path = compactPath(opts.path, ctx, Math.max(1, budget - others))
+  }
+  line = join(shortPattern, path, mods, dropped)
+  if (displayWidth(line) <= budget) return line
+  return fitGrepHeaderFinal(opts, shortPattern, fullPath)
+}
+
+/**
+ * Last Grep fit step, so the row clamp never cuts the closing `/flags`. Drop
+ * every modifier (a `+N` chunk stays when it fits), then the `in <path>`
+ * part, then shrink the pattern to exactly the cells left.
+ */
+function fitGrepHeaderFinal(
+  opts: Parameters<typeof fitGrepHeader>[0],
+  shortPattern: string,
+  fullPath: string | undefined,
+): string {
+  const { pattern, flags, ctx, budget } = opts
+  const total = opts.modifiers.length
+  const join = (p: string, path: string | undefined, count: number): string =>
+    [`/${p}/${flags}`, path === undefined ? "" : `in ${path}`, count > 0 ? `+${count}` : ""]
+      .filter((s) => s !== "")
+      .join(HEADER_SEP)
+  // Keep a compacted path beside the shortened pattern while it has a fair floor.
+  for (const count of opts.path !== undefined && fullPath !== undefined ? [total, 0] : []) {
+    const room = budget - displayWidth(join(shortPattern, "", count))
+    if (room < Math.min(displayWidth(fullPath ?? ""), HEADER_MIN_BODY_CELLS)) continue
+    const line = join(shortPattern, compactPath(opts.path ?? "", ctx, room), count)
+    if (displayWidth(line) <= budget) return line
+  }
+  const atomCells = displayWidth(join("", undefined, 0))
+  const countCells = total > 0 ? displayWidth(`${HEADER_SEP}+${total}`) : 0
+  // The `+N` chunk stays only while the pattern keeps 4 cells beside it.
+  const keepCount = total > 0 && budget - atomCells - countCells >= 4
+  const room = budget - atomCells - (keepCount ? countCells : 0)
+  const p = room >= 1 ? shortenGrepPattern(pattern, room) : ""
+  return join(p, undefined, keepCount ? total : 0)
+}
 
 /**
  * Format a `tool_use` block's input for the bordered tool header. Picks
@@ -152,8 +578,31 @@ const BASH_CONT_MAX_LINES = 16
  *  - **Unknown**: JSON.stringify, hard slice at 200 chars (unknown tools
  *    have unknown shape, so word boundaries aren't meaningful).
  */
-export function formatToolInput(tool: ToolUseBlock, cols?: number, headerKey?: string): string {
+export function formatToolInput(
+  tool: ToolUseBlock,
+  cols?: number,
+  headerKey?: string,
+  pathContext?: ToolHeaderPathContext,
+): string {
+  const chrome = HEADER_FRAME_CELLS + displayWidth(DEFAULT_TOOL_ICON) + 1 + displayWidth(tool.name)
+  return formatToolInputBody(tool, cols, headerKey, pathContext, chrome + HEADER_LABEL_GAP_CELLS)
+}
+
+/**
+ * The body of {@link formatToolInput}. `chromeCells` is the row width spent
+ * before the body (frame, icon, label, gap), so path-bearing headers can
+ * size their body to the row.
+ */
+function formatToolInputBody(
+  tool: ToolUseBlock,
+  cols: number | undefined,
+  headerKey: string | undefined,
+  pathContext: ToolHeaderPathContext | undefined,
+  chromeCells: number,
+): string {
   const input = tool.input
+  const budget = headerBodyBudget(cols, chromeCells)
+  const ctx = resolvePathContext(pathContext)
   // Declarative header field (plugin tools): when the manifest names a
   // `headerKey` AND the input carries a non-empty string there, surface
   // exactly that value instead of the raw `{"k":"v"}` JSON fallback. This
@@ -168,35 +617,14 @@ export function formatToolInput(tool: ToolUseBlock, cols?: number, headerKey?: s
     if (typeof v === "string" && v.length > 0) return v
   }
   if (tool.name === "Bash" && input.command) {
-    const cmd = String(input.command)
-    const firstNl = cmd.indexOf("\n")
-    const firstLine = firstNl === -1 ? cmd : cmd.slice(0, firstNl)
-    // Width-aware soft-split: when the first \n-line would overflow the
-    // available terminal cells, route through `splitBashSegments` and
-    // use only the lead segment in the header. The remaining segments
-    // are emitted as `↳`-prefixed continuation rows by
-    // `formatToolInputContinuation`, followed by the existing PS2 `> `
-    // rows for any subsequent \n-lines (heredoc bodies, inline scripts).
-    //
-    // Soft-split applies to the FIRST \n-line independent of whether
-    // there are more \n-lines after it : early versions gated this on
-    // `firstNl === -1`, which made multi-line commands (python3 -c with
-    // embedded \n, heredocs, for-loops) bypass soft-split entirely and
-    // let the long first line truncate+wrap. Reported by user, May 2026.
-    //
-    // Default `cols` rule: when neither arg nor TTY width is available
-    // (e.g. unit tests, piped output), treat as Infinity so we never
-    // trigger soft-split : the lead-only header would otherwise be a
-    // regression for non-TTY callers.
-    const effectiveCols = cols ?? process.stdout.columns ?? Number.POSITIVE_INFINITY
-    const headerBody = shouldSoftSplit(firstLine, effectiveCols)
-      ? splitBashSegments(firstLine).lead || firstLine
-      : firstLine
-    const trimmed = trimAtWordBoundary(headerBody, HEADER_BASH_MAX)
-    const charsCut = headerBody.length - trimmed.length
-    const truncated = charsCut > 0 ? `${trimmed}${truncHint(charsCut, "ch")}` : trimmed
+    // Decomposition is decided once, by `planBashInput`, and shared with
+    // `formatToolInputContinuation` : header and continuation rows must never
+    // disagree about how a command was broken up. See `planBashInput` for the
+    // strategy ladder (inline script → shell operators → whitespace flow →
+    // plain `\n` path) and for the `cols`-unknown rule.
+    const plan = planBashInput(String(input.command), cols)
     // Header line only : continuation rendered by formatToolInputContinuation.
-    return `$ ${truncated}`
+    return `$ ${plan.body}`
   }
   if (tool.name === "Read" && input.file_path) {
     const path = String(input.file_path)
@@ -207,25 +635,32 @@ export function formatToolInput(tool: ToolUseBlock, cols?: number, headerKey?: s
     // pre-extras form : the common case is undisturbed.
     const off = typeof input.offset === "number" ? input.offset : undefined
     const lim = typeof input.limit === "number" ? input.limit : undefined
-    if (off === undefined && lim === undefined) return path
-    const startL = (off ?? 0) + 1
-    if (lim !== undefined) return `${path} · L${startL}-${startL + lim - 1}`
-    return `${path} · from L${startL}`
+    let suffix = ""
+    if (off !== undefined || lim !== undefined) {
+      const startL = (off ?? 0) + 1
+      suffix = lim !== undefined ? ` · L${startL}-${startL + lim - 1}` : ` · from L${startL}`
+    }
+    // The suffix is reserved first: the range is the promise the body keeps.
+    return `${compactPath(path, ctx, budget - displayWidth(suffix))}${suffix}`
   }
   if (tool.name === "Write" && input.file_path) {
-    return String(input.file_path)
+    return compactPath(String(input.file_path), ctx, budget)
   }
   if (tool.name === "Edit" && input.file_path) {
     const path = String(input.file_path)
     // `g` flag : borrowed from sed's `s/old/new/g`. Cheap, recognizable,
     // attaches the modifier visually to the path it modifies.
-    return input.replace_all ? `${path} · g` : path
+    const suffix = input.replace_all ? " · g" : ""
+    return `${compactPath(path, ctx, budget - displayWidth(suffix))}${suffix}`
   }
   if (tool.name === "Glob") {
     const pat = globPatternFromInput(input)
     if (pat.status === "ok") {
       const dir = globPathFromInput(input)
-      return dir.status === "ok" ? `${pat.value} · in ${dir.value}` : pat.value
+      if (dir.status !== "ok") return pat.value
+      // The pattern stays whole: the dir shrinks into the cells left over.
+      const head = `${pat.value} · in `
+      return `${head}${compactPath(dir.value, ctx, budget - displayWidth(head))}`
     }
   }
   if (tool.name === "Grep" && input.pattern) {
@@ -235,23 +670,31 @@ export function formatToolInput(tool: ToolUseBlock, cols?: number, headerKey?: s
     // mode. `-n` (line numbers) is intentionally not surfaced : it's the
     // default and would just clutter.
     const flags = `${input["-i"] ? "i" : ""}${input.multiline ? "m" : ""}`
-    const parts: string[] = [`/${input.pattern}/${flags}`]
-    if (input.path) parts.push(`in ${input.path}`)
-    if (input.glob) parts.push(String(input.glob))
+    // Modifiers in priority order, highest first: the glob, then context,
+    // then head limit, then output mode. Over budget, the tail drops first.
+    const modifiers: string[] = []
+    if (input.glob) modifiers.push(String(input.glob))
     // Context arrows. `-C N` (or its `context` alias) takes precedence :
     // it's symmetric so `↕` reads more naturally than two arrows. When
     // only `-A`/`-B` are set, render whichever (or both) are present.
     const ctxC = (input["-C"] as number | undefined) ?? (input.context as number | undefined)
     if (typeof ctxC === "number") {
-      parts.push(`↕${ctxC}`)
+      modifiers.push(`↕${ctxC}`)
     } else {
-      if (typeof input["-A"] === "number") parts.push(`↓${input["-A"]}`)
-      if (typeof input["-B"] === "number") parts.push(`↑${input["-B"]}`)
+      if (typeof input["-A"] === "number") modifiers.push(`↓${input["-A"]}`)
+      if (typeof input["-B"] === "number") modifiers.push(`↑${input["-B"]}`)
     }
-    if (typeof input.head_limit === "number") parts.push(`≤${input.head_limit}`)
-    if (input.output_mode === "count") parts.push("count")
-    else if (input.output_mode === "files_with_matches") parts.push("paths")
-    return parts.join(" · ")
+    if (typeof input.head_limit === "number") modifiers.push(`≤${input.head_limit}`)
+    if (input.output_mode === "count") modifiers.push("count")
+    else if (input.output_mode === "files_with_matches") modifiers.push("paths")
+    return fitGrepHeader({
+      pattern: String(input.pattern),
+      flags,
+      path: input.path ? String(input.path) : undefined,
+      modifiers,
+      ctx,
+      budget,
+    })
   }
   // Option A: compact key:value pairs joined by " · ". Replaces the old
   // JSON.stringify fallback that dumped raw JSON into the header (e.g.
@@ -343,57 +786,7 @@ export function formatToolInput(tool: ToolUseBlock, cols?: number, headerKey?: s
 export function formatToolInputContinuation(tool: ToolUseBlock, cols?: number): string[] {
   const input = tool.input
   if (tool.name !== "Bash" || !input.command) return []
-  const cmd = String(input.command)
-  const all = cmd.split("\n")
-  const firstLine = all[0] ?? ""
-  const tail = all.slice(1)
-  const effectiveCols = cols ?? process.stdout.columns ?? Number.POSITIVE_INFINITY
-
-  // Zone A : soft-split rows for the FIRST \n-line. Activates whenever
-  // the first line would overflow AND has top-level operators
-  // (`&&`, `||`, `|`, `;`) : independent of whether there are more
-  // \n-lines after it. Each row is prefixed `↳ ` and leads with the
-  // operator (shellcheck/shfmt convention). Visually distinct from
-  // Zone B's `> ` PS2 rows.
-  const softSplitRows: string[] = (() => {
-    if (!shouldSoftSplit(firstLine, effectiveCols)) return []
-    const { rest } = splitBashSegments(firstLine)
-    if (rest.length === 0) return []
-    return rest.map(({ op, body }) => {
-      const segLine = `${op} ${body}`
-      const trimmed = trimAtWordBoundary(segLine, HEADER_BASH_MAX)
-      const charsCut = segLine.length - trimmed.length
-      const finalBody = charsCut > 0 ? `${trimmed}${truncHint(charsCut, "ch")}` : trimmed
-      return `↳ ${finalBody}`
-    })
-  })()
-
-  // Zone B : PS2 (`> `) rows for subsequent \n-lines (heredoc bodies,
-  // inline scripts, for-loop bodies). Existing behavior, preserved.
-  const ps2Rows: string[] = tail.map((line) => {
-    const trimmed = trimAtWordBoundary(line, HEADER_BASH_MAX)
-    const charsCut = line.length - trimmed.length
-    const body = charsCut > 0 ? `${trimmed}${truncHint(charsCut, "ch")}` : trimmed
-    return `> ${body}`
-  })
-
-  // Combined cap. Concatenate Zone A then Zone B, then clip to
-  // `BASH_CONT_MAX_LINES` with a single trailing elision row that
-  // counts both elided categories together. Putting the cap on the
-  // combined list (rather than per-zone) keeps the visual block from
-  // ballooning when a model emits a long pipeline AND a multi-line
-  // heredoc body in the same call.
-  const combined = [...softSplitRows, ...ps2Rows]
-  if (combined.length === 0) return []
-  if (combined.length <= BASH_CONT_MAX_LINES) return combined
-  const visible = combined.slice(0, BASH_CONT_MAX_LINES)
-  const elided = combined.length - visible.length
-  // Elision-row prefix mirrors whichever zone the LAST visible row
-  // came from, so the eye stays oriented (`↳` if we cut inside the
-  // operator-split zone, `>` if we cut inside the heredoc zone).
-  const lastPrefix = visible[visible.length - 1].startsWith("↳ ") ? "↳" : ">"
-  visible.push(`${lastPrefix} ${truncHint(elided, "L")} more`)
-  return visible
+  return planBashInput(String(input.command), cols).rows
 }
 
 /**
@@ -455,8 +848,10 @@ export function formatToolHeaderRows(opts: {
   headerOverride?: string
   timeText?: string
   cols?: number
+  /** Where header paths are shown from. Defaults: `process.cwd()`, `os.homedir()`. */
+  pathContext?: ToolHeaderPathContext
 }): string[] {
-  const { tool, presentation, headerOverride, timeText, cols } = opts
+  const { tool, presentation, headerOverride, timeText, cols, pathContext } = opts
   const labelColor =
     presentation?.color && (c as Record<string, (s: string) => string>)[presentation.color]
       ? (c as Record<string, (s: string) => string>)[presentation.color]
@@ -464,8 +859,23 @@ export function formatToolHeaderRows(opts: {
   const iconText = toolIcon(presentation)
   const icon = `${c.bold(labelColor(iconText))} `
   const label = c.bold(labelColor(tool.name))
-  const timeSuffix = timeText !== undefined ? ` · ${timeText}` : ""
   const TIME_HINT_GUTTER = 2
+  const chromeCells =
+    HEADER_FRAME_CELLS +
+    displayWidth(iconText) +
+    1 +
+    displayWidth(tool.name) +
+    HEADER_LABEL_GAP_CELLS
+  // On a narrow row the default header body wins over the time hint: drop
+  // the hint when it would leave the body less than the minimum room.
+  const timeFits =
+    timeText === undefined ||
+    headerOverride !== undefined ||
+    cols === undefined ||
+    !PATH_HEADER_TOOLS.has(tool.name) ||
+    cols - displayWidth(` · ${timeText}`) - TIME_HINT_GUTTER - chromeCells - 1 >=
+      HEADER_MIN_BODY_CELLS
+  const timeSuffix = timeText !== undefined && timeFits ? ` · ${timeText}` : ""
   const adjustedCols =
     cols !== undefined && timeSuffix.length > 0
       ? Math.max(20, cols - displayWidth(timeSuffix) - TIME_HINT_GUTTER)
@@ -474,7 +884,15 @@ export function formatToolHeaderRows(opts: {
   const content =
     headerOverride !== undefined
       ? headerOverride
-      : c.dim(formatToolInput(tool, adjustedCols, presentation?.headerKey))
+      : c.dim(
+          formatToolInputBody(
+            tool,
+            adjustedCols,
+            presentation?.headerKey,
+            pathContext,
+            chromeCells,
+          ),
+        )
   // Default input summaries keep the historical two-space gap after the label
   // (`Bash  $ cmd`). Plugin-owned `displayHeader` overrides use a single space so
   // chrome like `IntercomSend → Sergio (id)` does not read as a double gap.
@@ -868,6 +1286,15 @@ type DisplayWrapMode = "prose" | "structured" | "truncate" | "none"
  */
 const TABULAR_DISPLAY_TOOLS = new Set(["ListAgents", "ShowDiff", "LockStatus", "Edit", "Write"])
 
+/**
+ * Tools whose `display` is a unified diff. Their rows get a line-number
+ * gutter and wrap up to {@link getDiffWrapLines} rows before a dim cut hint.
+ */
+const DIFF_DISPLAY_TOOLS = new Set(["Edit", "Write", "ShowDiff", "DiffViewerShowDiff", "show_diff"])
+
+/** Diff tools that show one file. Their `@@` hunk header rows are hidden. */
+const FILE_DIFF_TOOLS = new Set(["Edit", "Write"])
+
 /** Tools whose `display` rows are structured (indent + columns + trailing title). */
 const STRUCTURED_DISPLAY_TOOLS = new Set(["Task"])
 
@@ -963,10 +1390,23 @@ export function formatToolPreview(
       out.push(`  ${c.dimCyan("╰")}`)
       return out
     }
-    for (let i = 0; i < dlines.length; i++) {
-      const fragments = wrapDisplayLine(dlines[i], wrapMode, bodyWidth)
+    // Diff tools get a line-number gutter and wrap-then-cut rows (see
+    // `diff-rows.ts`). Each rendered row is then one fragment. Edit and Write
+    // show one file, so their `@@` rows are hidden. A Write that created a
+    // file shows Read-style rows, and its footer gets the `┊` cut row.
+    const tool = opts?.tool ?? ""
+    const newFile = tool === "Write" && isNewFileDisplay(body)
+    const rowGroups: string[][] = newFile
+      ? renderNewFileRows(dlines, bodyWidth).map((row) => [row])
+      : DIFF_DISPLAY_TOOLS.has(tool)
+        ? renderDiffRows(dlines, bodyWidth, undefined, {
+            hideHunkHeaders: FILE_DIFF_TOOLS.has(tool),
+          }).map((row) => [row])
+        : dlines.map((line) => wrapDisplayLine(line, wrapMode, bodyWidth))
+    for (let i = 0; i < rowGroups.length; i++) {
+      const fragments = rowGroups[i]!
       for (let fi = 0; fi < fragments.length; fi++) {
-        const isLastLine = i === dlines.length - 1
+        const isLastLine = i === rowGroups.length - 1
         const isLastFrag = fi === fragments.length - 1
         const conn = footer === undefined && isLastLine && isLastFrag ? "╰" : "│"
         const fragLine = fragments[fi]
@@ -976,6 +1416,7 @@ export function formatToolPreview(
       }
     }
     if (footer !== undefined) {
+      if (newFile && footer.length > 0) out.push(`  ${c.dimCyan("┊")}`)
       const footerLine = clampToolPreviewBodyLine(footer, bodyWidth)
       out.push(
         footerLine.length === 0 ? `  ${c.dimCyan("╰")}` : `  ${c.dimCyan("╰")} ${footerLine}`,
@@ -1012,7 +1453,9 @@ export function formatToolPreview(
   //    clampBodyWithHint} for the hint-reserve detail.
   const maxLines = TOOL_PREVIEW_LINES[tool ?? ""] ?? TOOL_PREVIEW_LINES_DEFAULT
   const allLines = (body || "(no output)").split("\n")
-  const visible = allLines.slice(0, maxLines)
+  const shown = allLines.slice(0, maxLines)
+  // Read shares the diff line-number gutter (see `renderReadRows`).
+  const visible = tool === "Read" ? renderReadRows(shown) : shown
   const linesElided = allLines.length - visible.length
   const lineWidth = effectiveBodyLineWidth(opts?.cols)
   // Expand `\t` to spaces using the gutter as the starting column. A

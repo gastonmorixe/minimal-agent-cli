@@ -237,6 +237,8 @@ async function openInteractiveSession(
     toolTimeTracker: deps.toolTimeTracker ?? null,
     codeHighlighter: deps.codeHighlighter ?? null,
     columns: terminalColumns,
+    // Header paths show relative to the start cwd, as the rest of this file does.
+    cwd: process.cwd(),
   })
   const toolExecutor = new ToolExecutorAdapter({
     loader: deps.loader,

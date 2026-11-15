@@ -22,6 +22,8 @@ import type {
 } from "@minimal-agent/core/host-kit/tool-executor-adapter"
 import { expandTabs } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { ToolUseBlock } from "@minimal-agent/core/sdk/messages"
+import { c } from "../style/ansi.ts"
+import { diffSummary, displayPatch, newFileDisplay, newFileNumberedBody } from "./diff-rows.ts"
 import {
   type CodeHighlighter,
   clampBodyWithHint,
@@ -73,6 +75,11 @@ export interface ReplToolViewOptions {
    * formatter uses its own default width.
    */
   columns?: () => number | undefined
+  /**
+   * The dir that header paths are shown relative to. Omitted: the formatter
+   * uses `process.cwd()`.
+   */
+  cwd?: string
 }
 
 /** The live state of one tool call. */
@@ -135,22 +142,6 @@ function stripDiffPathPrefix(raw: string): string | undefined {
   return path.replace(/^[ab]\//, "")
 }
 
-/** The title line of an Edit/Write diff: Write shows the file, Edit shows none. */
-function diffTitle(
-  toolName: string,
-  filePath: string | undefined,
-  isNew: boolean,
-): string | undefined {
-  return toolName === "Write" && filePath
-    ? `${isNew ? "New file" : "Write"}: ${filePath}`
-    : undefined
-}
-
-/** The plain body of a diff: the title line (if any), then the patch. */
-function plainDiff(patch: string, title?: string): string {
-  return title ? `${title}\n${patch}` : patch
-}
-
 /**
  * Build the REPL tool view: a {@link ToolViewPort} that writes the framed
  * tool rows to `opts.writeTranscript`.
@@ -189,6 +180,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
       headerOverride: override,
       timeText,
       cols: state.cols,
+      pathContext: opts.cwd !== undefined ? { cwd: opts.cwd } : undefined,
     })
     for (const [idx, row] of rows.entries()) writeTranscript(idx === 0 ? `\n${row}` : row)
   }
@@ -274,9 +266,16 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
     let display = outcome.display
     const diff = outcome.diff
     const filePath = typeof tool.input.file_path === "string" ? tool.input.file_path : undefined
-    const title = diff ? diffTitle(tool.name, filePath, diff.newFile) : undefined
+    const isFileDiff = (tool.name === "Edit" || tool.name === "Write") && diff !== undefined
+    // A Write that created a file shows a Read-style preview, not a diff.
+    const newFilePatch =
+      tool.name === "Write" && diff !== undefined && diff.newFile ? diff.patch : undefined
+    let displayFooter = outcome.displayFooter
+    const editPatch =
+      isFileDiff && newFilePatch === undefined ? displayPatch(diff.patch) : undefined
+    const summary = isFileDiff ? c.dim(diffSummary(diff.patch, diff.newFile)) : undefined
     // The plain diff is the body when no color or highlight applies.
-    if (diff && display === undefined) display = plainDiff(diff.patch, title)
+    if (editPatch !== undefined && display === undefined) display = `${summary}\n${editPatch}`
 
     // `DiffViewerShowDiff` sends no `file_path` and no `outcome.diff`: its patch
     // arrives in the input and its flat ANSI display from the plugin. The patch
@@ -286,7 +285,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
     const showDiffPatch = showDiff ? tool.input.patch : undefined
     const patch = typeof showDiffPatch === "string" ? showDiffPatch : diff ? diff.patch : undefined
     const diffTitleText =
-      showDiff && typeof tool.input.title === "string" ? tool.input.title : title
+      showDiff && typeof tool.input.title === "string" ? tool.input.title : undefined
     const languagePath =
       filePath ?? (typeof showDiffPatch === "string" ? diffPatchPath(showDiffPatch) : undefined)
 
@@ -315,10 +314,10 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
           previewContent = highlighted + annotation
           contentHasAnsi = true
         }
-      } else if ((tool.name === "Edit" || tool.name === "Write") && diff) {
-        const highlighted = await highlightUnifiedDiff(diff.patch, language, highlighter, title)
+      } else if (editPatch !== undefined) {
+        const highlighted = await highlightUnifiedDiff(editPatch, language, highlighter)
         if (highlighted !== null) {
-          display = highlighted
+          display = `${summary}\n${highlighted}`
           diffStyled = true
         }
       } else if (showDiff && patch !== undefined) {
@@ -332,14 +331,23 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
       }
     }
     // No highlighted diff: color the plain Edit/Write diff (S41).
-    if (!isError && !diffStyled && (tool.name === "Edit" || tool.name === "Write") && diff) {
-      display = renderUnifiedDiff(diff.patch, title)
+    if (!isError && !diffStyled && editPatch !== undefined) {
+      display = `${summary}\n${renderUnifiedDiff(editPatch)}`
+    }
+    if (!isError && newFilePatch !== undefined && outcome.display === undefined) {
+      const highlighted =
+        language && highlighter
+          ? await highlightReadBody(newFileNumberedBody(newFilePatch), language, highlighter)
+          : null
+      const preview = newFileDisplay(newFilePatch, highlighted)
+      display = preview.display
+      displayFooter ??= preview.footer
     }
 
     const previewLines = formatToolPreview(previewContent, isError, display, {
       tool: tool.name,
       info: outcome.truncInfo,
-      footer: outcome.displayFooter,
+      footer: displayFooter,
       cols: state.cols,
       ansiContent: contentHasAnsi,
     })

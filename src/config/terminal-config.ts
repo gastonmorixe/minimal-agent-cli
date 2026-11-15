@@ -17,6 +17,7 @@
  * - `skipQuota`: skip the startup quota row (`main.ts`).
  * - `nerdGlyphCells`: Nerd Font glyph width, 1, 2, or "auto" (`startup/live-repl.ts`).
  * - `scrollback.submittedAt`: the prompt timestamp style (`ui/scrollback-submitted-at.ts`).
+ * - `diffWrapLines`: wrap cap for diff rows (`ui/tool-transcript/diff-rows.ts`, set in `main.ts`).
  *
  * `statusBar` is not here: the quota-status plugin reads it from the file
  * itself.
@@ -69,6 +70,12 @@ export interface TerminalConfig {
    * (probe at startup). Override with `MINIMAL_AGENT_NERD_GLYPH_CELLS`.
    */
   nerdGlyphCells?: 1 | 2 | "auto"
+  /**
+   * Transcript rows one Edit/Write/ShowDiff diff line may wrap onto before
+   * it is cut with a `...(+Nch)` hint. Positive integer, default 5.
+   * Override with `MINIMAL_AGENT_DIFF_WRAP_LINES`.
+   */
+  diffWrapLines?: number
   /** Scrollback settings for submitted user prompts. */
   scrollback?: {
     submittedAt?: SubmittedAtStyle
@@ -125,6 +132,13 @@ export function parseTerminalConfig(obj: Record<string, unknown>): TerminalConfi
   // "1" / "2" are rejected to keep the surface tight.
   if (obj.nerdGlyphCells === 1 || obj.nerdGlyphCells === 2 || obj.nerdGlyphCells === "auto") {
     out.nerdGlyphCells = obj.nerdGlyphCells
+  }
+  if (
+    typeof obj.diffWrapLines === "number" &&
+    Number.isInteger(obj.diffWrapLines) &&
+    obj.diffWrapLines >= 1
+  ) {
+    out.diffWrapLines = obj.diffWrapLines
   }
   if (isRecord(obj.scrollback)) {
     const submittedAt = normalizeSubmittedAtStyle(obj.scrollback.submittedAt)

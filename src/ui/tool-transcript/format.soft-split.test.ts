@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "bun:test"
 
+import { displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { ToolUseBlock } from "@minimal-agent/core/sdk/messages"
 
 import { formatToolInput, formatToolInputContinuation } from "./format.ts"
@@ -38,12 +39,18 @@ describe("formatToolInput — Bash soft-split (width-aware)", () => {
     expect(out).toBe("$ cd /Users/dev/Projects/mdstream")
   })
 
-  it("falls back to the full first line when no top-level operators exist", () => {
-    // Long single-segment command (no &&, ||, |, ;): no split is possible,
-    // header keeps full first line and lets the terminal wrap as before.
+  it("shortens a command with no top-level operators instead of letting it wrap", () => {
+    // No `&&`, `||`, `|`, `;` and no inline-script payload, so there is
+    // nothing to decompose into rows. The header must then do the shortening
+    // itself and fit the terminal: leaving the row to the terminal's own
+    // hard-wrap was the reported bug (it cut mid-token and broke the frame).
     const cmd = "very-long-single-token-with-no-operators-at-all-x".repeat(3)
     const out = formatToolInput(tu("Bash", { command: cmd }), 60)
-    expect(out).toBe(`$ ${cmd}`)
+    expect(out.startsWith("$ ")).toBe(true)
+    expect(out).not.toBe(`$ ${cmd}`)
+    // `$ ` (2 cells) plus the body, inside the 14-cell header chrome.
+    expect(displayWidth(out)).toBeLessThanOrEqual(60 - 14 + 2)
+    expect(formatToolInputContinuation(tu("Bash", { command: cmd }), 60)).toEqual([])
   })
 
   it("DOES soft-split the first \\n-line when it overflows (heredoc/inline-script tail keeps PS2)", () => {

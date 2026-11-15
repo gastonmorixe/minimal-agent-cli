@@ -638,3 +638,153 @@ describe("runHostMode", () => {
     expect(exits).toEqual([143])
   })
 })
+
+describe("runHostMode provider + credential targets", () => {
+  const OTHER = "host-mode-other-prov"
+  afterEach(() => {
+    clearModelRegistry()
+  })
+
+  function registerOn(id: string, providerId: string): void {
+    registerModel({
+      id,
+      providerId,
+      surfaceId: "test",
+      displayName: id,
+      capabilities: defaultCapabilities(),
+      pricing: {
+        inputUSD: 0,
+        outputUSD: 0,
+        cacheWriteUSD: 0,
+        cacheReadUSD: 0,
+        webSearchPerCallUSD: 0,
+      },
+    })
+  }
+
+  const stored = (providerId: string, credentialName: string) => ({
+    providerId,
+    displayName: `${providerId}-name`,
+    authKind: "api-key" as const,
+    source: "store" as const,
+    credentialName,
+  })
+
+  /** A transport that records the auth of each request. */
+  function authSend(seen: AuthResult[]) {
+    return async function* (
+      opts: SendOptions,
+    ): AsyncGenerator<string, StreamedResponse, undefined> {
+      seen.push((opts as unknown as { auth: AuthResult }).auth)
+      yield "ok"
+      return {
+        blocks: [{ type: "text" as const, text: "ok" }],
+        text: "ok",
+        stopReason: "end_turn",
+      } as StreamedResponse
+    }
+  }
+
+  it("listTargets keeps the live target; setTarget switches provider, auth, and models", async () => {
+    registerFixtureModel("model-a", [])
+    registerOn("model-x", OTHER)
+    const otherAuth: AuthResult = { type: "api-key", token: "other-token" }
+    const authCalls: unknown[][] = []
+    const seenAuth: AuthResult[] = []
+    const out: Record<string, unknown> = {}
+    const handler = async (ctx: HostModeContext): Promise<number> => {
+      const rt = ctx.runtime
+      out.targets = rt.listTargets?.()
+      await expect(rt.setTarget?.({ providerId: OTHER, credentialName: "work" })).rejects.toThrow(
+        /no session open/,
+      )
+      const session = await rt.openSession()
+      await rt.setTarget?.({ providerId: OTHER, credentialName: "work" })
+      out.target = rt.getTarget?.()
+      out.model = rt.getModel()
+      out.models = rt.listModels().map((m) => m.id)
+      out.info = rt.modelInfo("model-x")?.modelId
+      await drain(session.run("hi", { emitDeltas: true, signal: new AbortController().signal }))
+      await session.close()
+      return 0
+    }
+    const input = makeInput(handler)
+    await runHostMode({
+      ...input,
+      sessionDeps: { ...input.sessionDeps, sendFn: authSend(seenAuth) },
+      discoverTargets: () => [stored(OTHER, "work")],
+      resolveTargetAuth: async (...args) => {
+        authCalls.push(args)
+        return otherAuth
+      },
+    })
+    expect(out.targets).toEqual([
+      { providerId: PROVIDER, label: PROVIDER },
+      { providerId: OTHER, credentialName: "work", label: `${OTHER}-name · work` },
+    ])
+    expect(out.target).toEqual({ providerId: OTHER, credentialName: "work" })
+    expect(out.model).toBe("model-x")
+    expect(out.models).toEqual(["model-x"])
+    expect(out.info).toBe("model-x")
+    expect(authCalls).toEqual([[OTHER, "model-x", "work"]])
+    expect(seenAuth.at(-1)).toEqual(otherAuth)
+  })
+
+  it("setTarget leaves the target unchanged when auth or the credential check fails", async () => {
+    registerFixtureModel("model-a", [])
+    registerOn("model-x", OTHER)
+    const errors: string[] = []
+    const targets: unknown[] = []
+    const handler = async (ctx: HostModeContext): Promise<number> => {
+      const rt = ctx.runtime
+      const session = await rt.openSession()
+      for (const t of [
+        { providerId: OTHER, credentialName: "nope" },
+        { providerId: OTHER, credentialName: "fail" },
+      ]) {
+        try {
+          await rt.setTarget?.(t)
+        } catch (e) {
+          errors.push(e instanceof Error ? e.message : String(e))
+        }
+        targets.push({ target: rt.getTarget?.(), model: rt.getModel() })
+      }
+      await session.close()
+      return 0
+    }
+    await runHostMode({
+      ...makeInput(handler),
+      discoverTargets: () => [stored(OTHER, "fail")],
+      resolveTargetAuth: async (_p, _m, credentialName) => {
+        if (credentialName === "fail") throw new Error("no credentials")
+        return AUTH
+      },
+    })
+    expect(errors).toHaveLength(2)
+    expect(errors[0]).toMatch(/unknown credential "nope"/)
+    expect(errors[1]).toMatch(/no credentials/)
+    for (const t of targets) {
+      expect(t).toEqual({ target: { providerId: PROVIDER }, model: "model-a" })
+    }
+  })
+
+  it("setTarget keeps the model when the new provider registers the same id", async () => {
+    registerFixtureModel("model-a", [])
+    registerOn("model-a", OTHER)
+    registerOn("model-z", OTHER)
+    let model = ""
+    const handler = async (ctx: HostModeContext): Promise<number> => {
+      const session = await ctx.runtime.openSession()
+      await ctx.runtime.setTarget?.({ providerId: OTHER })
+      model = ctx.runtime.getModel()
+      await session.close()
+      return 0
+    }
+    await runHostMode({
+      ...makeInput(handler),
+      discoverTargets: () => [],
+      resolveTargetAuth: async () => AUTH,
+    })
+    expect(model).toBe("model-a")
+  })
+})

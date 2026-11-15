@@ -135,7 +135,7 @@ describe("toolDisplaysFromRecords", () => {
     const entry = map.get("tu_edit")
     expect(entry?.display).toBeDefined()
     const plain = stripAnsi(entry!.display!)
-    expect(plain).toContain("--- a//abs/x.json")
+    expect(plain.split("\n")[0]).toBe("+1 −1")
     expect(plain).toContain("-old line")
     expect(plain).toContain("+new line")
   })
@@ -168,9 +168,10 @@ describe("toolDisplaysFromRecords", () => {
     const entry = map.get("tu_w")
     expect(entry?.display).toBeDefined()
     const plain = stripAnsi(entry!.display!)
-    expect(plain).toContain("New file: /abs/new.md")
-    expect(plain).toContain("+# Hello")
-    expect(plain).toContain("+world")
+    expect(plain.split("\n")[0]).toBe("new file · 3 lines")
+    // A created file shows Read-style `N\t<code>` rows, no `+` marker.
+    expect(plain.split("\n").slice(1)).toEqual(["1\t# Hello", "2\t", "3\tworld"])
+    expect(entry?.displayFooter).toBeUndefined()
   })
 
   it("does NOT derive a display when the tool_result is_error (preserve the error text)", () => {
