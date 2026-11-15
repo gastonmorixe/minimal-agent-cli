@@ -12,7 +12,7 @@ import {
   findCsiEnd,
   hasModifier,
   isPrintableChar,
-  isPrintableCodePoint,
+  isTypableKeyCode,
   type ParsedKey,
   parseCsiUKey,
   parseXtermOtherKey,
@@ -36,7 +36,10 @@ type EscapeToken =
 export class RawInput {
   private static readonly BRACKETED_PASTE_START = "\x1b[200~"
   private static readonly BRACKETED_PASTE_END = "\x1b[201~"
-  private static readonly KITTY_KEYBOARD_ENABLE = "\x1b[>31u"
+  // Flag 1 only. Flags 2/8 make a bare Shift/Alt press emit bytes, which
+  // makes iTerm scroll to the prompt. See KITTY_KEYBOARD_ENABLE in
+  // src/editor/types.ts.
+  private static readonly KITTY_KEYBOARD_ENABLE = "\x1b[>1u"
   private static readonly KITTY_KEYBOARD_DISABLE = "\x1b[<u"
   private static readonly XTERM_FORMAT_OTHER_KEYS_ENABLE = "\x1b[>4;1f"
   private static readonly XTERM_FORMAT_OTHER_KEYS_DISABLE = "\x1b[>4f"
@@ -793,7 +796,7 @@ export class RawInput {
       return { kind: "edit", consumed, apply: () => this.buf.insertText(text) }
     }
 
-    if (!shift && !alt && !ctrl && isPrintableCodePoint(code)) {
+    if (!shift && !alt && !ctrl && isTypableKeyCode(code)) {
       return {
         kind: "edit",
         consumed,

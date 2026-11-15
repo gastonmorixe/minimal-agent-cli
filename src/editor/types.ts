@@ -437,7 +437,20 @@ export type QueueKeyHandler = (key: string, ctx: QueueKeyContext) => QueueKeyRes
 
 export const BRACKETED_PASTE_START = "\x1b[200~"
 export const BRACKETED_PASTE_END = "\x1b[201~"
-export const KITTY_KEYBOARD_ENABLE = "\x1b[>31u"
+/**
+ * Kitty keyboard protocol, flag 1 only ("disambiguate escape codes").
+ *
+ * Flag 1 is enough for every key the editor binds: Shift+Enter, Alt+Enter,
+ * Alt+b/f/m, Ctrl+…, and Esc arrive as CSI-u, while plain text, Enter, Tab
+ * and Backspace stay legacy bytes (handled by the byte path).
+ *
+ * Do NOT raise this to 31. Flag 8 ("report all keys as escape codes") makes
+ * the terminal emit a sequence for a bare Shift / Alt / Cmd press, and flag 2
+ * adds release events. The editor ignores both, but iTerm scrolls to the
+ * prompt whenever it sends input, so a lone modifier press yanks the user out
+ * of scrollback. Pinned by `editor-controller.kitty-flags.test.ts`.
+ */
+export const KITTY_KEYBOARD_ENABLE = "\x1b[>1u"
 export const KITTY_KEYBOARD_DISABLE = "\x1b[<u"
 export const XTERM_FORMAT_OTHER_KEYS_ENABLE = "\x1b[>4;1f"
 export const XTERM_FORMAT_OTHER_KEYS_DISABLE = "\x1b[>4f"

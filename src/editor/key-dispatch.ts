@@ -21,7 +21,7 @@ import {
   findCsiEnd,
   hasModifier,
   isPrintableChar,
-  isPrintableCodePoint,
+  isTypableKeyCode,
   parseCsiUKey,
   parseXtermOtherKey,
   trailingPrefixLength,
@@ -865,7 +865,7 @@ export class EditorKeyDispatcher {
       // The handler only matches exact command keys, so passing the raw
       // text is safe even in the (rare) multi-codepoint case.
       else if (text !== null) navKey = text
-      else if (isPrintableCodePoint(code)) navKey = String.fromCodePoint(code)
+      else if (isTypableKeyCode(code)) navKey = String.fromCodePoint(code)
       if (navKey !== null && host.tryQueueNav(navKey)) {
         // Esc consumed → "ignore" (no buffer churn); everything else may
         // have replaced the buffer, so report "changed" for a repaint.
@@ -968,7 +968,7 @@ export class EditorKeyDispatcher {
       // meta keys :
       //
       //   - iTerm 3.5+ with kitty proto enabled (the agent's default
-      //     after sending `\x1b[>31u` at startup) ships modified
+      //     after sending `\x1b[>1u` at startup) ships modified
       //     keys as CSI-u. Option+m arrives here as code=109, alt=true.
       //   - iTerm with kitty disabled AND "Option as Meta" enabled
       //     ships `\x1bm` (the legacy meta-prefix path, handled in
@@ -1015,7 +1015,7 @@ export class EditorKeyDispatcher {
 
     if (text && !ctrl) return this.insertTyped(text)
 
-    if (!shift && !alt && !ctrl && isPrintableCodePoint(code)) {
+    if (!shift && !alt && !ctrl && isTypableKeyCode(code)) {
       return this.insertTyped(String.fromCodePoint(code))
     }
 

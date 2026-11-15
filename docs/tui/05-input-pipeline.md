@@ -142,7 +142,7 @@ The two-press requirement is intentional: a single accidental Ctrl+C must not ki
 
 ```
 ESC[?2004h           bracketed paste on
-ESC[>31u             kitty keyboard protocol on (level 31)
+ESC[>1u              kitty keyboard protocol on (flag 1: disambiguate only)
 ESC[>4;1f            xterm formatOtherKeys = 1 (CSI escape per non-printable)
 ESC[>4;2m            xterm modifyOtherKeys = 2 (modifiers reported on all keys)
 ```
@@ -152,5 +152,12 @@ These give us:
 - Distinguishable Ctrl+I vs Tab, Ctrl+M vs Enter, etc.
 - Modified function keys (Shift+Tab, Ctrl+ArrowLeft)
 - Atomic paste handling
+
+The kitty level is deliberately flag 1, not 31. Flag 8 ("report all keys as
+escape codes") makes the terminal send a sequence for a bare Shift / Alt press
+and flag 2 adds release events. The editor ignores both, but iTerm scrolls to
+the prompt whenever it sends input, so a lone modifier press jumped the user
+out of scrollback. With flag 1, modified keys (Shift+Enter, Alt+Enter, Alt+m,
+Ctrl+C, Esc) still arrive as CSI-u and plain keys stay legacy bytes.
 
 All flipped off in `emergencyRestore()` and on `stop()`.

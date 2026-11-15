@@ -112,7 +112,8 @@ describe("RawInput", () => {
     const pending = input.read()
 
     expect(output.text()).toContain("\x1b[?2004h")
-    expect(output.text()).toContain("\x1b[>31u")
+    expect(output.text()).toContain("\x1b[>1u")
+    expect(output.text()).not.toContain("\x1b[>31u")
     expect(output.text()).toContain("\x1b[>4;1f")
     expect(output.text()).toContain("\x1b[>4;2m")
 
@@ -124,6 +125,20 @@ describe("RawInput", () => {
     expect(output.text()).toContain("\x1b[>4f")
     expect(output.text()).toContain("\x1b[<u")
     expect(output.text()).toContain("\x1b[?2004l")
+  })
+
+  it("ignores kitty modifier-only and release events (Shift/Alt/Cmd alone)", async () => {
+    const { result } = await readFromTTY([
+      "ab",
+      "\x1b[57441;2u", // left Shift press
+      "\x1b[57441;1:3u", // left Shift release
+      "\x1b[57443;3u", // left Alt press
+      "\x1b[57444;9u", // left Super (Cmd) press
+      "\x1b[99;1:3u", // 'c' release
+      "c",
+      "\r",
+    ])
+    expect(result).toBe("abc")
   })
 
   it("renders the initial prompt immediately and restores cooked mode after submit", async () => {
