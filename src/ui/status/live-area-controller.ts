@@ -21,7 +21,14 @@ import {
   type SpinnerNotification,
 } from "../spinner/index.ts"
 
-import { formatActivityInfix, formatElapsedSuffix, LABEL_BYTES_RE } from "./format.ts"
+import {
+  displayLabelFor,
+  EntryClock,
+  formatActivityInfix,
+  formatElapsedSuffix,
+  LABEL_BYTES_RE,
+  RateWindow,
+} from "./format.ts"
 import type { StatusSpinnerTheme } from "./line-renderer.ts"
 
 interface EditorStatusSink {
@@ -64,15 +71,22 @@ export class LiveAreaStatusController implements StatusController {
   /** Set while a blocking overlay (modal) owns the screen; see pauseForOverlay. */
   private overlayPaused = false
   /**
-   * Identity of the entry whose elapsed timer is currently running.
-   * Reset triggers: bus.create() (new id), cleared status (null), or
-   * controller stop. `update()` on the same handle keeps the same id
-   * so phase transitions on one network request keep ticking from the
-   * original start (e.g. `Sending` -\> `Receiving stream` -\> `Thinking`
-   * all share an elapsed counter).
+   * Identity of the entry on top of the bus, and when that entry was first
+   * seen. Start times are kept PER ENTRY ({@link EntryClock}):
+   * - `update()` on one handle keeps its id, so `Sending request` then
+   *   `Receiving stream` share one counter;
+   * - a new `bus.create()` (new id) starts at 0, so two consecutive
+   *   `Running Bash` rows each count from 0;
+   * - an entry that comes back on top (the turn's `Thinking` row after a
+   *   request or tool row clears) resumes its own count instead of
+   *   restarting at 0.
+   * The clock is forgotten when the bus empties or the controller stops.
    */
   private statusId: number | null = null
   private statusStartedAt = 0
+  private readonly clock = new EntryClock()
+  /** Sliding-window rate for the activity infix (see {@link RateWindow}). */
+  private readonly rateWindow = new RateWindow()
   /**
    * Visual cell width of the canonical icon for the current spinner
    * frame. Stays the same across on-frame (colorized glyph) and
@@ -126,6 +140,8 @@ export class LiveAreaStatusController implements StatusController {
     this.label = null
     this.statusId = null
     this.statusStartedAt = 0
+    this.clock.clear()
+    this.rateWindow.reset()
   }
 
   /**
@@ -175,17 +191,14 @@ export class LiveAreaStatusController implements StatusController {
       this.editor.setStatus(null)
       this.statusId = null
       this.statusStartedAt = 0
+      this.clock.clear()
+      this.rateWindow.reset()
       return
     }
-    // Reset the elapsed timer on entry-identity change (new
-    // `bus.create()`) but NOT on label updates to the same entry -- so
-    // two consecutive `Running Bash` tool dispatches each restart from
-    // 0, while client.ts phase transitions on one network request
-    // (`Sending` -> `Receiving stream` -> ...) keep ticking from the
-    // original handle's birth.
+    // Per-entry start time: see `statusId` / `clock` above.
     if (status.id !== this.statusId) {
       this.statusId = status.id
-      this.statusStartedAt = this.now()
+      this.statusStartedAt = this.clock.startOf(status.id, this.now())
     }
     this.spinnerManager.ensureMounted()
     this.spinnerManager.setNotification(this.toNotification(status))
@@ -235,13 +248,17 @@ export class LiveAreaStatusController implements StatusController {
     // (today's `Calling Write: streaming input (10 B)` pattern from
     // client.ts uses this).
     const status = this.bus.currentStatus()
-    const labelHasBytes = LABEL_BYTES_RE.test(this.label)
+    // Core reports the open content block as a fact; the words are ours.
+    const label = displayLabelFor(this.label, status?.activity)
+    const labelHasBytes = LABEL_BYTES_RE.test(label)
     const infix = formatActivityInfix(status?.activity, {
       now,
       entryStartedAt: this.statusStartedAt,
       hideBytes: labelHasBytes,
+      rateWindow: this.rateWindow,
+      ...(status ? { entryId: status.id } : {}),
     })
-    this.editor.setStatus(`${slot}${gap}${this.label}${infix}${suffix}`)
+    this.editor.setStatus(`${slot}${gap}${label}${infix}${suffix}`)
   }
 
   private toNotification(status: StatusSnapshot): SpinnerNotification {

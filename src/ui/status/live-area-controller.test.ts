@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { StatusBus } from "@minimal-agent/core/host/status-bus"
-import { displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { displayWidth, stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 import { _resetNerdGlyphCellsForTest, setNerdGlyphCells } from "../../terminal/nerd-glyph-width.ts"
 import { BlinkingNerdSpinner, type Spinner } from "../spinner/index.ts"
 
@@ -393,6 +393,42 @@ describe("LiveAreaStatusController", () => {
       setNow(1_005_000) // same wall clock as after the advance
       bus.create("Running Bash", { notificationId: "tool.running", category: "tool" })
       expect(editor.statuses[editor.statuses.length - 1]).toBe("* Running Bash")
+      ctrl.stop()
+    })
+
+    it("resumes an entry's own count when it comes back on top (turn Thinking row)", () => {
+      // The REPL's per-turn `Thinking` row sits under every request/tool
+      // row. When those clear, `Thinking` must show time since the TURN
+      // started, not restart at 0 s.
+      const { bus, editor, ctrl, advance } = makeRig()
+      bus.create("Thinking", { notificationId: "agent.thinking", category: "agent" })
+      advance(2_000)
+      const req = bus.create("Sending request", {
+        notificationId: "network.request",
+        category: "network",
+      })
+      expect(editor.statuses[editor.statuses.length - 1]).toBe("* Sending request")
+      advance(5_000)
+      req.clear()
+      expect(editor.statuses[editor.statuses.length - 1]).toBe("* Thinking \x1b[2m(7s)\x1b[22m")
+      ctrl.stop()
+    })
+
+    it("paints the block-aware label from activity.phase", () => {
+      const { bus, editor, ctrl, advance } = makeRig()
+      const req = bus.create("Receiving stream", {
+        notificationId: "network.request",
+        category: "network",
+      })
+      req.updateActivity({ direction: "down", phase: "tool-input", toolName: "Write" })
+      expect(stripAnsi(editor.statuses[editor.statuses.length - 1] ?? "")).toBe(
+        "* Streaming Write input ↓",
+      )
+      advance(100)
+      req.updateActivity({ phase: "stream", toolName: null })
+      expect(stripAnsi(editor.statuses[editor.statuses.length - 1] ?? "")).toBe(
+        "* Receiving stream ↓",
+      )
       ctrl.stop()
     })
 
