@@ -64,6 +64,39 @@ describe("renderFindingsPanel", () => {
     expect(lines.some((l) => /\+6 more/.test(l))).toBe(true)
   })
 
+  it("word-wraps a long message instead of cutting it", () => {
+    const words = Array.from({ length: 40 }, (_, i) => `word${i}`)
+    const findings: Finding[] = [
+      { source: "x", severity: "error", code: "E1", message: words.join(" "), line: 1, col: 1 },
+    ]
+    const lines = renderFindingsPanel(findings, { cols: 60 }).map(stripAnsi)
+    const joined = lines.join(" ")
+    expect(joined).not.toContain("...(+")
+    for (const w of words) expect(joined).toContain(w)
+    for (const l of lines) expect(l.length).toBeLessThanOrEqual(60)
+    // continuation rows hang under the text, past the dot
+    expect(lines[1]).toMatch(/^ {2}│ {3}\S/)
+  })
+
+  it("prints a multi-line message (embedded format diff) one row per line", () => {
+    const message =
+      "File does not match the project's formatting rules (reported by biome). " +
+      "Expected content at line 3 (diff, - current / + expected):\n" +
+      " import x\n-import {\n-  a,\n-} from 'y'\n+import { a } from 'y'\n" +
+      "Format the file according to the project's formatting setup."
+    const findings: Finding[] = [{ source: "biome", severity: "error", code: "format", message }]
+    const raw = renderFindingsPanel(findings, { cols: 80 })
+    const lines = raw.map(stripAnsi)
+    expect(lines.join("\n")).not.toContain("...(+")
+    expect(lines.some((l) => l.includes("-import {"))).toBe(true)
+    expect(lines.some((l) => l.includes("+import { a } from 'y'"))).toBe(true)
+    expect(lines.some((l) => l.includes("Format the file according"))).toBe(true)
+    // diff lines are colored, the closing sentence is not
+    const plus = raw.find((l) => stripAnsi(l).includes("+import { a }"))!
+    expect(plus).not.toBe(stripAnsi(plus))
+    expect(lines.every((l) => /^\s{2}[│╰┊]/.test(l))).toBe(true)
+  })
+
   it("orders errors before warnings before info", () => {
     const findings: Finding[] = [
       { source: "a", severity: "info", message: "i", line: 1, col: 1 },
