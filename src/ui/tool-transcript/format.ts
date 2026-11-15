@@ -33,7 +33,13 @@ import {
 import { detectInlineScript, type InlineScript } from "../../cli/inline-script.ts"
 import { c } from "../style/ansi.ts"
 import { truncHint } from "../style/truncate-hint.ts"
-import { isNewFileDisplay, renderDiffRows, renderNewFileRows, renderReadRows } from "./diff-rows.ts"
+import {
+  isNewFileDisplay,
+  renderDiffRows,
+  renderNewFileRows,
+  renderReadRows,
+  wrapPreserving,
+} from "./diff-rows.ts"
 
 // Colors a plain Edit/Write diff when no code highlighter runs (S41: core
 // emits the plain patch).
@@ -1686,6 +1692,68 @@ function locationFragment(f: Finding): string {
   return typeof f.col === "number" ? `${f.line}:${f.col}` : `${f.line}`
 }
 
+/** Cells a finding's continuation rows hang under: past the `● ` dot. */
+const FINDING_HANG = 2
+
+/**
+ * Color one line of a finding message. Inside a diff section (entered after a
+ * line ending in `:`), `-`/`+` lines take the diff viewer's pink/lime and ` `
+ * context lines go dim. Any other line ends the section and prints plain.
+ */
+function styleMessageLine(line: string, inDiff: boolean): { text: string; inDiff: boolean } {
+  if (inDiff && /^[-+ ]/.test(line)) {
+    const sign = line[0]
+    const text = sign === "+" ? c.lime(line) : sign === "-" ? c.pink(line) : c.dim(line)
+    return { text, inDiff: true }
+  }
+  if (/^…?\(truncated\)$/.test(line.trim())) return { text: c.dim(line), inDiff }
+  return { text: line, inDiff: /:\s*$/.test(line) }
+}
+
+/**
+ * Lay out one finding as transcript rows, without the gutter. Nothing is cut:
+ * the first line wraps at word boundaries, and every later message line
+ * (multi-line messages like biome's embedded format diff) sits on its own row.
+ * Continuation rows hang under the text, past the severity dot. Tabs expand so
+ * code in a diff keeps its indentation. With no width signal, lines wrap only
+ * at their own newlines.
+ */
+function findingRows(f: Finding, width: number | undefined): string[] {
+  const loc = locationFragment(f)
+  const locPart = loc ? `${c.dim(loc)} ` : ""
+  const codePart = f.code ? `${c.dim(f.code)} ` : ""
+  const lines = f.message
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n+$/, "")
+    .split("\n")
+    .map((l) => expandTabs(l, 0, 4))
+  const hang = " ".repeat(FINDING_HANG)
+  const wrapW = width === undefined ? 0 : Math.max(1, width - FINDING_HANG)
+
+  const rows: string[] = []
+  // First line: dot + location + code + text, wrapped with a hanging indent.
+  const head = `${locPart}${codePart}${lines[0] ?? ""}`
+  const headFrags = wrapPreserving(head, wrapW)
+  rows.push(`${severityDot(f.severity)} ${headFrags[0] ?? ""}`)
+  for (const frag of headFrags.slice(1)) rows.push(`${hang}${frag}`)
+
+  let inDiff = /:\s*$/.test(lines[0] ?? "")
+  for (const raw of lines.slice(1)) {
+    const styled = styleMessageLine(raw, inDiff)
+    inDiff = styled.inDiff
+    // A wrapped diff line indents its tail one cell past the `-`/`+` sign so
+    // the tail never reads as a context line of its own.
+    const [first = "", ...rest] = wrapPreserving(styled.text, wrapW)
+    rows.push(`${hang}${first}`)
+    if (rest.length === 0) continue
+    const tail = rest.join("")
+    const tailW = inDiff && wrapW > 1 ? wrapW - 1 : wrapW
+    const tailHang = inDiff ? `${hang} ` : hang
+    for (const frag of wrapPreserving(tail, tailW)) rows.push(`${tailHang}${frag}`)
+  }
+  return rows
+}
+
 /**
  * Render plugin-provided {@link Finding}s into bordered tool-block rows.
  *
@@ -1715,13 +1783,7 @@ export function renderFindingsPanel(
 
   const out: string[] = []
   for (const f of shown) {
-    const dot = severityDot(f.severity)
-    const loc = locationFragment(f)
-    const locPart = loc ? `${c.dim(loc)} ` : ""
-    const codePart = f.code ? `${c.dim(f.code)} ` : ""
-    const body = `${dot} ${locPart}${codePart}${f.message}`
-    const line = clampToolPreviewBodyLine(body, bodyWidth)
-    out.push(`  ${c.dimCyan("│")} ${line}`)
+    for (const row of findingRows(f, bodyWidth)) out.push(`  ${c.dimCyan("│")} ${row}`)
   }
   if (hidden > 0) {
     out.push(`  ${c.dimCyan("┊")} ${c.dim(`+${hidden} more`)}`)
