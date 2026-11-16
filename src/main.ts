@@ -87,7 +87,6 @@ import { InteractiveSession } from "./interactive-session.ts"
 import { bareDisableIds } from "./oneshot/bare.ts"
 import { setupOneShot } from "./oneshot/oneshot-options.ts"
 import { prepareOrInput } from "./oneshot/or-input.ts"
-import { closeStartupTreeWithLoadedTools } from "./plugins-ui/startup-tool-entries.ts"
 import { toolPresentationMap } from "./plugins-ui/tool-presentation.ts"
 import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
@@ -131,6 +130,7 @@ import {
   sessionStartSource,
   withSessionContext,
 } from "./startup/session-will-start.ts"
+import { closeStartupTreeWithToolsAndPluginRows } from "./startup/startup-plugin-rows-emit.ts"
 import {
   printStartupConfigRows,
   printTerminalViewportRow,
@@ -981,7 +981,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     if (modeManager) modeManager.primeLastAdvertised(lastAdvertisedModeFromHistory(initialMessages))
   }
   // The `tools` row: the advertised tools with their CLI icons (S41).
-  closeStartupTreeWithLoadedTools(loadedTools, opts.cliToolFilter)
+  await closeStartupTreeWithToolsAndPluginRows(loader, loadedTools, opts.cliToolFilter, { cwd })
 
   // Flush any diagnostics that fired during the banner draw. The
   // scrollback sink was put into buffering mode right after construction
