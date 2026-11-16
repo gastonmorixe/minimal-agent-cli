@@ -7,11 +7,12 @@
  * @module oneshot/or-input.test
  */
 
-import { describe, expect, test } from "bun:test"
+import { afterAll, describe, expect, test } from "bun:test"
 import { join } from "node:path"
 
 import { normalizeArgs } from "../cli/cli-args.ts"
 import { CliFlagError, parseCliOptions } from "../cli/parse-argv.ts"
+import { isolatedCliEnv } from "../test-utils/isolated-cli-env.ts"
 import { planOneShot } from "./oneshot-options.ts"
 import { type OrRequest, parseOrRequest, planOrArgv, prepareOrInput } from "./or-input.ts"
 
@@ -324,12 +325,16 @@ describe("prepareOrInput (wiring)", () => {
 
 describe("entry point (subprocess)", () => {
   const entry = join(import.meta.dir, "..", "index.ts")
+  // A temp agent home, never the real ~/.minimal-agent of the developer.
+  const iso = isolatedCliEnv({ prefix: "ma-or-input-home-" })
+  afterAll(() => iso.cleanup())
 
   async function run(argv: string[], stdin: string) {
     const proc = Bun.spawn(["bun", entry, ...argv], {
       stdin: new Blob([stdin]),
       stdout: "pipe",
       stderr: "pipe",
+      env: iso.env,
     })
     const code = await proc.exited
     return { code, stderr: await new Response(proc.stderr).text() }

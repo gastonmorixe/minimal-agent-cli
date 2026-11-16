@@ -11,17 +11,23 @@
  *   j1  --json + plain answer                       → exit 0, final answer as one JSONL line
  */
 
-import { describe, expect, it } from "bun:test"
+import { afterAll, describe, expect, it } from "bun:test"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { isolatedCliEnv } from "../test-utils/isolated-cli-env.ts"
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
 
 // These tests boot the real CLI with the opencode-go provider plugin from the
 // sibling plugins repo. On a bare core checkout (core CI) it is absent, so
 // they skip (see test-utils/sibling-repo.ts). The umbrella checkout runs them.
 const HAVE_PROVIDER = siblingPluginPresent("ma-llm-opencode-go-plugin")
+
+// The child writes its session and logs under a temp agent home, never the
+// real ~/.minimal-agent of the developer (see test-utils/isolated-cli-env.ts).
+const ISO = isolatedCliEnv({ prefix: "ma-e2e-output-mode-home-" })
+afterAll(() => ISO.cleanup())
 
 async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
   if (!stream) return ""
@@ -41,7 +47,7 @@ async function runCli(args: string[], response: string) {
     stderr: "pipe",
     timeout: 8000,
     env: {
-      ...process.env,
+      ...ISO.env,
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",
       MINIMAL_AGENT_TRANSPORT: "test",
