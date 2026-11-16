@@ -45,6 +45,11 @@ export function setStartupTreeVisible(show: boolean): void {
   SHOW_HEADER = show
 }
 
+/** Whether the startup tree prints (the flag set by {@link setStartupTreeVisible}). */
+export function isStartupTreeVisible(): boolean {
+  return SHOW_HEADER
+}
+
 /**
  * Pad `line` with spaces on the right so its visible width reaches
  * `targetCol`. ANSI escapes are excluded from width math. If `line`

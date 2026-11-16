@@ -45,22 +45,15 @@
  * @module ui/chrome/startup-plugin-rows
  */
 
+import type { StartupRow, StartupRowPart } from "@minimal-agent/core/plugin-api"
 import { truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { c } from "../style/ansi.ts"
 
-// mirror of plugin-api StartupRow/Part; switch to the import when core lands
 /** One styled text fragment. Tones are semantic, the CLI picks the color. */
-export type Part = { text: string; tone?: "default" | "dim" | "accent" | "warn" | "ok" }
+export type Part = StartupRowPart
 
-// mirror of plugin-api StartupRow/Part; switch to the import when core lands
-/** One plugin-contributed startup-tree row. */
-export type StartupRow = {
-  label: string
-  summary: Part[]
-  children?: { label: string; value: Part[] }[]
-  order?: number
-}
+export type { StartupRow }
 
 /** Options for {@link renderStartupPluginRows}. */
 export interface StartupPluginRowsOptions {
