@@ -10,16 +10,14 @@ import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 /**
- * Absolute path to the sibling `../minimal-agent-plugins/` checkout, resolved
- * relative to the repo root (two levels up from `src/test-utils/`).
+ * Absolute path to the plugins checkout. `MA_PLUGINS_DIR` (absolute, or
+ * relative to the cwd) wins, used as is. Else the sibling
+ * `../minimal-agent-plugins/`, resolved relative to the repo root (two levels
+ * up from `src/test-utils/`). Same override name as `scripts/compile.ts`.
  */
-export const SIBLING_REPO_ROOT: string = resolve(
-  import.meta.dirname,
-  "..",
-  "..",
-  "..",
-  "minimal-agent-plugins",
-)
+export const SIBLING_REPO_ROOT: string = process.env.MA_PLUGINS_DIR
+  ? resolve(process.env.MA_PLUGINS_DIR)
+  : resolve(import.meta.dirname, "..", "..", "..", "minimal-agent-plugins")
 
 /** True when the sibling plugins repo is checked out next to this repo. */
 export function siblingRepoPresent(): boolean {

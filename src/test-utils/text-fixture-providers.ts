@@ -12,7 +12,11 @@
  * from a real `PluginLoader` over a temp root that links the 3 plugins of
  * the sibling checkout (loaded once, at module load). tsc does not walk into
  * the plugins tree, and a missing checkout does not break the import. Tests
- * guard with `describe.skipIf(!textFixturesPresent())`.
+ * guard with `describe.skipIf(!textFixturesPresent())`. When the text plugins
+ * are missing, this module prints one warning at load and the guarded tests
+ * skip. With `MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1`, or `CI` set, it throws
+ * at load instead, so every test file that imports it fails with a clear
+ * message. `MA_PLUGINS_DIR` overrides the checkout path (see `sibling-repo.ts`).
  *
  * @module test-utils/text-fixture-providers
  */
@@ -44,7 +48,36 @@ async function loadTextLoader(): Promise<PluginLoader | null> {
   return PluginLoader.load({ roots: { embedded: [root] }, logger: () => {} })
 }
 
+/**
+ * True when a missing text checkout must FAIL instead of skip:
+ * `MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1`, or `CI` set (any value but
+ * empty, `0` or `false`).
+ */
+export function textFixturesRequired(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  if (env.MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES === "1") return true
+  const ci = env.CI?.trim().toLowerCase()
+  return ci !== undefined && ci !== "" && ci !== "0" && ci !== "false"
+}
+
 const LOADER: PluginLoader | null = await loadTextLoader()
+
+if (LOADER === null) {
+  const missing = TEXT_PLUGINS.filter((dir) => !siblingPluginPresent(dir))
+  const reason =
+    `the text plugins (${missing.join(", ")}) are missing in ${SIBLING_REPO_ROOT}.` +
+    " Set MA_PLUGINS_DIR, or clone minimal-agent-plugins next to this repo."
+  if (textFixturesRequired()) {
+    // Thrown at module load: every test file that imports this helper fails.
+    throw new Error(
+      `[text-fixture-providers] FAIL: MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1 or CI is set, and ${reason}`,
+    )
+  }
+  console.warn(
+    `[text-fixture-providers] WARNING: SKIP the text tests: ${reason} Set MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1 to make this a failure.`,
+  )
+}
 
 /** True when the text plugins are checked out. Guard with `describe.skipIf(!textFixturesPresent())`. */
 export function textFixturesPresent(): boolean {
