@@ -14,6 +14,7 @@ import {
   HOST_OWNER_ID,
   type StoredProviderFact,
 } from "@minimal-agent/core/errors"
+import type { CompactArgsError, CompactFailure } from "@minimal-agent/core/host/compact-contract"
 import type { ContextExceededNotice } from "@minimal-agent/core/host/context-exceeded-recovery"
 import type { ContextExceededAdvice } from "@minimal-agent/core/host/model-error"
 import type { LoginEvent, LoginFailureCode } from "@minimal-agent/core/host/oauth-login"
@@ -132,14 +133,125 @@ export const COMPACT_NO_PROVIDER_TEXT =
   "Local compaction needs the compaction text (compact.summary_system). " +
   "No plugin gives this text. Examine your plugin overrides, or use /compact tail."
 
-/** The host renderer for compaction errors. */
-export const coreCompactErrorRenderer: ErrorRenderer = {
-  kinds: ["CompactNoProviderError"],
-  render: (err) => (err.kind === "CompactNoProviderError" ? COMPACT_NO_PROVIDER_TEXT : undefined),
-}
-
 function optText(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() !== "" ? v.trim() : undefined
+}
+
+/** CLI text of a `CompactBusyError` (15e.3 row c3). */
+export const COMPACT_BUSY_TEXT =
+  "compact aborted: a compaction of this history is already in progress. " +
+  "Wait for it to end, then try again."
+
+/** CLI text of a `CompactRaceError` (15e.3 row c4). */
+export const COMPACT_RACE_TEXT =
+  "compact aborted: the history changed during the compaction. " +
+  "The history is not compacted. Try again."
+
+/**
+ * CLI text of a `CompactModeUnsupportedError` (15e.3 row c5): the mode, and
+ * how to make a branch for a fork.
+ */
+export function compactModeUnsupportedText(err: CoreErrorJson): string {
+  const mode = optText(err.fields.mode) ?? "unknown"
+  const text = `compact mode ${mode} is not available in this runner. The history did not change.`
+  return mode === "fork"
+    ? `${text} To make a branch, fork the session file (SessionStore.fork) or copy the transcript, then compact the branch.`
+    : text
+}
+
+/** CLI text of a `CompactSendPolicyError` (15e.3 row c9): the error name only. */
+export function compactSendPolicyText(err: CoreErrorJson): string {
+  const name = optText(err.fields.errorName)
+  return name !== undefined
+    ? `the send policy hook failed (${name})`
+    : "the send policy hook failed"
+}
+
+/** CLI text of a `CompactSummaryStreamError` (15e.3 row c8), from its fields. */
+export function compactSummaryStreamText(err: CoreErrorJson): string {
+  const f = err.fields
+  const facts = [`retryable: ${f.retryable === true ? "yes" : "no"}`]
+  const category = optText(f.category)
+  if (category !== undefined) facts.push(`category: ${category}`)
+  const upstream = optText(f.upstreamType)
+  if (upstream !== undefined) facts.push(`type: ${upstream}`)
+  const detail = optText(f.detail)
+  const text = `the summary stream failed (${facts.join(", ")})`
+  return detail !== undefined ? `${text}: ${detail}` : text
+}
+
+/** The host renderer for compaction errors. */
+export const coreCompactErrorRenderer: ErrorRenderer = {
+  kinds: [
+    "CompactNoProviderError",
+    "CompactBusyError",
+    "CompactRaceError",
+    "CompactModeUnsupportedError",
+    "CompactSendPolicyError",
+    "CompactSummaryStreamError",
+  ],
+  render: (err) => {
+    switch (err.kind) {
+      case "CompactNoProviderError":
+        return COMPACT_NO_PROVIDER_TEXT
+      case "CompactBusyError":
+        return COMPACT_BUSY_TEXT
+      case "CompactRaceError":
+        return COMPACT_RACE_TEXT
+      case "CompactModeUnsupportedError":
+        return compactModeUnsupportedText(err)
+      case "CompactSendPolicyError":
+        return compactSendPolicyText(err)
+      case "CompactSummaryStreamError":
+        return compactSummaryStreamText(err)
+      default:
+        return undefined
+    }
+  },
+}
+
+/**
+ * CLI text of a compaction fallback cause (`CompactStats.remoteError` or
+ * `summaryError`, 15e.3 row c7). Built from the code and its facts only.
+ * Never empty: a `request_failed` with no facts names the code.
+ */
+export function compactFailureText(f: CompactFailure): string {
+  switch (f.code) {
+    case "send_denied": {
+      const reason = optText(f.reason)
+      return reason !== undefined
+        ? `the send policy hook denied the request: ${reason}`
+        : "the send policy hook denied the request"
+    }
+    case "remote_unavailable":
+      return "remote compaction is not available (no adapter.compact or no model entry)"
+    case "unknown_model":
+      return `the model "${f.model ?? ""}" is unknown`
+    case "empty_summary":
+      return "the summary has no text"
+    default: {
+      if (f.error !== undefined) return registry.render(f.error) ?? f.error.kind
+      return optText(f.detail) ?? "the request failed"
+    }
+  }
+}
+
+/**
+ * CLI text of a rejected `/compact` argv (15e.3 row c10), from the code, the
+ * token and the value. The bytes are the same as the old core text (parity
+ * snapshot d31).
+ */
+export function compactArgsErrorText(e: CompactArgsError): string {
+  switch (e.code) {
+    case "duplicate_mode":
+      return `/compact: duplicate mode ("${e.token}")`
+    case "unknown_mode":
+      return `/compact: unknown mode "${e.value ?? e.token}" (want remote|tail|local|fork)`
+    case "bad_tail":
+      return `/compact: tail must be an integer >= 0 (got "${e.value ?? e.token}")`
+    default:
+      return `/compact: unknown argument "${e.token}" (want [mode] [tail=N] [focus="..."])`
+  }
 }
 
 /**
@@ -148,6 +260,9 @@ function optText(v: unknown): string | undefined {
  * uses only the fields: the hook name, the plugin id, the tool name, the
  * facts of a failed approval hook, and the reason that the hook gave. When
  * the hook gave no reason, the text gives no reason.
+ *
+ * Same deny text in 3 other places: web server/src/chat-stream/adapter.ts,
+ * plugins ma-acp-plugin/error-text.ts, plugins ma-sub-agents-plugin/lib/error-text.ts.
  */
 export function lifecycleDeniedText(err: CoreErrorJson): string {
   const f = err.fields

@@ -31,7 +31,7 @@ import {
   type CommandNoticeBlock,
   type ResolvedCommand,
 } from "@minimal-agent/core/plugin-api/types/plugin"
-import { errorText } from "../startup/core-text.ts"
+import { compactArgsErrorText, compactFailureText, errorText } from "../startup/core-text.ts"
 
 /** Minimal agent surface the host command needs. */
 export interface CompactAgentLike {
@@ -63,8 +63,8 @@ export function createCompactHostCommand(agent: CompactAgentLike): ResolvedComma
         }
       }
       const parsed = parseCompactArgs(ctx.argv ?? "")
-      if (parsed.error) {
-        return { kind: "error", message: parsed.error }
+      if (parsed.error !== undefined) {
+        return { kind: "error", message: compactArgsErrorText(parsed.error) }
       }
       const mode = parsed.mode ?? "local"
       const keepTail = parsed.keepTail ?? DEFAULT_KEEP_TAIL
@@ -149,10 +149,11 @@ export function buildCompactNoticeBlock(
   }
   // Make silent remote→local fallback visible in the TUI (plan-auth
   // wrong-host 401 used to look like a successful "local" compact).
-  if (stats.kind === "local" && stats.remoteError) {
-    block.footer = `remote unavailable: ${stats.remoteError}`
-  } else if (stats.kind === "local" && stats.summaryError) {
-    block.footer = `summary failed: ${stats.summaryError}`
+  // The cause is facts (CompactFailure); the CLI owns the text.
+  if (stats.kind === "local" && stats.remoteError !== undefined) {
+    block.footer = `remote unavailable: ${compactFailureText(stats.remoteError)}`
+  } else if (stats.kind === "local" && stats.summaryError !== undefined) {
+    block.footer = `summary failed: ${compactFailureText(stats.summaryError)}`
   }
   return block
 }

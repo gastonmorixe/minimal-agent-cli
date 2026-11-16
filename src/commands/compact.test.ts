@@ -135,7 +135,7 @@ describe("createCompactHostCommand", () => {
         kind: "local",
         messagesBefore: 20,
         messagesAfter: 7,
-        remoteError: "boom",
+        remoteError: { code: "request_failed", detail: "boom" },
       }),
     })
     const result = await cmd.invoke(bareCtx())
@@ -162,7 +162,7 @@ describe("createCompactHostCommand", () => {
       kind: "local",
       messagesBefore: 20,
       messagesAfter: 7,
-      summaryError: "boom-summary",
+      summaryError: { code: "request_failed", detail: "boom-summary" },
     } as unknown as CompactStats
     const cmd = createCompactHostCommand({
       compact: async () => stats,
