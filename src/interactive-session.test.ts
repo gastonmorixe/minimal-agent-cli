@@ -29,6 +29,7 @@ import {
   TranscriptRouter,
 } from "./interactive-session.ts"
 import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
+import { textCoreDeps, textFixturesPresent } from "./test-utils/text-fixture-providers.ts"
 import type {
   TestSendParams as SendOptions,
   TestSendResult as StreamedResponse,
@@ -98,52 +99,56 @@ describe("InteractiveSession", () => {
     clearModelRegistry()
   })
 
-  it("creates through real host wiring and exposes public facade behavior", async () => {
-    registerModel(fakeModel("other-model"))
-    const loader = {
-      getPromptBlockAsync: async () => null,
-      getExtraTools: () => [],
-      getToolAliases: () => new Map<string, string>(),
-      hasTool: () => false,
-    } as unknown as PluginLoader
-    const activeMode = { id: "focus" }
-    const modes = {
-      active: () => activeMode,
-      activeId: () => activeMode.id,
-      consumePendingAttachment: () => null,
-    } as unknown as ModeManager
-    const requestMessages: Message[][] = []
-    const sendFn = async function* (
-      opts: SendOptions,
-    ): AsyncGenerator<string, StreamedResponse, undefined> {
-      requestMessages.push(structuredClone(opts.messages) as Message[])
-      yield "ok"
-      return response("ok")
-    }
-    const session = await InteractiveSession.create({
-      ...baseDeps(sendFn),
-      loader,
-      modeManager: modes,
-    })
+  it.skipIf(!textFixturesPresent())(
+    "creates through real host wiring and exposes public facade behavior",
+    async () => {
+      registerModel(fakeModel("other-model"))
+      const loader = {
+        getPromptBlockAsync: async () => null,
+        getExtraTools: () => [],
+        getToolAliases: () => new Map<string, string>(),
+        hasTool: () => false,
+      } as unknown as PluginLoader
+      const activeMode = { id: "focus" }
+      const modes = {
+        active: () => activeMode,
+        activeId: () => activeMode.id,
+        consumePendingAttachment: () => null,
+      } as unknown as ModeManager
+      const requestMessages: Message[][] = []
+      const sendFn = async function* (
+        opts: SendOptions,
+      ): AsyncGenerator<string, StreamedResponse, undefined> {
+        requestMessages.push(structuredClone(opts.messages) as Message[])
+        yield "ok"
+        return response("ok")
+      }
+      const session = await InteractiveSession.create({
+        ...baseDeps(sendFn),
+        loader,
+        modeManager: modes,
+        ...textCoreDeps(),
+      })
 
-    expect(session.agentCore()).toBeDefined()
-    expect(session.pluginLoader()).toBe(loader)
-    expect(session.modes()).toBe(modes)
-    expect(session.getActiveMode()).toBe(activeMode)
-    expect(session.getModel()).toBe("test-model")
-    session.setModel("other-model")
-    expect(session.getModel()).toBe("other-model")
+      expect(session.agentCore()).toBeDefined()
+      expect(session.pluginLoader()).toBe(loader)
+      expect(session.modes()).toBe(modes)
+      expect(session.getActiveMode()).toBe(activeMode)
+      expect(session.getModel()).toBe("test-model")
+      session.setModel("other-model")
+      expect(session.getModel()).toBe("other-model")
 
-    session.notePreviousTurnAborted()
-    await drain(session.run("after abort"))
-    session.noteSessionResumed()
-    await drain(session.run(""))
+      session.notePreviousTurnAborted()
+      await drain(session.run("after abort"))
+      session.noteSessionResumed()
+      await drain(session.run(""))
 
-    expect(session.history()).toHaveLength(4)
-    expect(JSON.stringify(requestMessages[0])).toContain("turn-aborted")
-    expect(JSON.stringify(requestMessages[1])).toContain("session-resumed")
-    expect(session.rollbackPendingTurn()).toBe(false)
-  })
+      expect(session.history()).toHaveLength(4)
+      expect(JSON.stringify(requestMessages[0])).toContain("turn-aborted")
+      expect(JSON.stringify(requestMessages[1])).toContain("session-resumed")
+      expect(session.rollbackPendingTurn()).toBe(false)
+    },
+  )
 
   it("renders thinking, block edges, and notices from session events, in log order", async () => {
     let round = 0

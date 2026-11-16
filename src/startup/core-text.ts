@@ -95,10 +95,40 @@ export const coreAuthErrorRenderer: ErrorRenderer = {
   render: (err) => renderCoreError(err),
 }
 
+function idList(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []
+}
+
+/**
+ * CLI text of a `ContractCheckFailedError`: the boot refused to start. Names
+ * every missing and duplicated contract. The CLI owns this text because
+ * `ma-host-text-plugin` can be the missing plugin (R-BOOT-2).
+ */
+export function contractCheckFailedText(err: CoreErrorJson): string {
+  const missing = idList(err.fields.missing)
+  const duplicates = idList(err.fields.duplicates)
+  const parts = ["required plugin contracts are not met"]
+  if (missing.length > 0) parts.push(`missing: ${missing.join(", ")}`)
+  if (duplicates.length > 0) parts.push(`duplicated in one plugin tier: ${duplicates.join(", ")}`)
+  return (
+    `${parts.join("; ")}. Install or enable the text plugins (ma-base-prompt-plugin, ` +
+    "ma-core-tools-plugin, ma-turn-recovery-plugin, ma-prompt-template-plugin), " +
+    "or remove the duplicate plugin."
+  )
+}
+
+/** The host renderer for boot errors. */
+export const coreBootErrorRenderer: ErrorRenderer = {
+  kinds: ["ContractCheckFailedError"],
+  render: (err) =>
+    err.kind === "ContractCheckFailedError" ? contractCheckFailedText(err) : undefined,
+}
+
 /** Make a registry that holds the CLI renderers (owner "host"). */
 export function createCliErrorRegistry(): ErrorRendererRegistry {
   const registry = createErrorRendererRegistry()
   registry.register(coreAuthErrorRenderer, HOST_OWNER_ID)
+  registry.register(coreBootErrorRenderer, HOST_OWNER_ID)
   return registry
 }
 

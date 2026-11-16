@@ -14,14 +14,29 @@
  *    tool_result pair exactly once, in order, with the note for each cut-off
  *    call. No tool may run again by itself.
  *
+ * The fixture provider counts the real cut-off note in each request, so
+ * the CLI loads the real text plugins (from the sibling plugins checkout)
+ * next to the fixture provider, not the text stub. The test skips when the
+ * checkout is absent.
+ *
  * @module startup/resume-cutoff.test
  */
 
 import { afterAll, describe, expect, it } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
-import { join } from "node:path"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs"
+import { basename, join } from "node:path"
 
 import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
+import { textPluginDirs } from "../test-utils/text-fixture-providers.ts"
 
 const CLI_ROOT = join(import.meta.dir, "..", "..")
 const TMP_ROOT = join(CLI_ROOT, "tmp")
@@ -31,7 +46,53 @@ const MARK = join(HOME_DIR, "mark.txt")
 const REQS = join(HOME_DIR, "requests.jsonl")
 const SESSIONS = join(HOME_DIR, ".minimal-agent", "sessions")
 const CHILD = join(import.meta.dir, "fixtures", "resume-kill-child.ts")
-const FIXTURE_PLUGINS = join(import.meta.dir, "fixtures", "plugins")
+const FIXTURE_PLUGINS = join(HOME_DIR, "plugins")
+const TEXT_PLUGIN_DIRS = textPluginDirs()
+// The plugin root of the child: the fixture provider and the real text
+// plugins, as links (the text stub plugin would replace the cut-off note).
+mkdirSync(FIXTURE_PLUGINS)
+for (const dir of [
+  join(import.meta.dir, "fixtures", "plugins", "ma-llm-resume-fixture-plugin"),
+  ...TEXT_PLUGIN_DIRS,
+]) {
+  symlinkSync(dir, join(FIXTURE_PLUGINS, basename(dir)))
+}
+// One tool plugin, so the CLI hands its loader (and with it the text
+// providers) to the session: a root with no tool, mode or prompt block
+// gives the session no loader.
+const PROBE_DIR = join(FIXTURE_PLUGINS, "cutoff-probe")
+mkdirSync(PROBE_DIR)
+writeFileSync(
+  join(PROBE_DIR, "manifest.json"),
+  JSON.stringify({
+    id: "cutoff-probe",
+    name: "cutoff-probe",
+    version: "0.1.0",
+    description: "t",
+    headless: {
+      tools: [
+        {
+          id: "probe",
+          trigger: {
+            type: "tool",
+            tool: {
+              name: "CutoffProbe",
+              description: "probe",
+              input_schema: { type: "object", properties: {} },
+              explicitName: true,
+            },
+          },
+          handler: { type: "module", path: "./probe.ts", export: "default" },
+          interactive: false,
+        },
+      ],
+    },
+  }),
+)
+writeFileSync(
+  join(PROBE_DIR, "probe.ts"),
+  'export default async () => ({ kind: "tool_result", content: "probe" })\n',
+)
 const SID = "8d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a"
 const NOTE =
   "The process stopped while this tool call ran. It may have run fully, partly, or not at all. Check its effects before you run it again."
@@ -119,52 +180,55 @@ function newSession(known: string[]): string {
   return (name ?? "").replace(/\.jsonl$/, "")
 }
 
-describe("a tool call cut off by a kill, over two resumes (decision 31)", () => {
-  it("keeps each cut-off pair once and in place, and never runs a tool again", async () => {
-    const first = await runChild(["--session-id", SID, "-p", "go"])
-    expect(first.signalCode).toBe("SIGKILL")
-    expect(lines(MARK)).toEqual(["r1", "c2"])
+describe.skipIf(TEXT_PLUGIN_DIRS.length === 0)(
+  "a tool call cut off by a kill, over two resumes (decision 31)",
+  () => {
+    it("keeps each cut-off pair once and in place, and never runs a tool again", async () => {
+      const first = await runChild(["--session-id", SID, "-p", "go"])
+      expect(first.signalCode).toBe("SIGKILL")
+      expect(lines(MARK)).toEqual(["r1", "c2"])
 
-    const resume1 = await runChild(["--resume", SID])
-    expect(resume1.signalCode).toBe("SIGKILL")
-    expect(lines(MARK)).toEqual(["r1", "c2", "c3"])
-    const sid1 = newSession([`${SID}.jsonl`])
+      const resume1 = await runChild(["--resume", SID])
+      expect(resume1.signalCode).toBe("SIGKILL")
+      expect(lines(MARK)).toEqual(["r1", "c2", "c3"])
+      const sid1 = newSession([`${SID}.jsonl`])
 
-    const resume2 = await runChild(["--resume", sid1])
-    expect(resume2.stderr).not.toContain("fatal")
-    expect(resume2.exitCode).toBe(0)
-    expect(resume2.stdout).toContain("CUTOFF-ANSWER")
-    // No tool ran again by itself.
-    expect(lines(MARK)).toEqual(["r1", "c2", "c3"])
+      const resume2 = await runChild(["--resume", sid1])
+      expect(resume2.stderr).not.toContain("fatal")
+      expect(resume2.exitCode).toBe(0)
+      expect(resume2.stdout).toContain("CUTOFF-ANSWER")
+      // No tool ran again by itself.
+      expect(lines(MARK)).toEqual(["r1", "c2", "c3"])
 
-    const requests = lines(REQS).map(
-      (l) => JSON.parse(l) as Array<{ role: string; content: string | Block[] }>,
-    )
-    expect(requests).toHaveLength(4)
-    const [, round2, resumed1, resumed2] = requests
-    // Run 1, round 2: the normal round 1 pair is in the request.
-    expect(pairs(round2 ?? [])).toEqual(["assistant:use:toolu_1", "user:result:toolu_1"])
-    // Resume 1: the cut-off call gets the note right after its tool_use.
-    expect(pairs(resumed1 ?? [])).toEqual([
-      "assistant:use:toolu_1",
-      "user:result:toolu_1",
-      "assistant:use:toolu_2",
-      "user:result:toolu_2:note",
-    ])
-    // Resume 2: the first pair is still there, once and in the same place.
-    // The second cut-off call gets its own note after it.
-    expect(pairs(resumed2 ?? [])).toEqual([
-      "assistant:use:toolu_1",
-      "user:result:toolu_1",
-      "assistant:use:toolu_2",
-      "user:result:toolu_2:note",
-      "assistant:use:toolu_3",
-      "user:result:toolu_3:note",
-    ])
-    // Resume 2 holds the request of resume 1 unchanged, as a prefix. The
-    // prompt-cache marker moves to the last message, so it is left out.
-    const noCache = (v: unknown): string =>
-      JSON.stringify(v, (k, x: unknown) => (k === "cache" ? undefined : x))
-    expect(noCache(resumed2?.slice(0, resumed1?.length ?? 0))).toBe(noCache(resumed1))
-  }, 90000)
-})
+      const requests = lines(REQS).map(
+        (l) => JSON.parse(l) as Array<{ role: string; content: string | Block[] }>,
+      )
+      expect(requests).toHaveLength(4)
+      const [, round2, resumed1, resumed2] = requests
+      // Run 1, round 2: the normal round 1 pair is in the request.
+      expect(pairs(round2 ?? [])).toEqual(["assistant:use:toolu_1", "user:result:toolu_1"])
+      // Resume 1: the cut-off call gets the note right after its tool_use.
+      expect(pairs(resumed1 ?? [])).toEqual([
+        "assistant:use:toolu_1",
+        "user:result:toolu_1",
+        "assistant:use:toolu_2",
+        "user:result:toolu_2:note",
+      ])
+      // Resume 2: the first pair is still there, once and in the same place.
+      // The second cut-off call gets its own note after it.
+      expect(pairs(resumed2 ?? [])).toEqual([
+        "assistant:use:toolu_1",
+        "user:result:toolu_1",
+        "assistant:use:toolu_2",
+        "user:result:toolu_2:note",
+        "assistant:use:toolu_3",
+        "user:result:toolu_3:note",
+      ])
+      // Resume 2 holds the request of resume 1 unchanged, as a prefix. The
+      // prompt-cache marker moves to the last message, so it is left out.
+      const noCache = (v: unknown): string =>
+        JSON.stringify(v, (k, x: unknown) => (k === "cache" ? undefined : x))
+      expect(noCache(resumed2?.slice(0, resumed1?.length ?? 0))).toBe(noCache(resumed1))
+    }, 90000)
+  },
+)

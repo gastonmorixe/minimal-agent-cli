@@ -12,7 +12,10 @@ import { join } from "node:path"
 
 import { ToolFeedbackTracker } from "@minimal-agent/core/host-kit/feedback-tracker"
 import { ToolExecutorAdapter } from "@minimal-agent/core/host-kit/tool-executor-adapter"
-
+import {
+  fixtureSyntheticTextResolver,
+  textFixturesPresent,
+} from "../../test-utils/text-fixture-providers.ts"
 import type {
   CodeHighlighter,
   CodeHighlightRequest,
@@ -95,28 +98,35 @@ describe("ToolExecutorAdapter code highlighting with the CLI formatter", () => {
     expect(rendered).toContain("\x1b[38;2;10;20;30mUse `--dump-paths`.")
   })
 
-  it("composes Edit status markers with token colors and keeps compact result plain", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ma-edit-highlight-"))
-    dirs.push(dir)
-    const path = join(dir, "example.ts")
-    writeFileSync(path, "oldCall()\n")
-    const transcript: string[] = []
+  it.skipIf(!textFixturesPresent())(
+    "composes Edit status markers with token colors and keeps compact result plain",
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "ma-edit-highlight-"))
+      dirs.push(dir)
+      const path = join(dir, "example.ts")
+      writeFileSync(path, "oldCall()\n")
+      const transcript: string[] = []
 
-    const result = await adapter(transcript).execute({
-      type: "tool_use",
-      id: "edit-1",
-      name: "Edit",
-      input: { file_path: path, old_string: "oldCall()", new_string: "newCall()" },
-    })
+      const result = await adapter(transcript).execute(
+        {
+          type: "tool_use",
+          id: "edit-1",
+          name: "Edit",
+          input: { file_path: path, old_string: "oldCall()", new_string: "newCall()" },
+        },
+        undefined,
+        { text: fixtureSyntheticTextResolver() },
+      )
 
-    expect(String(result.content)).toContain("File edited:")
-    expect(String(result.content)).not.toContain("\x1b")
-    const rendered = transcript.join("\n")
-    expect(rendered).toContain("\x1b[48;2;56;0;38m\x1b[38;5;199m-")
-    expect(rendered).toContain("\x1b[48;2;29;56;0m\x1b[38;5;118m+")
-    expect(rendered).toContain("\x1b[38;2;10;20;30moldCall()")
-    expect(rendered).toContain("\x1b[38;2;10;20;30mnewCall()")
-  })
+      expect(String(result.content)).toContain("File edited:")
+      expect(String(result.content)).not.toContain("\x1b")
+      const rendered = transcript.join("\n")
+      expect(rendered).toContain("\x1b[48;2;56;0;38m\x1b[38;5;199m-")
+      expect(rendered).toContain("\x1b[48;2;29;56;0m\x1b[38;5;118m+")
+      expect(rendered).toContain("\x1b[38;2;10;20;30moldCall()")
+      expect(rendered).toContain("\x1b[38;2;10;20;30mnewCall()")
+    },
+  )
 
   it("colors an Edit diff with the terminal-kit renderer when no highlighter runs (S41)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ma-edit-plain-"))
