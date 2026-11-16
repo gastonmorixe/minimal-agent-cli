@@ -21,7 +21,9 @@ import {
   resolveCacheTtl,
 } from "@minimal-agent/core/host/cache-ttl"
 import { type EffortSource, resolveEffort } from "@minimal-agent/core/host/effort-resolution"
+import { namePolicyFromTools } from "@minimal-agent/core/host/startup-profile"
 import type { SystemPromptOverrides } from "@minimal-agent/core/host/system-prompt-overrides"
+import type { StartupProfile } from "@minimal-agent/core/plugin-api/types/startup-profile"
 import type { ToolNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
 
 import type { CliUserConfig } from "../config/terminal-config.ts"
@@ -144,6 +146,18 @@ export interface CliOptions {
    * `"host-mode"` command when this is set.
    */
   readonly hostModeId: string | undefined
+  /**
+   * `--startup-profile <path>`, read and validated at entry. The lowest CLI
+   * tier: it replaces env and config for the profile fields. `undefined`
+   * when the flag is absent.
+   */
+  readonly startupProfile: LoadedStartupProfile | undefined
+}
+
+/** A startup profile read from `--startup-profile`, with its path. */
+export interface LoadedStartupProfile {
+  readonly path: string
+  readonly profile: StartupProfile
 }
 
 /**
@@ -263,7 +277,9 @@ export function parseCliOptions(
   env: EnvLike,
   parseFormatter: FormatterParser,
   systemPromptOverrides: SystemPromptOverrides = {},
+  startupProfile?: LoadedStartupProfile,
 ): CliOptions {
+  const profile = startupProfile?.profile
   const readFlagValue = makeReadFlagValue(args)
 
   const model = valueAfter(args, "--model") ?? rawAfter(args, "--model")
@@ -345,7 +361,7 @@ export function parseCliOptions(
       ? (readFlagValue("--schema-retries") ?? "")
       : undefined,
   )
-  const bare = args.includes("--bare")
+  const bare = args.includes("--bare") || profile?.bare === true
   const inputFormat = parseInputFormat(args)
 
   const headerInputs = {
@@ -431,7 +447,8 @@ export function parseCliOptions(
         .filter((t) => t.length > 0)
       return tools.length > 0 ? { kind: "allow-list", tools } : null
     }
-    return null
+    // No tool flag: the lead's policy from `--startup-profile`, else all.
+    return profile !== undefined ? namePolicyFromTools(profile.tools) : null
   })()
 
   return {
@@ -495,5 +512,6 @@ export function parseCliOptions(
     wantAuthStatus,
     cliToolFilter,
     hostModeId,
+    startupProfile,
   }
 }

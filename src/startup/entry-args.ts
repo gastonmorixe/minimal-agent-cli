@@ -46,6 +46,7 @@ import {
   renderHostModeHelpJson,
 } from "./help.ts"
 import { computePluginRoots } from "./plugin-roots.ts"
+import { loadStartupProfileArg } from "./startup-profile-boot.ts"
 
 /** Process environment shape used by startup argument preparation. */
 export type EntrypointEnv = Record<string, string | undefined>
@@ -205,6 +206,15 @@ export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): Entryp
     input.env.MA_TRUST_HOOKS = "1"
   }
 
+  // `--startup-profile <path>` (sub-agent inherit): read it before every
+  // tier that it replaces. A missing or invalid file is fatal (SPEC 6.3).
+  const profileLoad = loadStartupProfileArg(args)
+  if (!profileLoad.ok) {
+    stderr.write(`${profileLoad.message}\n`)
+    exit(2)
+  }
+  const startupProfile = profileLoad.ok ? profileLoad.value : undefined
+
   const userConfig = loadCliUserConfig()
   let systemPromptOverrides
   try {
@@ -212,6 +222,7 @@ export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): Entryp
       args,
       env: input.env,
       config: userConfig,
+      profile: startupProfile?.profile.systemPrompt,
     })
   } catch (e) {
     if (e instanceof SystemPromptOverrideError) {
@@ -228,6 +239,7 @@ export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): Entryp
         input.env,
         parseFormatterCommand,
         systemPromptOverrides,
+        startupProfile,
       )
     } catch (e) {
       if (e instanceof CliFlagError) {

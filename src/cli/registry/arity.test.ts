@@ -182,6 +182,11 @@ const ONESHOT_WITH_VALUES: Readonly<Record<string, string>> = {
   "--temperature": "SPEC-ONESHOT, hidden until wired",
 }
 
+/** Intended addition: the hidden sub-agent flag (subagent inherit, CONTRACT 4). */
+const SUBAGENT_INHERIT_WITH_VALUES: Readonly<Record<string, string>> = {
+  "--startup-profile": "subagent inherit, hidden, set by the spawn plan",
+}
+
 /** Intended additions: SPEC-ONESHOT booleans added after the freeze. */
 const ONESHOT_NO_VALUE: Readonly<Record<string, string>> = {
   "--bare": "SPEC-ONESHOT, hidden until wired",
@@ -253,6 +258,7 @@ describe("V-18: derived arity tables equal the old hand tables plus the pinned g
           ...Object.keys(ONESHOT_WITH_VALUES),
           ...Object.keys(PLUGIN_PROMPTS_WITH_VALUES),
           ...Object.keys(UPDATE_WITH_VALUES),
+          ...Object.keys(SUBAGENT_INHERIT_WITH_VALUES),
         ]),
       ),
     )

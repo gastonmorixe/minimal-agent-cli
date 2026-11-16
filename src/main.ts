@@ -40,7 +40,7 @@ import { fileURLToPath } from "node:url"
 import { createAgentContext } from "@minimal-agent/core/host/agent-context"
 import { resolveAgentName } from "@minimal-agent/core/host/agent-identity"
 import { setBashCwdChangeListener } from "@minimal-agent/core/host/bash-cwd"
-import { loadModeUserOverrides, loadPluginEnabledOverrides } from "@minimal-agent/core/host/config"
+import { loadModeUserOverrides } from "@minimal-agent/core/host/config"
 import { setGlobalEventBus } from "@minimal-agent/core/host/global-bus"
 import {
   buildModelInfoSnapshot,
@@ -50,10 +50,7 @@ import {
   applyPreferredDnsResultOrder,
   defaultNetworkClient,
 } from "@minimal-agent/core/host/network"
-import {
-  collectFlagValues,
-  resolvePluginEnabledOverrides,
-} from "@minimal-agent/core/host/plugin-enable-resolution"
+import { collectFlagValues } from "@minimal-agent/core/host/plugin-enable-resolution"
 import { resolveEffectivePlatform } from "@minimal-agent/core/host/plugin-platform-resolution"
 import { bootProviderDiscovery } from "@minimal-agent/core/host/provider-discovery-boot"
 import {
@@ -131,6 +128,11 @@ import {
   withSessionContext,
 } from "./startup/session-will-start.ts"
 import { closeStartupTreeWithToolsAndPluginRows } from "./startup/startup-plugin-rows-emit.ts"
+import {
+  resolveBootPluginOverrides,
+  resolveNoAgentsMd,
+  wireStartupProfile,
+} from "./startup/startup-profile-boot.ts"
 import {
   printStartupConfigRows,
   printTerminalViewportRow,
@@ -643,37 +645,32 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         `Valid: macos, linux, windows, all.`,
     )
   }
-  const configPluginOverrides = loadPluginEnabledOverrides()
   // `--no-agents-md` / `--no-agents` / MINIMAL_AGENT_NO_AGENTS_MD=1 are
   // convenience aliases that force-disable the `agents-md` plugin (AGENTS.md
   // system-prompt injection). Equivalent to `--disable-plugin agents-md`.
-  const noAgentsMd =
-    args.includes("--no-agents-md") ||
-    args.includes("--no-agents") ||
-    env.MINIMAL_AGENT_NO_AGENTS_MD === "1"
+  // `--startup-profile` replaces the env and config tiers (sub-agent inherit).
+  const noAgentsMd = resolveNoAgentsMd(args, env, opts.startupProfile)
   // `--bare` (SPEC-ONESHOT R13): disable every manifest plugin except those
   // that own a `--tools` tool, the `--host-mode` id, or an `--enable-plugin`
   // id. Always skip AGENTS.md. Provider plugins were already registered by
   // bootProviderDiscovery above, so they stay. Rule: src/oneshot/bare.ts.
   const bareOff = bareDisableIds(opts, pluginRoots, args, env)
-  const pluginOverrides = resolvePluginEnabledOverrides({
-    config: configPluginOverrides,
-    env: {
-      disable: env.MINIMAL_AGENT_DISABLE_PLUGINS,
-      enable: env.MINIMAL_AGENT_ENABLE_PLUGINS,
-    },
-    cli: {
-      disable: [
-        ...collectFlagValues(args, "--disable-plugin"),
-        ...(noAgentsMd ? ["agents-md"] : []),
-        ...bareOff,
-      ],
-      // `--dry-run` = `--enable-plugin dry-run`. A disable still wins.
-      enable: [...collectFlagValues(args, "--enable-plugin"), ...dryRunEnableIds(args, env)],
-    },
+  const pluginOverrides = resolveBootPluginOverrides(opts.startupProfile, env, {
+    disable: [
+      ...collectFlagValues(args, "--disable-plugin"),
+      ...(noAgentsMd ? ["agents-md"] : []),
+      ...bareOff,
+    ],
+    // `--dry-run` = `--enable-plugin dry-run`. A disable still wins.
+    enable: [...collectFlagValues(args, "--enable-plugin"), ...dryRunEnableIds(args, env)],
   })
   // Plugin prompt-TEXT suppression. Must precede getPromptBlocksAsync below.
-  const pluginPromptSuppression = resolvePluginPromptsForBoot(args, env, diag.warn)
+  const pluginPromptSuppression = resolvePluginPromptsForBoot(
+    args,
+    env,
+    diag.warn,
+    opts.startupProfile?.profile.pluginPrompts,
+  )
   // Late-bound getter for the agent's LIVE model id. The loader loads before
   // the Agent is constructed, and the model can change mid-session (/model,
   // preflight switch) or differ on resume, so the ModelInfo tool must read the
@@ -846,6 +843,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
           opts.cliToolFilter,
         )
       : null
+  // Write `<sid>.profile.json` and wire `ctx.startupProfile` + `ctx.queryHostPolicy`.
+  const startupValues = { env, opts, noAgentsMd, pluginOverrides, pluginPromptSuppression }
+  wireStartupProfile(loader, modeManager, diag.warn, startupValues)
   if (modeManager?.active()) {
     // Use the manifest's `label` (e.g. "ASK") rather than the lowercase
     // `id` so the startup row matches the prompt prefix the user sees a

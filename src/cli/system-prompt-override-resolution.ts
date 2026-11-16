@@ -30,18 +30,46 @@ export type SystemPromptOverrideEnv = Record<string, string | undefined>
 /** Filesystem reader dependency, injected by tests and defaulted in production. */
 export type SystemPromptOverrideFileReader = (path: string) => string
 
-/** Resolve CLI/env/config system-prompt overrides for startup. */
+/**
+ * Resolve CLI/env/config system-prompt overrides for startup.
+ *
+ * With a `profile` (the resolved overrides of a lead session, from
+ * `--startup-profile`), the profile replaces the env and config tiers.
+ * Explicit CLI flags still win per part.
+ */
 export function resolveSystemPromptOverridesForStartup(input: {
   readonly args: readonly string[]
   readonly env: SystemPromptOverrideEnv
   readonly config: UserConfig
   readonly readFile?: SystemPromptOverrideFileReader
+  readonly profile?: SystemPromptOverrides | undefined
 }): SystemPromptOverrides {
   const readFile = input.readFile ?? ((path: string) => readFileSync(path, "utf8"))
   const cli = sourceSetFromArgs(input.args, readFile)
+  if (input.profile !== undefined) {
+    return resolveSystemPromptOverrides({
+      cli,
+      env: {},
+      config: sourceSetFromResolved(input.profile),
+    })
+  }
   const env = sourceSetFromEnv(input.env, readFile, activeParts(cli))
   const config = sourceSetFromConfig(input.config, readFile, activeParts(cli, env))
   return resolveSystemPromptOverrides({ cli, env, config })
+}
+
+/** Turn resolved overrides back into one raw tier: replace gives `text`, omit gives `omit`. */
+function sourceSetFromResolved(resolved: SystemPromptOverrides): SystemPromptOverrideSourceSet {
+  const out: MutableSystemPromptOverrideSourceSet = {}
+  for (const spec of SYSTEM_PROMPT_OVERRIDE_FLAG_SPECS) {
+    const part = resolved[spec.part]
+    if (part?.kind === "replace") out[spec.part] = { text: part.text }
+    else if (part?.kind === "omit") out[spec.part] = { omit: true }
+  }
+  if (resolved.unsafeProviderOverrides !== undefined) {
+    out.unsafeProviderOverrides = resolved.unsafeProviderOverrides
+  }
+  return out
 }
 
 function activeParts(
