@@ -19,6 +19,10 @@ import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { ToolExecutorAdapter } from "@minimal-agent/core/host-kit/tool-executor-adapter"
 import type { LifecyclePort } from "@minimal-agent/core/sdk/lifecycle"
 import { TOOL_PRESENTATION } from "../../plugins-ui/tool-presentation.ts"
+import {
+  fixtureSyntheticTextResolver,
+  textFixturesPresent,
+} from "../../test-utils/text-fixture-providers.ts"
 import type { CodeHighlighter } from "../formatter/mdstream-code-highlighter.ts"
 import { ToolTimeTracker } from "./tool-time.ts"
 import { createReplToolView } from "./tool-view.ts"
@@ -151,12 +155,11 @@ async function runCase(
   opts: CaseOptions = {},
 ): Promise<CaseResult> {
   const rows: string[] = []
-  const result = await replExecutor(rows, opts).execute({
-    type: "tool_use",
-    id: `call-${name}`,
-    name,
-    input,
-  })
+  const result = await replExecutor(rows, opts).execute(
+    { type: "tool_use", id: `call-${name}`, name, input },
+    undefined,
+    { text: fixtureSyntheticTextResolver() },
+  )
   const scrub = (s: string) => s.split(root).join("<ROOT>")
   return {
     rows: rows.map(scrub),
@@ -171,7 +174,7 @@ function writeFixture(name: string, text: string): string {
   return path
 }
 
-describe("REPL tool transcript golden (S24, S29)", () => {
+describe.skipIf(!textFixturesPresent())("REPL tool transcript golden (S24, S29)", () => {
   it("keeps the exact rows and model content of each tool case", async () => {
     const loader = await loadProbePlugin()
     const askMode = new ModeManager(
@@ -188,6 +191,9 @@ describe("REPL tool transcript golden (S24, S29)", () => {
       "ask",
       "dark",
       () => new Date(2026, 4, 22, 17, 52, 30),
+      undefined,
+      undefined,
+      fixtureSyntheticTextResolver(),
     )
     const tsFile = writeFixture("example.ts", "const x: number = 1\nreturn x\n")
     const editFile = writeFixture("edit.ts", "alpha\nbeta\ngamma\n")

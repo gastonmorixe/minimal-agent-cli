@@ -140,6 +140,7 @@ import {
   validateStartupEffort,
 } from "./startup/startup-rows.ts"
 import type { StreamInfo } from "./startup/stream-json-writer.ts"
+import { cliHasPlugins, cliLoaderBase } from "./startup/text-contracts.ts"
 import { isColdStart, maybeShowFirstRunWelcome } from "./ui/chrome/first-run.ts"
 import { formatQuotaWindows } from "./ui/chrome/quota-summary.ts"
 import { buildReadyBanner } from "./ui/chrome/ready-banner.ts"
@@ -684,8 +685,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // model call. Else it returns the loader unchanged.
   const loader = await PluginLoader.load({
     // Every root comes from the CLI (S40), incl. the dev plugins checkout.
-    roots: pluginRoots,
-    coreToolNames,
+    ...cliLoaderBase(pluginRoots, coreToolNames),
     // Single AgentContext shared with every plugin dispatch path.
     // Frozen value object; see createAgentContext + AgentContext docs.
     agent: agentContext,
@@ -770,10 +770,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // construction (search this file for `hasPlugins`). Independently of
   // how we choose to render the startup tree, those callers want one
   // bool: "did anything plugin-shaped get loaded".
-  // `--dry-run` forces it on: the hook-only dry-run plugin alone (`--bare`)
-  // gives no tool, prompt, or mode, so the loader and its send halt would
-  // not reach the session, and the request would go out for real.
-  const hasPlugins = loadedTools.length > 0 || hasPromptBlock || loadedModes.length > 0 || dryRun.on
+  // `--dry-run` forces it on (its hook-only plugin gives no tool, prompt, or
+  // mode). Text-only plugins count too: core holds no text (cliHasPlugins).
+  const hasPlugins = cliHasPlugins(loader, loadedTools, loadedModes, hasPromptBlock, dryRun.on)
   // Show what the plugin layer actually contributes — names of callable
   // tools rather than an aggregate `3 tool(s)`. The active mode (if any)
   // gets its own row below at the `printStartupRow("mode", …)` site, so
