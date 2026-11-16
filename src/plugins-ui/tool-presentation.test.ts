@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { TOOL_DEFINITIONS } from "@minimal-agent/core/host/tool-catalog"
+import { BUILTIN_TOOL_NAMES } from "@minimal-agent/core/host/tool-catalog"
 import { ToolFeedbackTracker } from "@minimal-agent/core/host-kit/feedback-tracker"
 import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { ToolExecutorAdapter } from "@minimal-agent/core/host-kit/tool-executor-adapter"
@@ -149,7 +149,7 @@ describe("CLI tool presentation map covers the core built-in tools", () => {
   }
 
   it("has a row with an icon and a color for every core built-in tool", () => {
-    const names = TOOL_DEFINITIONS.map((t) => t.name)
+    const names = BUILTIN_TOOL_NAMES
     expect(names.length).toBeGreaterThan(0)
     const missing = names.filter(
       (n) => !TOOL_PRESENTATION.get(n)?.icon || !TOOL_PRESENTATION.get(n)?.color,
@@ -300,10 +300,7 @@ describe.skipIf(!siblingRepoPresent())(
     })
 
     it("has no row for a tool that no plugin or core ships", () => {
-      const shipped = new Set([
-        ...shippedTools().flatMap((p) => p.tools),
-        ...TOOL_DEFINITIONS.map((t) => t.name),
-      ])
+      const shipped = new Set([...shippedTools().flatMap((p) => p.tools), ...BUILTIN_TOOL_NAMES])
       const stale = [...TOOL_PRESENTATION.keys()].filter((n) => !shipped.has(n))
       expect(stale).toEqual([])
     })

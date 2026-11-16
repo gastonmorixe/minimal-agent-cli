@@ -59,7 +59,7 @@ import {
 } from "@minimal-agent/core/host/provider-session"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
 import { resolveSessionTarget } from "@minimal-agent/core/host/session-index"
-import { TOOL_DEFINITIONS } from "@minimal-agent/core/host/tool-catalog"
+import { BUILTIN_TOOL_NAMES } from "@minimal-agent/core/host/tool-catalog"
 import {
   combineTurnDrains,
   instantiateTurnAttachments,
@@ -566,7 +566,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
 
   // Load plugins from the roots in `pluginRoots` (see startup/plugin-roots.ts).
   // Core tool names must always win over plugin names.
-  const coreToolNames = new Set(TOOL_DEFINITIONS.map((t) => t.name))
+  const coreToolNames = new Set<string>(BUILTIN_TOOL_NAMES)
   // `userDir` (the per-user agent home) is resolved up front, before provider
   // discovery, and the first-run plugin clone runs earlier still (before
   // provider resolution) — because the LLM providers now ship IN the cloned
@@ -841,8 +841,6 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
           undefined,
           (modeId) => modeUserOverrides.get(modeId) ?? null,
           opts.cliToolFilter,
-          // The plugin text resolver owns the mode refusal, stamp and change text.
-          hasPlugins ? loader.syntheticText() : undefined,
         )
       : null
   // Write `<sid>.profile.json` and wire `ctx.startupProfile` + `ctx.queryHostPolicy`.
