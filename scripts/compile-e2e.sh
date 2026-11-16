@@ -32,7 +32,7 @@
 #      itself as BUN_BE_BUN=1): one turn calls BackgroundRun and
 #      SubAgentsSpawnAgent. The job log shows the command ran with no
 #      BUN_BE_BUN and no bun. The child agent (the binary spawning itself)
-#      calls the model.
+#      calls the model. The run uses `--formatter cat` (plain text output).
 #
 # Every output is also scanned for crash text (CRASH_RE). Each command has a
 # time limit. Exit codes: 0 all checks passed, 1 a check failed, 2 bad usage
@@ -381,7 +381,9 @@ if [[ ! -s "$MOCK_DIR/port" ]]; then
 else
   MOCK_URL="http://127.0.0.1:$(cat "$MOCK_DIR/port")"
   rm -rf "$EMPTY_HOME" && mkdir -p "$EMPTY_HOME"
-  if RUN_TIMEOUT=90 run_empty "-p self-spawn (mock model)" --skip-quota \
+  # `--formatter cat`: plain-text output (no markdown renderer), so the
+  # captured $OUT is readable and greppable when a check fails.
+  if RUN_TIMEOUT=90 run_empty "-p self-spawn (mock model)" --skip-quota --formatter cat \
     --provider generic-endpoint --endpoint "$MOCK_URL" --format openai-chat-completions \
     --auth-type none --model mock-model --mode none -p "go"; then
     mock_log="$(cat "$MOCK_DIR/log" 2>/dev/null)"
