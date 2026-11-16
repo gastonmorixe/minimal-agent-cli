@@ -45,6 +45,7 @@ import {
 import { describeStartupAuth, resolveStartupAuth } from "@minimal-agent/core/host/provider-auth"
 import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
 import {
+  compactArgsErrorText,
   contextExceededAdviceText,
   contextNoticeText,
   errorText,
@@ -99,8 +100,8 @@ async function rejection(fn: () => Promise<unknown>): Promise<string> {
 /** What `startCompactFallback` writes for a parse error. */
 function compactLine(argv: string): string {
   const parsed = parseCompactArgs(argv)
-  if (!parsed.error) throw new Error("expected a compact parse error")
-  return `✗ ${parsed.error}`
+  if (parsed.error === undefined) throw new Error("expected a compact parse error")
+  return `✗ ${compactArgsErrorText(parsed.error)}`
 }
 
 /** What print-mode writes for a notice event (`src/print-mode.ts` notice case). */

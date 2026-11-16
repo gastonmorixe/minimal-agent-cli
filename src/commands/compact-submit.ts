@@ -18,7 +18,7 @@ import {
   parseCompactArgs,
 } from "@minimal-agent/core/host/compact-contract"
 import type { CommandNoticeBlock } from "@minimal-agent/core/plugin-api/types/plugin"
-import { errorText } from "../startup/core-text.ts"
+import { compactArgsErrorText, errorText } from "../startup/core-text.ts"
 import { renderCommandNoticeBlock } from "../ui/command-notice.ts"
 
 import { buildCompactNoticeBlock } from "./compact.ts"
@@ -95,8 +95,8 @@ export interface CompactFallbackDeps extends CompactStreamDeps {
  */
 export function startCompactFallback(argv: string, deps: CompactFallbackDeps): void {
   const parsedArgs = parseCompactArgs(argv)
-  if (parsedArgs.error) {
-    deps.writeNoticeLines([`✗ ${parsedArgs.error}`])
+  if (parsedArgs.error !== undefined) {
+    deps.writeNoticeLines([`✗ ${compactArgsErrorText(parsedArgs.error)}`])
     return
   }
   const mode = parsedArgs.mode ?? "local"
