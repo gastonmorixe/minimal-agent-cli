@@ -1,12 +1,7 @@
 import { afterAll, describe, expect, it } from "bun:test"
-import { mkdtempSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-
 import { TOOL_PRESENTATION } from "../plugins-ui/tool-presentation.ts"
 import { isolatedCliEnv } from "../test-utils/isolated-cli-env.ts"
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
-import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 import { cleanSpawnEnv } from "./clean-spawn-env.ts"
 
 // These tests boot the real CLI with the opencode-go provider plugin from the
@@ -16,7 +11,8 @@ const HAVE_PROVIDER = siblingPluginPresent("ma-llm-opencode-go-plugin")
 
 // Every child gets a temp agent home, so no test writes sessions or logs into
 // the real ~/.minimal-agent of the developer (see test-utils/isolated-cli-env.ts).
-// The "hides the startup tree" test below makes its own home on purpose.
+// The "hides the startup tree" test below makes its own home on purpose, and
+// removes it at the end of the test.
 const HELP_ISO = isolatedCliEnv({ base: cleanSpawnEnv(), prefix: "ma-smoke-help-home-" })
 const PROMPT_ISO = isolatedCliEnv({ base: cleanSpawnEnv(), prefix: "ma-smoke-prompt-home-" })
 afterAll(() => {
@@ -138,50 +134,51 @@ describe("CLI smoke", () => {
   it.skipIf(!HAVE_PROVIDER)(
     "hides the startup tree by default in non-interactive mode",
     async () => {
-      const isolatedHome = mkdtempSync(join(tmpdir(), "ma-smoke-home-"))
-      const p = Bun.spawn(
-        ["bun", "run", "src/index.ts", "--skip-quota", "--prompt", "Reply with exactly: PONG"],
-        {
-          stdout: "pipe",
-          stderr: "pipe",
-          // Generous ceiling so the child isn't SIGKILLed under parallel load.
-          timeout: 20000,
-          env: {
-            ...cleanSpawnEnv(),
-            ...tempHomeSpawnEnv(),
-            NODE_ENV: "test",
-            MINIMAL_AGENT_TEST_AUTH: "1",
-            MINIMAL_AGENT_TRANSPORT: "test",
-            MINIMAL_AGENT_TEST_RESPONSE: "PONG",
-            // Isolate plugin discovery from the developer's real ~/.minimal-agent
-            // and ~/.agents plugin dirs. Without this, the loader warns about the
-            // user's local plugins and the warning PATH (…/.minimal-agent/plugins/…)
-            // leaks the substring "minimal-agent" into stderr, tripping the
-            // negative assertion below on a real machine. (MINIMAL_AGENT_DISABLE_PLUGINS
-            // takes plugin ids, so it cannot do this.) Provider plugins still come
-            // from the sibling repo.
-            HOME: isolatedHome,
-            MINIMAL_AGENT_HOME: join(isolatedHome, ".minimal-agent"),
-            // Pin a registered, token-clean provider/model so the boot path is
-            // deterministic under the canonical `env -u MINIMAL_AGENT_PROVIDER -u
-            // MINIMAL_AGENT_MODEL` gate on a multi-credential machine. See the
-            // sibling test above for the full rationale.
-            MINIMAL_AGENT_PROVIDER: "opencode-go",
-            MINIMAL_AGENT_MODEL: "qwen3.7-plus",
+      // A home of its own isolates plugin discovery from the developer's real
+      // ~/.minimal-agent and ~/.agents plugin dirs. Without it, the loader warns
+      // about the user's local plugins and the warning PATH
+      // (…/.minimal-agent/plugins/…) leaks the substring "minimal-agent" into
+      // stderr, tripping the negative assertion below on a real machine.
+      // (MINIMAL_AGENT_DISABLE_PLUGINS takes plugin ids, so it cannot do this.)
+      // Provider plugins still come from the sibling repo.
+      const iso = isolatedCliEnv({ base: cleanSpawnEnv(), prefix: "ma-smoke-home-" })
+      try {
+        const p = Bun.spawn(
+          ["bun", "run", "src/index.ts", "--skip-quota", "--prompt", "Reply with exactly: PONG"],
+          {
+            stdout: "pipe",
+            stderr: "pipe",
+            // Generous ceiling so the child isn't SIGKILLed under parallel load.
+            timeout: 20000,
+            env: {
+              ...iso.env,
+              NODE_ENV: "test",
+              MINIMAL_AGENT_TEST_AUTH: "1",
+              MINIMAL_AGENT_TRANSPORT: "test",
+              MINIMAL_AGENT_TEST_RESPONSE: "PONG",
+              // Pin a registered, token-clean provider/model so the boot path is
+              // deterministic under the canonical `env -u MINIMAL_AGENT_PROVIDER -u
+              // MINIMAL_AGENT_MODEL` gate on a multi-credential machine. See the
+              // sibling test above for the full rationale.
+              MINIMAL_AGENT_PROVIDER: "opencode-go",
+              MINIMAL_AGENT_MODEL: "qwen3.7-plus",
+            },
           },
-        },
-      )
-      const [exitCode, stdout, stderr] = await Promise.all([
-        p.exited,
-        readStream(p.stdout),
-        readStream(p.stderr),
-      ])
-      expect(exitCode).toBe(0)
-      expect(stdout).toContain("PONG")
-      // Banner / tree rows are suppressed by default in non-interactive.
-      expect(stderr).not.toContain("minimal-agent")
-      expect(stderr).not.toMatch(/^\s*│/m)
-      expect(stderr).not.toMatch(/^\s*╭/m)
+        )
+        const [exitCode, stdout, stderr] = await Promise.all([
+          p.exited,
+          readStream(p.stdout),
+          readStream(p.stderr),
+        ])
+        expect(exitCode).toBe(0)
+        expect(stdout).toContain("PONG")
+        // Banner / tree rows are suppressed by default in non-interactive.
+        expect(stderr).not.toContain("minimal-agent")
+        expect(stderr).not.toMatch(/^\s*│/m)
+        expect(stderr).not.toMatch(/^\s*╭/m)
+      } finally {
+        iso.cleanup()
+      }
     },
   )
 })

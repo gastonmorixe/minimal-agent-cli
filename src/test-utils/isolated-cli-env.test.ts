@@ -56,6 +56,72 @@ describe("isolatedCliEnv", () => {
     }
   })
 
+  test("drops every MINIMAL_AGENT_* key of the base, so no harness key leaks", () => {
+    const real = "/real/.minimal-agent"
+    const iso = isolatedCliEnv({
+      base: {
+        HOME: "/real",
+        MINIMAL_AGENT_HOME: "/real",
+        MINIMAL_AGENT_SUBAGENT_RESULT_PATH: `${real}/sessions/x.result.json`,
+        MINIMAL_AGENT_BIN_DIR: `${real}/bin`,
+        MINIMAL_AGENT_MODEL: "some-model",
+        PATH: "/usr/bin",
+      },
+    })
+    try {
+      expect(iso.env.MINIMAL_AGENT_SUBAGENT_RESULT_PATH).toBeUndefined()
+      expect(iso.env.MINIMAL_AGENT_BIN_DIR).toBeUndefined()
+      expect(iso.env.MINIMAL_AGENT_MODEL).toBeUndefined()
+      expect(iso.env.PATH).toBe("/usr/bin")
+      expect(iso.env.HOME).toBe(iso.home)
+      expect(iso.env.MINIMAL_AGENT_HOME).toBe(iso.agentHome)
+      expect(iso.env.MINIMAL_AGENT_HOME?.startsWith(iso.home + sep)).toBe(true)
+      for (const value of Object.values(iso.env)) {
+        expect(value?.startsWith("/real") ?? false).toBe(false)
+      }
+      // The only MINIMAL_AGENT_* keys left are the ones the helper sets.
+      const own = new Set([
+        ...Object.keys(tempHomeSpawnEnv()),
+        "MINIMAL_AGENT_NO_BINARY_SETUP",
+        "MINIMAL_AGENT_HOME",
+      ])
+      const left = Object.keys(iso.env).filter((k) => k.startsWith("MINIMAL_AGENT_"))
+      expect(left.filter((k) => !own.has(k))).toEqual([])
+    } finally {
+      iso.cleanup()
+    }
+  })
+
+  test("the default base (process.env) also loses its MINIMAL_AGENT_* keys", () => {
+    const key = "MINIMAL_AGENT_ISOLATION_PROBE_KEY"
+    process.env[key] = "/real/.minimal-agent"
+    try {
+      const iso = isolatedCliEnv()
+      try {
+        expect(iso.env[key]).toBeUndefined()
+        expect(iso.env.HOME).toBe(iso.home)
+      } finally {
+        iso.cleanup()
+      }
+    } finally {
+      delete process.env[key]
+    }
+  })
+
+  test("a caller key set after the spread still wins", () => {
+    const iso = isolatedCliEnv({ base: PARENT })
+    try {
+      const env: Record<string, string | undefined> = {
+        ...iso.env,
+        MINIMAL_AGENT_PROVIDER: "opencode-go",
+      }
+      expect(env.MINIMAL_AGENT_PROVIDER).toBe("opencode-go")
+      expect(env.HOME).toBe(iso.home)
+    } finally {
+      iso.cleanup()
+    }
+  })
+
   test("two calls get two dirs, and cleanup removes the dir", () => {
     const a = isolatedCliEnv()
     const b = isolatedCliEnv()
