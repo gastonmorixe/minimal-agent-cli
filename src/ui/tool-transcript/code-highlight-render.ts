@@ -11,6 +11,81 @@ import { c } from "../style/ansi.ts"
 const { BOLD, RESET } = ANSI_CODES
 
 /**
+ * Pick the grammar that matches the slice actually being highlighted.
+ *
+ * Syntect's `php` grammar starts in HTML mode and only enters PHP at an opening
+ * `<?php` / `<?` tag. A mid-file Read slice or a diff hunk has no tag, so it
+ * lexes as one flat HTML text run. `PHP Source` (the bundled `source.php` inner
+ * grammar) starts in PHP mode, and `php` stays correct for slices that really
+ * are HTML — a template head, or a block after `?>`.
+ *
+ * Rule: the first real open tag decides, unless a `?>` comes before it. Order
+ * matters in both directions; a slice that opens in PHP and later switches
+ * would otherwise lose its PHP tokens. No tag at all means we are inside a PHP
+ * block: PHP files are the only input here, and the alternative (assuming HTML)
+ * is what produced a flat block in the first place.
+ *
+ * Deliberately shape-based, not content-sniffing: nothing here guesses a
+ * language, it only chooses between two grammars for a language already known.
+ */
+export function refineEmbeddedLanguage(language: string, code: string): string {
+  if (language.trim().toLowerCase() !== "php") return language
+
+  const open = findOpenTag(code)
+  if (open === -1) return PHP_SOURCE_TOKEN
+  const close = code.indexOf("?>")
+  if (close !== -1 && close < open) return PHP_SOURCE_TOKEN
+  return "php"
+}
+
+/**
+ * Index of the first REAL PHP open tag, or -1.
+ *
+ * Matches `<?php`, `<?=` and the short `<? ` form only. A bare `<?` is not
+ * enough: `$doc = "<?xml version=\"1.0\"?>";` is legacy PHP that builds XML
+ * strings, and treating it as a tag makes the grammar leave PHP mode mid-file
+ * and mis-style the rest of the slice. `<` followed by anything other than
+ * `php`, `=` or whitespace is not an open tag in this grammar's eyes either.
+ */
+function findOpenTag(code: string): number {
+  const pattern = /<\?(?:php\b|=|\s)/i
+  const match = pattern.exec(code)
+  return match?.index ?? -1
+}
+
+/**
+ * The grammar token sent to mdstream for a PHP slice with no open tag.
+ *
+ * Spelled as syntect's display name, not the `php-source` alias, on purpose:
+ * `PHP Source` has been in the bundled syntax pack for years, so it highlights
+ * on every mdstream version. The `php-source` alias only exists from 0.3.9, and
+ * on older servers it resolves to plain text — the flat output this change
+ * exists to remove. Switch to the alias once the CLI can require >= 0.3.9 (the
+ * ready line carries no version, so there is no runtime gate yet).
+ */
+const PHP_SOURCE_TOKEN = "PHP Source"
+
+/**
+ * The `-`/`+` body text of a patch, markers stripped.
+ *
+ * File headers (`--- a/x`, `+++ b/x`), hunk headers and context rows are
+ * excluded. Those are exactly the lines mdstream does not lex per stream: a
+ * `<?php` sitting on a context row never reaches the added stream's lexer, so
+ * letting it choose the grammar would leave the changed row flat — the bug this
+ * refinement exists to fix, merely moved to the context line.
+ */
+function changedPayload(patch: string): string {
+  const body: string[] = []
+  for (const line of patch.split("\n")) {
+    // Only a space after the marker makes these headers. A deleted `--$i;` shows
+    // up as `---$i;` and is real body content, not a file header.
+    if (line.startsWith("--- ") || line.startsWith("+++ ") || line.startsWith("@@")) continue
+    if (line.startsWith("-") || line.startsWith("+")) body.push(line.slice(1))
+  }
+  return body.join("\n")
+}
+
+/**
  * Background-only reset (`SGR 49`). Clears the wash without touching the
  * foreground, so a washed row can be closed at the end of its own line and the
  * next transcript row's gutter starts on the terminal's default background.
@@ -39,7 +114,10 @@ export async function highlightReadBody(
   if (parsed.some((match) => match === null)) return null
 
   const code = parsed.map((match) => match![2]).join("\n")
-  const ansi = await highlighter.highlight({ language, code })
+  const ansi = await highlighter.highlight({
+    language: refineEmbeddedLanguage(language, code),
+    code,
+  })
   if (ansi === null) return null
   const highlighted = splitLogicalLines(ansi)
   if (highlighted.length !== parsed.length) return null
@@ -60,9 +138,14 @@ export async function highlightUnifiedDiff(
   title?: string,
 ): Promise<string | null> {
   const palette = resolveDiffPalette()
+  // Decide on the changed lines only. mdstream lexes `-`/`+` bodies; context
+  // rows reach the lexers only through its continuity pass, which a patch this
+  // large may skip. A `<?php` that lives on a context row therefore must not
+  // choose the grammar, or the added row stays flat.
+  const diffLanguage = refineEmbeddedLanguage(language, changedPayload(patch))
   const native = highlighter.highlightUnifiedDiff
     ? await highlighter.highlightUnifiedDiff({
-        language,
+        language: diffLanguage,
         code: patch,
         diffStyle: "bg-wash",
         colors: palette.colors,
@@ -90,9 +173,18 @@ export async function highlightUnifiedDiff(
 
   const oldCode = oldPayload.join("\n")
   const newCode = newPayload.join("\n")
+  // Each stream is lexed independently with fresh state, so each side picks the
+  // grammar its own lines need. The two sides may disagree on one patch, which
+  // is correct: each choice matches the text that stream actually sees.
+  const oldLanguage = refineEmbeddedLanguage(language, oldCode)
+  const newLanguage = refineEmbeddedLanguage(language, newCode)
   const [oldAnsi, newAnsi] = await Promise.all([
-    oldCode.length === 0 ? Promise.resolve("") : highlighter.highlight({ language, code: oldCode }),
-    newCode.length === 0 ? Promise.resolve("") : highlighter.highlight({ language, code: newCode }),
+    oldCode.length === 0
+      ? Promise.resolve("")
+      : highlighter.highlight({ language: oldLanguage, code: oldCode }),
+    newCode.length === 0
+      ? Promise.resolve("")
+      : highlighter.highlight({ language: newLanguage, code: newCode }),
   ])
   if (oldAnsi === null || newAnsi === null) return null
   const oldLines = oldPayload.length === 0 ? [] : splitLogicalLines(oldAnsi)

@@ -29,6 +29,7 @@ if (mode === "bad-ready") {
 }
 
 const decoder = new TextDecoder()
+let answered = false
 let buffer = ""
 for await (const chunk of Bun.stdin.stream()) {
   buffer += decoder.decode(chunk, { stream: true })
@@ -49,6 +50,16 @@ for await (const chunk of Bun.stdin.stream()) {
     if (mode === "timeout") {
       await Bun.sleep(5_000)
       continue
+    }
+    // Answers its first request, then goes silent like a hung sidecar. Lets a
+    // test alternate success and timeout without a live process being able to
+    // answer the next request.
+    if (mode === "hang-after-first") {
+      if (answered) {
+        await Bun.sleep(5_000)
+        continue
+      }
+      answered = true
     }
     if (mode === "exit") process.exit(2)
     if (mode === "malformed") {
