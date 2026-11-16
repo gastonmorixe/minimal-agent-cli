@@ -145,4 +145,27 @@ describe("renderStartupPluginRows", () => {
     for (const line of lines.slice(2)) expect(line.startsWith("      ")).toBe(true)
     expect(lines.slice(2).join("").includes("│")).toBe(false)
   })
+
+  test("an unknown tone renders as default in color mode", () => {
+    const row = { label: "t", summary: [{ text: "r", tone: "red" }] } as unknown as StartupRow
+    const [line] = renderStartupPluginRows([row], COLOR)
+    expect(line).toContain("  r")
+    expect(stripAnsi(line!)).toBe("  │ t          r")
+  })
+
+  test("pads child labels by display width (CJK)", () => {
+    const row: StartupRow = {
+      label: "x",
+      summary: [{ text: "s" }],
+      children: [
+        { label: "日本", value: [{ text: "one" }] },
+        { label: "abcdef", value: [{ text: "two" }] },
+      ],
+    }
+    const lines = renderStartupPluginRows([row], PLAIN)
+    expect(lines[1]).toBe("  │   ├ 日本    one")
+    expect(displayWidth(lines[1]!.slice(0, lines[1]!.indexOf("one")))).toBe(
+      displayWidth(lines[2]!.slice(0, lines[2]!.indexOf("two"))),
+    )
+  })
 })

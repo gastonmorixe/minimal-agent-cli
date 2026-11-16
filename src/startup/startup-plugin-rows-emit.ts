@@ -12,10 +12,21 @@
  * (`last: true`). With no plugin rows the old path runs unchanged
  * (`closeStartupTreeWithLoadedTools`).
  *
+ * Budget: the 250 ms race bounds only ASYNC listener work. A listener that
+ * blocks synchronously (file reads, parsing, hashing) holds the event loop
+ * and the timer cannot fire, so listeners must stay synchronous-cheap and
+ * move any heavy work behind an `await` or off the boot path.
+ *
+ * Safety: every plugin string (row label, summary text, child label, child
+ * value text) is stripped of ESC sequences and C0/DEL/C1 controls (tab and
+ * newline become a space), and an unknown tone falls back to `default`.
+ * Any error in collect, render, or print falls back to the old closer, and
+ * nothing is printed before the lines are fully rendered.
+ *
  * @module startup/startup-plugin-rows-emit
  */
 
-import type { StartupRow, StartupRowsPayload } from "@minimal-agent/core/plugin-api"
+import type { StartupRow, StartupRowPart, StartupRowsPayload } from "@minimal-agent/core/plugin-api"
 import { applyToolNamePolicy, type ToolNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
 
 import {
@@ -24,7 +35,11 @@ import {
 } from "../plugins-ui/startup-tool-entries.ts"
 import { renderStartupPluginRows } from "../ui/chrome/startup-plugin-rows.ts"
 import { resolveHelpColor } from "../ui/help/policy.ts"
-import { isStartupTreeVisible, printStartupToolsRow } from "../ui/startup/tree.ts"
+import {
+  isStartupTreeVisible,
+  printStartupToolsRow,
+  resetStartupTreeRow,
+} from "../ui/startup/tree.ts"
 
 /** The slice of the loader hook bus this module needs. */
 export interface StartupRowsHooks {
@@ -44,14 +59,56 @@ export const STARTUP_ROWS_BUDGET_MS = 250
 
 const TIMEOUT = Symbol("timeout")
 
-function isPartArray(v: unknown): boolean {
+const ESC = String.fromCodePoint(0x1b)
+const C1_CSI = String.fromCodePoint(0x9b)
+/** ESC/C1 sequences: CSI (`ESC [` or U+009B), OSC/DCS/APC/PM/SOS up to BEL or ST, other two-byte ESC forms. */
+const ESC_SEQ_RE = new RegExp(
+  [
+    `(?:${ESC}\\[|${C1_CSI})[0-?]*[ -/]*[@-~]`,
+    `(?:${ESC}[\\]PX^_]|[\\x90\\x98\\x9d\\x9e\\x9f])[^\\x07${ESC}\\x9c]*(?:\\x07|${ESC}\\\\|\\x9c)?`,
+    `${ESC}[ -/]*[0-~]`,
+  ].join("|"),
+  "g",
+)
+// biome-ignore lint/suspicious/noControlCharactersInRegex: control bytes are what we strip
+const CONTROL_RE = /[\x00-\x1f\x7f-\x9f]/g
+
+/**
+ * Strip terminal control content from a plugin-supplied string: ESC/C1
+ * sequences (CSI, OSC, DCS, ...), then every C0 control, DEL, and C1
+ * control. Tab, newline and CR become a space so words stay apart.
+ */
+export function stripTerminalControls(text: string): string {
+  return text
+    .replace(ESC_SEQ_RE, "")
+    .replace(/[\t\n\r]/g, " ")
+    .replace(CONTROL_RE, "")
+}
+
+const TONES: ReadonlySet<string> = new Set(["default", "dim", "accent", "warn", "ok"])
+
+function isPartArray(v: unknown): v is Array<Record<string, unknown>> {
   return (
     Array.isArray(v) &&
     v.every((p) => typeof p === "object" && p !== null && typeof p.text === "string")
   )
 }
 
-/** Keep only rows with a string label and a valid summary (and children). */
+/** Clean parts: strip controls from text, map an unknown tone to `default`. */
+function cleanParts(parts: Array<Record<string, unknown>>): StartupRowPart[] {
+  return parts.map((p) => {
+    const part: StartupRowPart = { text: stripTerminalControls(p.text as string) }
+    if (p.tone !== undefined) {
+      part.tone =
+        typeof p.tone === "string" && TONES.has(p.tone)
+          ? (p.tone as StartupRowPart["tone"])
+          : "default"
+    }
+    return part
+  })
+}
+
+/** Keep only rows with a string label and a valid summary (and children), cleaned. */
 function sanitizeRows(rows: unknown): StartupRow[] {
   if (!Array.isArray(rows)) return []
   const out: StartupRow[] = []
@@ -59,15 +116,18 @@ function sanitizeRows(rows: unknown): StartupRow[] {
     if (typeof row !== "object" || row === null) continue
     const r = row as Record<string, unknown>
     if (typeof r.label !== "string" || !isPartArray(r.summary)) continue
-    const clean: StartupRow = { label: r.label, summary: r.summary as StartupRow["summary"] }
+    const clean: StartupRow = {
+      label: stripTerminalControls(r.label),
+      summary: cleanParts(r.summary),
+    }
     if (Array.isArray(r.children)) {
-      clean.children = r.children.filter(
-        (ch): ch is NonNullable<StartupRow["children"]>[number] =>
-          typeof ch === "object" &&
-          ch !== null &&
-          typeof ch.label === "string" &&
-          isPartArray(ch.value),
-      )
+      clean.children = []
+      for (const ch of r.children as unknown[]) {
+        if (typeof ch !== "object" || ch === null) continue
+        const c = ch as Record<string, unknown>
+        if (typeof c.label !== "string" || !isPartArray(c.value)) continue
+        clean.children.push({ label: stripTerminalControls(c.label), value: cleanParts(c.value) })
+      }
     }
     if (typeof r.order === "number" && Number.isFinite(r.order)) clean.order = r.order
     out.push(clean)
@@ -126,10 +186,14 @@ function stderrCols(): number {
   return (process.stderr as { columns?: number }).columns ?? 80
 }
 
+/** Test seam: the renderer used by {@link closeStartupTreeWithToolsAndPluginRows}. */
+export const startupPluginRowsSeam = { render: renderStartupPluginRows }
+
 /**
  * Close the startup tree with `tools`, then any plugin rows from
  * `startup.rows`. With no plugin rows this is exactly
- * `closeStartupTreeWithLoadedTools`.
+ * `closeStartupTreeWithLoadedTools`. Never throws: any error before the
+ * first line is printed falls back to `closeStartupTreeWithLoadedTools`.
  */
 export async function closeStartupTreeWithToolsAndPluginRows(
   loader: { hooks(): StartupRowsHooks },
@@ -137,16 +201,31 @@ export async function closeStartupTreeWithToolsAndPluginRows(
   policy: ToolNamePolicy,
   { cwd }: { cwd: string },
 ): Promise<void> {
-  const rows = isStartupTreeVisible()
-    ? await collectStartupRows(loader.hooks(), { cwd, cols: stderrCols() })
-    : []
-  const plain = !resolveHelpColor(process.env, process.stderr.isTTY)
-  const visible = renderStartupPluginRows(rows, { cols: stderrCols(), plain })
-  if (visible.length === 0) {
+  let lines: string[]
+  let entries: ReturnType<typeof startupToolEntries>
+  try {
+    const cols = stderrCols()
+    const rows = isStartupTreeVisible()
+      ? await collectStartupRows(loader.hooks(), { cwd, cols })
+      : []
+    const plain = !resolveHelpColor(process.env, process.stderr.isTTY)
+    lines = rows.length === 0 ? [] : startupPluginRowsSeam.render(rows, { cols, plain, last: true })
+    entries = lines.length === 0 ? [] : startupToolEntries(applyToolNamePolicy(tools, policy))
+  } catch {
+    lines = []
+    entries = []
+  }
+  if (lines.length === 0) {
     closeStartupTreeWithLoadedTools(tools, policy)
     return
   }
-  const entries = startupToolEntries(applyToolNamePolicy(tools, policy))
-  if (entries.length > 0) printStartupToolsRow(entries)
-  printStartupPluginRows(rows, { cols: stderrCols(), plain, last: true })
+  try {
+    if (entries.length > 0) printStartupToolsRow(entries)
+    for (const line of lines) console.error(line)
+  } catch {
+    // Output already started: a fallback would print the tree twice.
+  } finally {
+    // The plugin group closed the tree: no later closeStartupTree rewrite.
+    resetStartupTreeRow()
+  }
 }
