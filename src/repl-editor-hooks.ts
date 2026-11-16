@@ -8,7 +8,11 @@
  */
 
 import { getSessionId } from "@minimal-agent/core/host/session-id"
-import type { TurnWillStartPayload } from "@minimal-agent/core/sdk/lifecycle"
+import {
+  type HookContextEntry,
+  isHookContextEntry,
+  type TurnWillStartPayload,
+} from "@minimal-agent/core/sdk/lifecycle"
 import { FOOTER_LAYER_OVERLAY, FOOTER_PRIORITY_OVERLAY } from "./editor-controller.ts"
 import { Picker, type PickerItem } from "./ui/picker.ts"
 
@@ -45,7 +49,7 @@ export interface EditorHooksLoader {
     ) => Promise<{
       payload: T
       halted?: boolean
-      additionalContext?: string[]
+      additionalContext?: HookContextEntry[]
     }>
   }
 }
@@ -289,15 +293,18 @@ export interface TurnWillStartFacts {
 export interface TurnWillStartOutcome {
   text: string
   halted: boolean
-  /** Hook context lines for the core run (`opts.additionalContext`). Always an array. */
-  additionalContext: string[]
+  /**
+   * Hook context entries for the core run (`opts.additionalContext`), as the
+   * listeners gave them (strings, or `{ text, position }`). Always an array.
+   */
+  additionalContext: HookContextEntry[]
 }
 
-/** The string items of a chain result's `additionalContext`, or `[]`. */
-function contextOf(result: unknown): string[] {
+/** The well-formed entries of a chain result's `additionalContext`, unchanged, or `[]`. */
+function contextOf(result: unknown): HookContextEntry[] {
   if (!result || typeof result !== "object") return []
   const ctx = (result as { additionalContext?: unknown }).additionalContext
-  return Array.isArray(ctx) ? ctx.filter((l): l is string => typeof l === "string") : []
+  return Array.isArray(ctx) ? ctx.filter(isHookContextEntry) : []
 }
 
 /**

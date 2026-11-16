@@ -3,9 +3,10 @@
  *
  * The host fires the lifecycle port once per session start, BEFORE the
  * first user turn, and hands the listeners' `additionalContext` to the core
- * (`AgentCore.addSessionContext`). The core puts the lines one time into
- * the next user message, as a context block before the user text. The
- * system prompt does not change.
+ * (`AgentCore.addSessionContext`) unchanged: strings and
+ * `{ text, position }` entries. The core puts them one time into the next
+ * user message (a string or no position means after the user text,
+ * `"before"` means before it). The system prompt does not change.
  *
  * Never throws: a failing port, or a core without `addSessionContext`,
  * means "no context", and the host goes on.
@@ -13,11 +14,16 @@
  * @module host/startup/session-will-start
  */
 
-import type { LifecyclePort, SessionWillStartPayload } from "@minimal-agent/core/sdk/lifecycle"
+import {
+  type HookContextEntry,
+  isHookContextEntry,
+  type LifecyclePort,
+  type SessionWillStartPayload,
+} from "@minimal-agent/core/sdk/lifecycle"
 
 /** The core surface this helper writes to. Optional so an older core still compiles. */
 export interface SessionContextSink {
-  addSessionContext?(lines: string[]): void
+  addSessionContext?(entries: readonly HookContextEntry[]): void
 }
 
 /**
@@ -26,7 +32,7 @@ export interface SessionContextSink {
  * (the event-stream route). No lines: the session passes through as is.
  */
 export async function withSessionContext<S extends { agentCore?(): SessionContextSink }>(
-  lines: readonly string[],
+  lines: readonly HookContextEntry[],
   opening: Promise<S>,
 ): Promise<S> {
   const session = await opening
@@ -43,7 +49,8 @@ export function sessionStartSource(resuming: boolean): SessionWillStartPayload["
 
 /**
  * Await `lifecycle.sessionWillStart`, then queue its context on `core`.
- * Returns the lines that were queued (empty when none, or on a failure).
+ * Returns the entries that were queued, unchanged (empty when none, or on a
+ * failure). Malformed entries are dropped with the core validator.
  * A failure writes one warn line to `stderr`.
  */
 export async function announceSessionWillStart(
@@ -51,13 +58,13 @@ export async function announceSessionWillStart(
   core: SessionContextSink | null | undefined,
   payload: SessionWillStartPayload,
   stderr: Pick<NodeJS.WriteStream, "write"> = process.stderr,
-): Promise<string[]> {
+): Promise<HookContextEntry[]> {
   if (typeof lifecycle.sessionWillStart !== "function") return []
-  let lines: string[]
+  let lines: HookContextEntry[]
   try {
     const result = await lifecycle.sessionWillStart(payload)
     lines = Array.isArray(result?.additionalContext)
-      ? result.additionalContext.filter((l): l is string => typeof l === "string")
+      ? result.additionalContext.filter(isHookContextEntry)
       : []
   } catch (e) {
     stderr.write(

@@ -36,6 +36,7 @@ import type {
 } from "@minimal-agent/core/plugin-api/types/plugin"
 import type { TurnResult } from "@minimal-agent/core/sdk/agent-core"
 import type { AgentEvent } from "@minimal-agent/core/sdk/events"
+import type { HookContextEntry } from "@minimal-agent/core/sdk/lifecycle"
 import type { InputQueuePort } from "@minimal-agent/core/sdk/ports"
 import type { ModelInfo } from "@minimal-agent/core/sdk/transport-types"
 import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
@@ -114,10 +115,11 @@ export interface ReplAgentLike {
        */
       resume?: boolean
       /**
-       * Optional. Hook context lines (`turn.willStart`) for this turn. The
-       * core puts them after the prompt in the first user message.
+       * Optional. Hook context entries (`turn.willStart`) for this turn, passed
+       * unchanged. The core puts "before" entries before the prompt and the
+       * rest after it, in the first user message.
        */
-      additionalContext?: string[]
+      additionalContext?: HookContextEntry[]
     },
   ): AsyncGenerator<string, TurnResult, undefined>
   /** Optional: current model id (for diagnostics/recovery prompts). */

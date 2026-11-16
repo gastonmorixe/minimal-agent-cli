@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
+import type { HookContextEntry } from "@minimal-agent/core/sdk/lifecycle"
+
 import {
   announceSessionWillStart,
   sessionStartSource,
@@ -9,8 +11,11 @@ import {
 const PAYLOAD = { source: "startup" as const, sid: "s1", cwd: "/w", model: "m" }
 
 function sink() {
-  const added: string[][] = []
-  return { added, core: { addSessionContext: (l: string[]) => void added.push(l) } }
+  const added: HookContextEntry[][] = []
+  return {
+    added,
+    core: { addSessionContext: (l: readonly HookContextEntry[]) => void added.push([...l]) },
+  }
 }
 
 function quietStderr() {
@@ -42,6 +47,28 @@ describe("announceSessionWillStart", () => {
     expect(seen).toEqual([{ ...PAYLOAD, source: "resume" }])
     expect(added).toEqual([["a", "b"]])
     expect(lines).toEqual(["a", "b"])
+  })
+
+  it("passes object entries unchanged and drops malformed ones (D2)", async () => {
+    const { added, core } = sink()
+    const before = { text: "b", position: "before" as const }
+    const out = await announceSessionWillStart(
+      {
+        sessionWillStart: async () => ({
+          additionalContext: [
+            before,
+            "a",
+            { text: "x", position: "middle" } as unknown as HookContextEntry,
+            7 as unknown as HookContextEntry,
+          ],
+        }),
+      },
+      core,
+      PAYLOAD,
+    )
+    expect(added).toEqual([[before, "a"]])
+    expect(added[0]?.[0]).toEqual({ text: "b", position: "before" })
+    expect(out).toEqual([before, "a"])
   })
 
   it("does not call addSessionContext for empty context", async () => {
