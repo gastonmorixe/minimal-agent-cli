@@ -27,7 +27,7 @@
       "  \u001b[2;36m┊\u001b[22;39m",
       "  \u001b[2;36m╰\u001b[22;39m \u001b[2mshown 10/30 L\u001b[22m"
     ],
-    "content": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n\n<ma::agent::output-preview shown=\"10\" total=\"30\" tool=\"Bash\">the user only saw a fraction of this output. If you used Bash to render visual content (ASCII art, ANSI TUI preview, formatted tables) for the user, put it in your text reply instead : the user reads that in full.</ma::agent::output-preview>",
+    "content": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n\n<ma::agent::output-preview shown=\"10\" total=\"30\" tool=\"Bash\">the user saw only a part of this output. If you used Bash to show visual content to the user (ASCII art, ANSI TUI preview, formatted tables), put that content in your text reply. The user reads the full text reply.</ma::agent::output-preview>",
     "isError": false
   },
   "bash-empty": {
@@ -185,7 +185,7 @@
       "  \u001b[2;36m┊\u001b[22;39m",
       "  \u001b[2;36m╰\u001b[22;39m \u001b[2mshown 10/40 L\u001b[22m"
     ],
-    "content": "page line 0\npage line 1\npage line 2\npage line 3\npage line 4\npage line 5\npage line 6\npage line 7\npage line 8\npage line 9\npage line 10\npage line 11\npage line 12\npage line 13\npage line 14\npage line 15\npage line 16\npage line 17\npage line 18\npage line 19\npage line 20\npage line 21\npage line 22\npage line 23\npage line 24\npage line 25\npage line 26\npage line 27\npage line 28\npage line 29\npage line 30\npage line 31\npage line 32\npage line 33\npage line 34\npage line 35\npage line 36\npage line 37\npage line 38\npage line 39\n\n<ma::agent::output-preview shown=\"10\" total=\"40\" tool=\"Fetch\">the user only saw a fraction of this output. If you intended this for the user, summarize the key parts in your text reply (the user reads it in full).</ma::agent::output-preview>",
+    "content": "page line 0\npage line 1\npage line 2\npage line 3\npage line 4\npage line 5\npage line 6\npage line 7\npage line 8\npage line 9\npage line 10\npage line 11\npage line 12\npage line 13\npage line 14\npage line 15\npage line 16\npage line 17\npage line 18\npage line 19\npage line 20\npage line 21\npage line 22\npage line 23\npage line 24\npage line 25\npage line 26\npage line 27\npage line 28\npage line 29\npage line 30\npage line 31\npage line 32\npage line 33\npage line 34\npage line 35\npage line 36\npage line 37\npage line 38\npage line 39\n\n<ma::agent::output-preview shown=\"10\" total=\"40\" tool=\"Fetch\">the user saw only a part of this output. If this output is for the user, give a summary of the important parts in your text reply. The user reads the full text reply.</ma::agent::output-preview>",
     "isError": false
   }
 }

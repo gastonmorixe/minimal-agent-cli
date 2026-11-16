@@ -97,7 +97,7 @@ writeFileSync(
 )
 const SID = "8d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a"
 const NOTE =
-  "The process stopped while this tool call ran. It may have run fully, partly, or not at all. Check its effects before you run it again."
+  "The process stopped while this tool call ran. The tool call possibly ran to the end, stopped before the end, or did not start. Examine its effects before you run it again."
 
 afterAll(() => {
   rmSync(HOME_DIR, { recursive: true, force: true })
