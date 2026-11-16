@@ -193,6 +193,7 @@ describe.skipIf(!textFixturesPresent())("REPL tool transcript golden (S24, S29)"
       () => new Date(2026, 4, 22, 17, 52, 30),
       undefined,
       undefined,
+      undefined,
       fixtureSyntheticTextResolver(),
     )
     const tsFile = writeFixture("example.ts", "const x: number = 1\nreturn x\n")
