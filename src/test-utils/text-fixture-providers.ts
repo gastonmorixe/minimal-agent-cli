@@ -12,11 +12,13 @@
  * from a real `PluginLoader` over a temp root that links the 3 plugins of
  * the sibling checkout (loaded once, at module load). tsc does not walk into
  * the plugins tree, and a missing checkout does not break the import. Tests
- * guard with `describe.skipIf(!textFixturesPresent())`. When the text plugins
- * are missing, this module prints one warning at load and the guarded tests
- * skip. With `MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1`, or `CI` set, it throws
- * at load instead, so every test file that imports it fails with a clear
- * message. `MA_PLUGINS_DIR` overrides the checkout path (see `sibling-repo.ts`).
+ * guard with `describe.skipIf(!textFixturesPresent())`, or skip on an empty
+ * `textPluginDirs()`. When a text plugin or ma-prompt-template-plugin
+ * ({@link BOOT_TEXT_PLUGINS}) is missing, this module prints one warning at
+ * load and the guarded tests skip. With `MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1`,
+ * or `CI` set, it throws at load instead (the message names the trigger), so
+ * every test file that imports it fails with a clear message.
+ * `MA_PLUGINS_DIR` overrides the checkout path (see `sibling-repo.ts`).
  *
  * @module test-utils/text-fixture-providers
  */
@@ -31,6 +33,7 @@ import type { ToolTextProvider } from "@minimal-agent/core/plugin-api/types/tool
 import type { SyntheticTextResolverLike } from "@minimal-agent/core/sdk/ports"
 
 import { SIBLING_REPO_ROOT, siblingPluginPresent } from "./sibling-repo.ts"
+import { textFixturesTrigger } from "./text-fixtures-required.ts"
 
 /** The plugins whose text the fixtures use. */
 export const TEXT_PLUGINS = [
@@ -48,31 +51,30 @@ async function loadTextLoader(): Promise<PluginLoader | null> {
   return PluginLoader.load({ roots: { embedded: [root] }, logger: () => {} })
 }
 
+export { textFixturesRequired, textFixturesTrigger } from "./text-fixtures-required.ts"
+
 /**
- * True when a missing text checkout must FAIL instead of skip:
- * `MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1`, or `CI` set (any value but
- * empty, `0` or `false`).
+ * The plugins a CLI boot needs to pass the text contract check: the text
+ * plugins plus ma-prompt-template-plugin (`prompts.template`).
  */
-export function textFixturesRequired(
-  env: Record<string, string | undefined> = process.env,
-): boolean {
-  if (env.MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES === "1") return true
-  const ci = env.CI?.trim().toLowerCase()
-  return ci !== undefined && ci !== "" && ci !== "0" && ci !== "false"
-}
+export const BOOT_TEXT_PLUGINS = [...TEXT_PLUGINS, "ma-prompt-template-plugin"] as const
 
 const LOADER: PluginLoader | null = await loadTextLoader()
 
-if (LOADER === null) {
-  const missing = TEXT_PLUGINS.filter((dir) => !siblingPluginPresent(dir))
+// The guard covers BOOT_TEXT_PLUGINS (a superset of TEXT_PLUGINS): the
+// providers need the text plugins, and `textPluginDirs()` (a spawned CLI
+// boot) also needs the template plugin. A test that skips on either one is
+// covered.
+const MISSING: readonly string[] = BOOT_TEXT_PLUGINS.filter((dir) => !siblingPluginPresent(dir))
+
+if (MISSING.length > 0) {
   const reason =
-    `the text plugins (${missing.join(", ")}) are missing in ${SIBLING_REPO_ROOT}.` +
+    `the text plugins (${MISSING.join(", ")}) are missing in ${SIBLING_REPO_ROOT}.` +
     " Set MA_PLUGINS_DIR, or clone minimal-agent-plugins next to this repo."
-  if (textFixturesRequired()) {
+  const trigger = textFixturesTrigger()
+  if (trigger !== null) {
     // Thrown at module load: every test file that imports this helper fails.
-    throw new Error(
-      `[text-fixture-providers] FAIL: MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1 or CI is set, and ${reason}`,
-    )
+    throw new Error(`[text-fixture-providers] FAIL: ${trigger} is set, and ${reason}`)
   }
   console.warn(
     `[text-fixture-providers] WARNING: SKIP the text tests: ${reason} Set MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1 to make this a failure.`,
@@ -85,17 +87,12 @@ export function textFixturesPresent(): boolean {
 }
 
 /**
- * The plugins a CLI boot needs to pass the text contract check: the text
- * plugins plus ma-prompt-template-plugin (`prompts.template`).
- */
-export const BOOT_TEXT_PLUGINS = [...TEXT_PLUGINS, "ma-prompt-template-plugin"] as const
-
-/**
  * Absolute directories of {@link BOOT_TEXT_PLUGINS} in the sibling checkout,
- * for the plugin root of a spawned CLI. `[]` when any one is absent.
+ * for the plugin root of a spawned CLI. `[]` when any one is absent (the load
+ * guard has then already warned, or thrown under CI or the require flag).
  */
 export function textPluginDirs(): string[] {
-  if (!BOOT_TEXT_PLUGINS.every((dir) => siblingPluginPresent(dir))) return []
+  if (MISSING.length > 0) return []
   return BOOT_TEXT_PLUGINS.map((dir) => join(SIBLING_REPO_ROOT, dir))
 }
 

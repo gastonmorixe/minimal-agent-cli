@@ -16,8 +16,10 @@
  *
  * The fixture provider counts the real cut-off note in each request, so
  * the CLI loads the real text plugins (from the sibling plugins checkout)
- * next to the fixture provider, not the text stub. The test skips when the
- * checkout is absent.
+ * next to the fixture provider, not the text stub. The test skips when one
+ * of `BOOT_TEXT_PLUGINS` is absent, except under `CI` or
+ * `MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1`: then the text fixture helper fails
+ * the file at load.
  *
  * @module startup/resume-cutoff.test
  */

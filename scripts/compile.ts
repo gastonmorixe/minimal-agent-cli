@@ -426,7 +426,7 @@ async function buildTo(
  * a release archive. `MA_PLUGINS_DIR` overrides it.
  */
 const PLUGINS_CHECKOUT = resolve(
-  process.env.MA_PLUGINS_DIR ?? resolve(CLI_DIR, "..", "minimal-agent-plugins"),
+  process.env.MA_PLUGINS_DIR || resolve(CLI_DIR, "..", "minimal-agent-plugins"),
 )
 
 /** Where the generated table is written (gitignored `tmp/`). */
