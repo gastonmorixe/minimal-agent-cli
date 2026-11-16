@@ -129,8 +129,10 @@ function buildCore(): AgentCore {
     },
     toolExecutor: { execute: async () => ({ content: TOOL_OUTPUT, isError: false }) },
     promptContributors: [{ systemPromptBlocks: () => [{ type: "text", text: SESSION_CONTEXT }] }],
-    // Keep the dump small: no instructions block.
+    // Keep the dump small: no instructions block. Core has no default
+    // identity text, so the test sets a fixed one (the first system block).
     systemPromptOverrides: {
+      identity: { kind: "replace", text: "You are a test agent." },
       instructions: { kind: "omit" },
       loopSafety: { kind: "omit" },
       toolOutputConventions: { kind: "omit" },
