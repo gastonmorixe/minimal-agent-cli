@@ -180,12 +180,18 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
   // sits on the clipboard) becomes a `[Image #id WxH size]` token instead of
   // literal text. The submit path (agent.run) resolves the token to an image
   // block. See src/media/paste-intercept.ts.
-  editor.setPasteInterceptor((pasted) => mediaPasteInterceptor(pasted))
+  // The plugin text resolver owns the media rejection text of a paste.
+  const pasteText = hasPlugins ? loader.syntheticText() : undefined
+  editor.setPasteInterceptor((pasted) =>
+    mediaPasteInterceptor(pasted, undefined, undefined, pasteText),
+  )
   // Ctrl+V: pull the system clipboard ourselves. Prefer an image (the
   // interceptor's empty-paste branch captures a clipboard image and returns
   // an `[Image #id …]` token); else paste clipboard text. This covers
   // terminals/OSes where Cmd+V is swallowed and never reaches us.
-  editor.setClipboardPasteHandler(() => mediaPasteInterceptor("") ?? clipboardText())
+  editor.setClipboardPasteHandler(
+    () => mediaPasteInterceptor("", undefined, undefined, pasteText) ?? clipboardText(),
+  )
   // Restore the unsent draft (if any) into the editor buffer. This is
   // the resume-time twin of the abort-flow's setBuffer call in the REPL
   // (search "setBuffer" in the abort branch under `src/host/`) — same visual

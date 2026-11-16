@@ -201,23 +201,33 @@ export function withAppendContributor<C extends object>(
 
 /**
  * The synthetic and tool text providers for a runtime session (B1). An
- * explicit deps value wins. Else the loader's providers. Same default as
- * core `buildAgentCore`, which this path does not go through.
+ * explicit deps value wins. Else the loader's providers and the loader's
+ * one resolver, so the session core does not build a second resolver.
+ * Same default as core `buildAgentCore`, which this path does not go through.
  */
 export function textProvidersOf(
   deps: Pick<BuildAgentCoreDeps, "loader" | "syntheticTextProviders" | "toolTextProviders">,
-): Pick<BuildAgentCoreDeps, "syntheticTextProviders" | "toolTextProviders"> {
+): Partial<
+  Pick<
+    ResumeSessionOptions,
+    "syntheticTextProviders" | "syntheticTextResolver" | "toolTextProviders"
+  >
+> {
   const loader = deps.loader
+  const fromLoader = deps.syntheticTextProviders === undefined
   const synthetic =
     deps.syntheticTextProviders ??
     (typeof loader?.syntheticTextProviders === "function"
       ? loader.syntheticTextProviders()
       : undefined)
+  const resolver =
+    fromLoader && typeof loader?.syntheticText === "function" ? loader.syntheticText() : undefined
   const tool =
     deps.toolTextProviders ??
     (typeof loader?.toolTextProviders === "function" ? loader.toolTextProviders() : undefined)
   return {
     ...(synthetic ? { syntheticTextProviders: synthetic } : {}),
+    ...(resolver ? { syntheticTextResolver: resolver } : {}),
     ...(tool ? { toolTextProviders: tool } : {}),
   }
 }
@@ -392,6 +402,12 @@ export class InteractiveSession implements ReplAgentLike {
     const transcript = new TranscriptRouter(deps.writeTranscript)
     const runPorts = new RunPortState()
     const session = await openInteractiveSession(deps, transcript.write, runPorts)
+    // This path skips core assemble.ts, so bind the mode text here. A
+    // resolver passed to the ModeManager constructor still wins.
+    const modes = deps.modeManager
+    if (typeof modes?.bindSyntheticText === "function") {
+      modes.bindSyntheticText(session.agentCore().syntheticText)
+    }
     return new InteractiveSession(
       session,
       deps.loader,
