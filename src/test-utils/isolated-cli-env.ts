@@ -18,6 +18,13 @@
 // can reach the network. Measured: e2e-smoke "one-shot prompt" (`--header`)
 // timed out at 5 s with it on, and took about 1 s with it off.
 //
+// The base env loses every `MINIMAL_AGENT_*` key (`cleanSpawnEnv`). The agent
+// harness exports keys such as `MINIMAL_AGENT_SUBAGENT_RESULT_PATH`,
+// `MINIMAL_AGENT_BIN_DIR`, `MINIMAL_AGENT_SESSION_ID` and `MINIMAL_AGENT_MODEL`.
+// Some point into the real `~/.minimal-agent`, and the others make the child a
+// pretend sub-agent of the running lead. A test adds back only the keys it
+// sets itself, after the spread.
+//
 // Spread `env` first and the test keys after it. Do not override `HOME` or
 // `MINIMAL_AGENT_HOME` after it. Call `cleanup()` in `afterAll`.
 // The ratchet `spawn-home-isolation.ratchet.test.ts` enforces this.
@@ -26,6 +33,7 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { cleanSpawnEnv } from "../e2e/clean-spawn-env.ts"
 import { tempHomeSpawnEnv } from "./temp-home-env.ts"
 
 /** The env and the temp dirs of one isolated CLI home. */
@@ -34,7 +42,7 @@ export interface IsolatedCliEnv {
   readonly home: string
   /** `<home>/.minimal-agent`, the agent home of the child. */
   readonly agentHome: string
-  /** The child env: base, then the temp home keys. */
+  /** The child env: base without `MINIMAL_AGENT_*`, then the temp home keys. */
   readonly env: Record<string, string | undefined>
   /** Remove the temp HOME. Best effort, never throws. */
   cleanup(): void
@@ -42,7 +50,7 @@ export interface IsolatedCliEnv {
 
 /** Options for {@link isolatedCliEnv}. */
 export interface IsolatedCliEnvOptions {
-  /** The env to start from. Default `process.env`. Pass `cleanSpawnEnv()` to drop `MINIMAL_AGENT_*`. */
+  /** The env to start from. Default `process.env`. Every `MINIMAL_AGENT_*` key of it is dropped. */
   readonly base?: Record<string, string | undefined>
   /** The mkdtemp prefix. Default `ma-cli-home-`. */
   readonly prefix?: string
@@ -53,7 +61,7 @@ export function isolatedCliEnv(options: IsolatedCliEnvOptions = {}): IsolatedCli
   const home = mkdtempSync(join(tmpdir(), options.prefix ?? "ma-cli-home-"))
   const agentHome = join(home, ".minimal-agent")
   const env: Record<string, string | undefined> = {
-    ...(options.base ?? process.env),
+    ...cleanSpawnEnv(options.base ?? process.env),
     ...tempHomeSpawnEnv(),
     MINIMAL_AGENT_NO_BINARY_SETUP: "1",
     HOME: home,

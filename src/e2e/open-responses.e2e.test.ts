@@ -71,6 +71,9 @@ async function runOrCli(
       MINIMAL_AGENT_PROVIDER: "opencode-go",
       MINIMAL_AGENT_MODEL: "qwen3.7-plus",
       ...env,
+      // Last, so a caller key can never point the child at the real home.
+      HOME: ISO.home,
+      MINIMAL_AGENT_HOME: ISO.agentHome,
     },
   })
   const [exitCode, stdout, stderr] = await Promise.all([
