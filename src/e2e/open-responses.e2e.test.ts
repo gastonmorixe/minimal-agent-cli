@@ -20,11 +20,17 @@
  * @module e2e/open-responses.e2e.test
  */
 
-import { describe, expect, it } from "bun:test"
+import { afterAll, describe, expect, it } from "bun:test"
 
+import { isolatedCliEnv } from "../test-utils/isolated-cli-env.ts"
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
 
 const HAVE_PROVIDER = siblingPluginPresent("ma-llm-opencode-go-plugin")
+
+// The child writes its session and logs under a temp agent home, never the
+// real ~/.minimal-agent of the developer (see test-utils/isolated-cli-env.ts).
+const ISO = isolatedCliEnv({ prefix: "ma-e2e-open-responses-home-" })
+afterAll(() => ISO.cleanup())
 
 const OR_ARGS = [
   "--bare",
@@ -57,7 +63,7 @@ async function runOrCli(
     stderr: "pipe",
     timeout: 15000,
     env: {
-      ...process.env,
+      ...ISO.env,
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",
       MINIMAL_AGENT_TRANSPORT: "test",

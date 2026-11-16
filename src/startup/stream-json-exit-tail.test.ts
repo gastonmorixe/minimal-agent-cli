@@ -18,10 +18,16 @@
  * @module host/startup/stream-json-exit-tail.test
  */
 
-import { describe, expect, it } from "bun:test"
+import { afterAll, describe, expect, it } from "bun:test"
 import { join } from "node:path"
 
+import { isolatedCliEnv } from "../test-utils/isolated-cli-env.ts"
+
 const CHILD = join(import.meta.dir, "fixtures", "stream-json-exit-child.ts")
+// The child opens a session without `persist`, so it should write nothing
+// under the agent home. A temp home makes sure of it anyway.
+const ISO = isolatedCliEnv({ prefix: "ma-exit-tail-home-" })
+afterAll(() => ISO.cleanup())
 const RUNS = 5
 
 /** Read a stream with a 5 ms pause between reads, like a slow consumer. */
@@ -44,6 +50,7 @@ async function runChild(bytes: number): Promise<{ exitCode: number; stdout: stri
   const p = Bun.spawn(["bun", "run", CHILD, String(bytes)], {
     stdout: "pipe",
     stderr: "ignore",
+    env: ISO.env,
   })
   const hang = Bun.sleep(END_BY_ITSELF_MS).then(() => "hang" as const)
   const done = Promise.all([p.exited, readSlowly(p.stdout)])

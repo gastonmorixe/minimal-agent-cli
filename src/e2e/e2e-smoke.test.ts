@@ -1,9 +1,10 @@
-import { describe, expect, it } from "bun:test"
+import { afterAll, describe, expect, it } from "bun:test"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { TOOL_PRESENTATION } from "../plugins-ui/tool-presentation.ts"
+import { isolatedCliEnv } from "../test-utils/isolated-cli-env.ts"
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
 import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 import { cleanSpawnEnv } from "./clean-spawn-env.ts"
@@ -12,6 +13,16 @@ import { cleanSpawnEnv } from "./clean-spawn-env.ts"
 // sibling plugins repo. On a bare core checkout (core CI) it is absent, so
 // they skip (see test-utils/sibling-repo.ts). The umbrella checkout runs them.
 const HAVE_PROVIDER = siblingPluginPresent("ma-llm-opencode-go-plugin")
+
+// Every child gets a temp agent home, so no test writes sessions or logs into
+// the real ~/.minimal-agent of the developer (see test-utils/isolated-cli-env.ts).
+// The "hides the startup tree" test below makes its own home on purpose.
+const HELP_ISO = isolatedCliEnv({ base: cleanSpawnEnv(), prefix: "ma-smoke-help-home-" })
+const PROMPT_ISO = isolatedCliEnv({ base: cleanSpawnEnv(), prefix: "ma-smoke-prompt-home-" })
+afterAll(() => {
+  HELP_ISO.cleanup()
+  PROMPT_ISO.cleanup()
+})
 
 async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
   if (!stream) return ""
@@ -28,6 +39,7 @@ describe("CLI smoke", () => {
       // Generous spawn ceiling so the subprocess isn't SIGKILLed under heavy
       // parallel test load (the timing budget is asserted separately below).
       timeout: 20000,
+      env: HELP_ISO.env,
     })
     expect(await p.exited).toBe(0)
     // The budget is CPU time of the child, not wall-clock time. Wall-clock
@@ -61,7 +73,7 @@ describe("CLI smoke", () => {
           // Generous ceiling so the child isn't SIGKILLed under parallel load.
           timeout: 20000,
           env: {
-            ...cleanSpawnEnv(),
+            ...PROMPT_ISO.env,
             NODE_ENV: "test",
             MINIMAL_AGENT_TEST_AUTH: "1",
             MINIMAL_AGENT_TRANSPORT: "test",

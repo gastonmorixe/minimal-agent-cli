@@ -9,10 +9,11 @@
  * @module startup/help-every-path.test
  */
 
-import { describe, expect, test } from "bun:test"
+import { afterAll, describe, expect, test } from "bun:test"
 import { join } from "node:path"
 
 import { builtinRegistry } from "../cli/registry/index.ts"
+import { isolatedCliEnv } from "../test-utils/isolated-cli-env.ts"
 import { visibleCommandPaths } from "../ui/help/model.ts"
 import { prepareEntrypointArgs } from "./entry-args.ts"
 
@@ -68,7 +69,7 @@ describe("every visible path --help (V-6, in process)", () => {
 })
 
 /** Env of a real run: no debug, plugins on, not CI, no color. */
-function spawnEnv(): Record<string, string> {
+function baseEnv(): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) {
     if (v !== undefined && k !== "DEBUG" && k !== "MINIMAL_AGENT_DISABLE_PLUGINS" && k !== "CI") {
@@ -80,10 +81,15 @@ function spawnEnv(): Record<string, string> {
   return env
 }
 
+// The child gets a temp agent home, never the real ~/.minimal-agent of the
+// developer (see test-utils/isolated-cli-env.ts).
+const ISO = isolatedCliEnv({ base: baseEnv(), prefix: "ma-help-path-home-" })
+afterAll(() => ISO.cleanup())
+
 async function spawnBin(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   const p = Bun.spawn(["bun", "src/index.ts", ...args], {
     cwd: REPO_ROOT,
-    env: spawnEnv(),
+    env: ISO.env,
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
