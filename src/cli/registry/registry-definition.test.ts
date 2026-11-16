@@ -286,8 +286,8 @@ describe("global flags", () => {
 })
 
 describe("env", () => {
-  test("46 visible rows, as in root help", () => {
-    expect(reg.env.filter((e) => e.hidden !== true).length).toBe(46)
+  test("47 visible rows, as in root help", () => {
+    expect(reg.env.filter((e) => e.hidden !== true).length).toBe(47)
   })
 
   test("18 visible rows carry a value hint (NAME=1 or NAME=0)", () => {
