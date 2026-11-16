@@ -16,6 +16,7 @@ import { queueFilePath } from "@minimal-agent/core/host/queue-store"
 import { StatusBus } from "@minimal-agent/core/host/status-bus"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
+import type { HookContextEntry } from "@minimal-agent/core/sdk/lifecycle"
 import { EditorController } from "./editor-controller.ts"
 import { type ReplAgentLike, runRepl } from "./repl.ts"
 import { Compositor } from "./ui/compositor.ts"
@@ -55,7 +56,7 @@ afterEach(() => {
 })
 
 /** A plugin-less loader (missing roots) whose `turn.willStart` chain is replaced. */
-async function contextLoader(sid: string, seen: unknown[], ctx: string[]): Promise<PluginLoader> {
+async function contextLoader(sid: string, seen: unknown[], ctx: unknown[]): Promise<PluginLoader> {
   const missing = join(process.cwd(), "tmp", `no-plugins-${randomUUID()}`)
   const real = await PluginLoader.load({
     bus: new EventBus(),
@@ -102,16 +103,17 @@ function fakeModes(activeId: string): ModeManager {
   } as unknown as ModeManager
 }
 
-async function runOneTurn(ctx: string[]) {
+async function runOneTurn(ctx: unknown[]) {
   const sid = `ma-tws-${randomUUID()}`
   sids.push(sid)
   const seen: unknown[] = []
-  const runs: Array<{ text: string; additionalContext: string[] | undefined }> = []
+  const runs: Array<{ text: string; additionalContext: readonly HookContextEntry[] | undefined }> =
+    []
   const loader = await contextLoader(sid, seen, ctx)
   const agent: ReplAgentLike = {
     pluginLoader: () => loader,
     modes: () => fakeModes("plan"),
-    async *run(text: string, opts?: { additionalContext?: string[] }) {
+    async *run(text: string, opts?: { additionalContext?: readonly HookContextEntry[] }) {
       runs.push({ text, additionalContext: opts?.additionalContext })
       yield "ok\n"
       return { blocks: [], text: "ok\n", stopReason: "end_turn" } as never
@@ -153,6 +155,12 @@ describe("runReplLiveArea turn.willStart", () => {
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({ text: "hello", agentMode: "plan" })
     expect(runs).toEqual([{ text: "hello", additionalContext: ["TURN-CTX"] }])
+  })
+
+  it("object entries reach the run unchanged, malformed ones are dropped (F7)", async () => {
+    const before: HookContextEntry = { text: "B", position: "before" }
+    const { runs } = await runOneTurn([before, "A", { text: "X", position: "middle" }, 3])
+    expect(runs).toEqual([{ text: "hello", additionalContext: [before, "A"] }])
   })
 
   it("no context: the run gets no additionalContext", async () => {

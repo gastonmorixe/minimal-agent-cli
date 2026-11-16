@@ -39,6 +39,7 @@ import { ToolRegistryAdapter } from "@minimal-agent/core/host-kit/tool-registry-
 import type { ManifestMode } from "@minimal-agent/core/plugin-api/types/plugin"
 import type { TurnResult } from "@minimal-agent/core/sdk/agent-core"
 import type { AgentEvent } from "@minimal-agent/core/sdk/events"
+import type { HookContextEntry } from "@minimal-agent/core/sdk/lifecycle"
 import type { Message } from "@minimal-agent/core/sdk/messages"
 import type { InputQueuePort } from "@minimal-agent/core/sdk/ports"
 import type { PreflightIssue } from "@minimal-agent/core/sdk/provider"
@@ -458,8 +459,8 @@ export class InteractiveSession implements ReplAgentLike {
       askUser?: (issue: PreflightIssue) => Promise<string | null>
       /** Continue the unfinished turn at its next round (S50). `userText` is not used. */
       resume?: boolean
-      /** Hook context lines (`turn.willStart`) that go after the prompt in this turn. */
-      additionalContext?: string[]
+      /** Hook context entries (`turn.willStart`) for this turn, passed unchanged to the core. */
+      additionalContext?: HookContextEntry[]
     },
   ): AsyncGenerator<string, TurnResult, undefined> {
     const pump = new TurnRenderPump(opts?.signal)

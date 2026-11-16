@@ -88,6 +88,7 @@ import {
   STREAM_JSON_EVENT_KINDS,
   serializeEvent,
 } from "@minimal-agent/core/sdk/events"
+import type { HookContextEntry } from "@minimal-agent/core/sdk/lifecycle"
 import { extractPromptFromArgs } from "../cli/extract-prompt.ts"
 import { type OutputFormat, resolveStdioMode, type StdioMode } from "../cli/output-format.ts"
 import { retryBoundaryText } from "../logging/retry-boundary-text.ts"
@@ -379,7 +380,7 @@ function armRunOutputSchema(session: Session, schema: object): void {
  */
 async function runCoreEventStream(
   input: RunNonInteractivePromptInput,
-  turnContext: readonly string[] = [],
+  turnContext: readonly HookContextEntry[] = [],
 ): Promise<void> {
   // The host may install the guard at boot. Otherwise this run installs it
   // and removes it at the end.
@@ -396,7 +397,7 @@ async function runCoreEventStream(
 async function runGuardedEventStream(
   input: RunNonInteractivePromptInput,
   guard: JsonStdioGuard,
-  turnContext: readonly string[],
+  turnContext: readonly HookContextEntry[],
 ): Promise<void> {
   const write = input.stdout ?? guard.write
   // Never call process.exit after writing the stream. On a slow pipe reader,
@@ -593,7 +594,7 @@ function writeResultLine(
  */
 async function runEventStreamTurn(
   session: Session,
-  turn: { text: string; resume: boolean; additionalContext?: readonly string[] },
+  turn: { text: string; resume: boolean; additionalContext?: readonly HookContextEntry[] },
   out: {
     write: (chunk: string) => void
     keep: ReadonlySet<string>
