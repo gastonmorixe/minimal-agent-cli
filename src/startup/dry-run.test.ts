@@ -6,6 +6,8 @@
 
 import { describe, expect, test } from "bun:test"
 
+import { LifecycleDeniedError } from "@minimal-agent/core/errors"
+
 import {
   DRY_RUN_PLUGIN_ID,
   dryRunEnableIds,
@@ -17,11 +19,9 @@ import {
   startDryRun,
 } from "./dry-run.ts"
 
-/** The shape core throws for a halted send (`LifecycleSendDeniedError`). */
-function sendDenied(reason = "dry-run: request built and printed, not sent"): Error {
-  const err = new Error(reason)
-  err.name = "LifecycleSendDeniedError"
-  return err
+/** What core throws for a halted send: a `LifecycleDeniedError` with hook `message.willSend`. */
+function sendDenied(reason = "dry-run: request built and printed, not sent"): LifecycleDeniedError {
+  return new LifecycleDeniedError({ hook: "message.willSend", reason, pluginId: "dry-run" })
 }
 
 describe("isDryRun", () => {
@@ -50,19 +50,38 @@ describe("dryRunEnableIds", () => {
 })
 
 describe("isDryRunHalt", () => {
-  test("true for a LifecycleSendDeniedError", () => {
+  test("true for a LifecycleDeniedError of message.willSend with the plugin reason", () => {
     expect(isDryRunHalt(sendDenied())).toBe(true)
   })
-  test("true when the direct cause is a LifecycleSendDeniedError", () => {
+  test("true when the direct cause is that LifecycleDeniedError", () => {
     expect(isDryRunHalt(new Error("wrapped", { cause: sendDenied() }))).toBe(true)
   })
   test("false for a plain error, a non-error, and a deeper cause", () => {
     expect(isDryRunHalt(new Error("boom"))).toBe(false)
-    expect(isDryRunHalt("LifecycleSendDeniedError")).toBe(false)
-    expect(isDryRunHalt({ name: "LifecycleSendDeniedError" })).toBe(false)
+    expect(isDryRunHalt("LifecycleDeniedError")).toBe(false)
+    expect(isDryRunHalt({ name: "LifecycleDeniedError" })).toBe(false)
     expect(isDryRunHalt(undefined)).toBe(false)
     const deep = new Error("outer", { cause: new Error("mid", { cause: sendDenied() }) })
     expect(isDryRunHalt(deep)).toBe(false)
+  })
+  test("matches on kind and fields, not on name or message", () => {
+    // The CoreError message is always "": the old name+message match would fail.
+    expect(sendDenied().message).toBe("")
+    expect(isDryRunHalt(sendDenied().toJSON())).toBe(true)
+    const named = new Error("dry-run: request built and printed, not sent")
+    named.name = "LifecycleSendDeniedError"
+    expect(isDryRunHalt(named)).toBe(false)
+  })
+  test("false for a deny with no reason, or on another hook", () => {
+    expect(isDryRunHalt(new LifecycleDeniedError({ hook: "message.willSend" }))).toBe(false)
+    expect(
+      isDryRunHalt(
+        new LifecycleDeniedError({
+          hook: "compact.willRun",
+          reason: "dry-run: request built and printed, not sent",
+        }),
+      ),
+    ).toBe(false)
   })
   test("false for a send halt from another hook (security/policy deny)", () => {
     expect(isDryRunHalt(sendDenied("secrets found in the payload"))).toBe(false)
