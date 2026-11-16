@@ -27,6 +27,7 @@ import {
   type PluginPromptSuppression,
   resolvePluginPromptSuppression,
 } from "@minimal-agent/core/host/plugin-prompt-resolution"
+import type { StartupProfile } from "@minimal-agent/core/plugin-api/types/startup-profile"
 
 /** What {@link resolvePluginPromptsForCli} returns. */
 export interface PluginPromptsResolution {
@@ -116,15 +117,21 @@ export function resolvePluginPromptsForCli(
  * @param args - Normalized argv.
  * @param env - The process env. `MINIMAL_AGENT_PLUGIN_PROMPTS` is read here.
  * @param warn - Sink for the warnings (the host passes `diag.warn`).
+ * @param profile - The lead's resolved value from `--startup-profile`. When
+ *   set, it replaces the env and config tiers. The CLI tier still wins.
  */
 export function resolvePluginPromptsForBoot(
   args: readonly string[],
   env: PluginPromptsEnv,
   warn: PluginPromptsWarn,
+  profile?: StartupProfile["pluginPrompts"],
 ): PluginPromptSuppression {
   const resolved = resolvePluginPromptSuppression({
-    config: loadPluginPromptsConfig(),
-    env: env.MINIMAL_AGENT_PLUGIN_PROMPTS,
+    config:
+      profile !== undefined
+        ? { all: profile.all, keep: profile.keep, suppress: profile.suppress }
+        : loadPluginPromptsConfig(),
+    env: profile !== undefined ? undefined : env.MINIMAL_AGENT_PLUGIN_PROMPTS,
     cli: pluginPromptsCliTier(args),
   })
   emitWarnings(resolved.warnings, warn)

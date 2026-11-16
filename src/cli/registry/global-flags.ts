@@ -651,6 +651,18 @@ const SESSION_FLAGS: readonly FlagSpec[] = [
     hidden: true,
     global: true,
   },
+  {
+    // Internal: a sub-agent spawn passes the lead's startup profile. The
+    // profile replaces the env and config tiers. Explicit flags still win.
+    name: "startup-profile",
+    type: "string",
+    value: "required",
+    valueName: "path",
+    summary: "Boot with the startup settings of a lead session",
+    group: "session",
+    hidden: true,
+    global: true,
+  },
 ]
 
 // ---------------------------------------------------------------------------
