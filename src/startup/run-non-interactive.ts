@@ -301,7 +301,7 @@ export interface RunNonInteractivePromptInput {
    */
   readonly orStream?: boolean
   /**
-   * `--dry-run`: the dry-run plugin halts the send (`LifecycleSendDeniedError`).
+   * `--dry-run`: the dry-run plugin halts the send (`LifecycleDeniedError`).
    * That halt is the expected end, so the run exits 0 with one stderr line.
    * Default false: the halt is a failure, as before.
    */

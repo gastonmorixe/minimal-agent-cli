@@ -4,8 +4,8 @@
  *
  * The flag is an alias of `--enable-plugin dry-run`. The plugin
  * (`ma-dry-run-plugin`) has one `message.willSend` hook. It writes the
- * request and halts the send, so core throws `LifecycleSendDeniedError`
- * and the transport never runs.
+ * request and halts the send, so core throws a `LifecycleDeniedError`
+ * (hook `message.willSend`) and the transport never runs.
  *
  * The CLI fails closed: when the flag is on and the plugin did not load,
  * the run stops before any model call. Without that check, a missing plugin
@@ -33,8 +33,11 @@ export const DRY_RUN_OUT_ENV = "MINIMAL_AGENT_DRY_RUN_OUT"
 /** The stderr line for a clean dry-run end (exit 0). */
 export const DRY_RUN_DONE_MESSAGE = "dry-run: request built and printed, not sent"
 
-/** The error name core gives a send that a `message.willSend` hook halted. */
-const SEND_DENIED_ERROR_NAME = "LifecycleSendDeniedError"
+/** The error kind core gives an operation that a lifecycle hook denied. */
+const LIFECYCLE_DENIED_KIND = "LifecycleDeniedError"
+
+/** The hook of a send deny. */
+const SEND_HOOK = "message.willSend"
 
 /** Env shape these helpers read. */
 type Env = Readonly<Record<string, string | undefined>>
@@ -51,16 +54,35 @@ export function dryRunEnableIds(args: readonly string[], env: Env): string[] {
 
 /**
  * True when `value` is the dry-run plugin's own send halt: a
- * `LifecycleSendDeniedError` whose message is the plugin's halt reason.
- * A halt from another hook (a security or policy deny) does not match, so
- * it stays a real failure and the dry run does not claim a dump.
+ * `LifecycleDeniedError` (matched on `kind`) of hook `message.willSend`
+ * whose `reason` field is the plugin's halt reason. A halt from another
+ * hook (a security or policy deny) does not match, so it stays a real
+ * failure and the dry run does not claim a dump.
  */
 function isSendDenied(value: unknown): boolean {
+  const json = errorJson(value)
   return (
-    value instanceof Error &&
-    value.name === SEND_DENIED_ERROR_NAME &&
-    value.message === DRY_RUN_DONE_MESSAGE
+    json !== undefined &&
+    json.kind === LIFECYCLE_DENIED_KIND &&
+    json.fields.hook === SEND_HOOK &&
+    json.fields.reason === DRY_RUN_DONE_MESSAGE
   )
+}
+
+/**
+ * The `{ kind, fields }` of a core error: from `toJSON()` on a `CoreError`
+ * instance, or the value itself when it already has that shape.
+ */
+function errorJson(
+  value: unknown,
+): { kind: unknown; fields: Readonly<Record<string, unknown>> } | undefined {
+  if (value === null || typeof value !== "object") return undefined
+  const v = value as { toJSON?: unknown; kind?: unknown; fields?: unknown }
+  const json: unknown = typeof v.toJSON === "function" && "kind" in v ? v.toJSON() : v
+  if (json === null || typeof json !== "object") return undefined
+  const { kind, fields } = json as { kind?: unknown; fields?: unknown }
+  if (fields === null || typeof fields !== "object") return undefined
+  return { kind, fields: fields as Readonly<Record<string, unknown>> }
 }
 
 /**

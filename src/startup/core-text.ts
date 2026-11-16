@@ -138,12 +138,50 @@ export const coreCompactErrorRenderer: ErrorRenderer = {
   render: (err) => (err.kind === "CompactNoProviderError" ? COMPACT_NO_PROVIDER_TEXT : undefined),
 }
 
+function optText(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() !== "" ? v.trim() : undefined
+}
+
+/**
+ * CLI text of a `LifecycleDeniedError`: a lifecycle hook (for example
+ * `message.willSend` or `compact.willRun`) denied the operation. The text
+ * uses only the fields: the hook name, the plugin id, the tool name, the
+ * facts of a failed approval hook, and the reason that the hook gave. When
+ * the hook gave no reason, the text gives no reason.
+ */
+export function lifecycleDeniedText(err: CoreErrorJson): string {
+  const f = err.fields
+  const hook = optText(f.hook) ?? "lifecycle"
+  const pluginId = optText(f.pluginId)
+  const tool = optText(f.tool)
+  const reason = optText(f.reason)
+  let text = `The ${hook} hook denied the operation`
+  if (pluginId !== undefined) text += ` (plugin ${pluginId})`
+  if (tool !== undefined) text += ` for the tool ${tool}`
+  const failure = f.failure
+  if (failure !== null && typeof failure === "object" && !Array.isArray(failure)) {
+    const label = optText((failure as { label?: unknown }).label)
+    const detail = optText((failure as { detail?: unknown }).detail)
+    text +=
+      label !== undefined ? `. The approval hook "${label}" failed` : ". The approval hook failed"
+    if (detail !== undefined) text += ` (${detail})`
+  }
+  return reason !== undefined ? `${text}: ${reason}` : `${text}.`
+}
+
+/** The host renderer for lifecycle hook denies. */
+export const coreLifecycleErrorRenderer: ErrorRenderer = {
+  kinds: ["LifecycleDeniedError"],
+  render: (err) => (err.kind === "LifecycleDeniedError" ? lifecycleDeniedText(err) : undefined),
+}
+
 /** Make a registry that holds the CLI renderers (owner "host"). */
 export function createCliErrorRegistry(): ErrorRendererRegistry {
   const registry = createErrorRendererRegistry()
   registry.register(coreAuthErrorRenderer, HOST_OWNER_ID)
   registry.register(coreBootErrorRenderer, HOST_OWNER_ID)
   registry.register(coreCompactErrorRenderer, HOST_OWNER_ID)
+  registry.register(coreLifecycleErrorRenderer, HOST_OWNER_ID)
   return registry
 }
 
@@ -169,15 +207,17 @@ export function failureText(what: string, err: unknown): string {
 /**
  * Text of an error event or a `failed` stop cause. Core sends `error` (kind and
  * fields) for a CoreError and an empty `message`. A known kind gets its CLI
- * text. Any other event gives its `message`.
+ * text. A kind with no CLI text and an empty `message` gives the kind, so
+ * the line is never empty. Any other event gives its `message`.
  */
 export function errorEventText(ev: {
   readonly message: string
   readonly error?: { readonly kind: string; readonly fields: Readonly<Record<string, unknown>> }
 }): string {
   if (ev.error !== undefined) {
-    const text = renderCoreError({ kind: ev.error.kind, fields: ev.error.fields } as CoreErrorJson)
+    const text = registry.render({ kind: ev.error.kind, fields: ev.error.fields } as CoreErrorJson)
     if (text !== undefined) return text
+    if (ev.message === "") return ev.error.kind
   }
   return ev.message
 }
