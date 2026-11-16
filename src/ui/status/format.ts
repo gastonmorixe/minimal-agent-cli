@@ -66,6 +66,35 @@ export function displayLabelFor(label: string, activity: StatusActivity | undefi
   }
 }
 
+/**
+ * Which way data flows for one activity. The network tracker's measured
+ * `direction` wins. Without one, the phase says it: an attempt that has
+ * started but has no response yet (`connect`, `upload`, `wait-headers`) is
+ * still sending (↑); an open stream or content block is receiving (↓).
+ *
+ * Needed because core publishes block facts on every attempt (de0a7c5),
+ * while only a NEW HTTP request gets a byte tracker. A send that reuses an
+ * open wire (Cursor's bidi Run, continued after a tool result) has a phase
+ * but never a direction, and showed the neutral `·` for both
+ * "Sending request" and "Writing response".
+ */
+export function effectiveDirection(activity: StatusActivity): StatusDirection | undefined {
+  if (activity.direction !== undefined) return activity.direction
+  switch (activity.phase) {
+    case "connect":
+    case "upload":
+    case "wait-headers":
+      return "up"
+    case "stream":
+    case "thinking":
+    case "writing":
+    case "tool-input":
+      return "down"
+    default:
+      return undefined
+  }
+}
+
 /** The stall threshold for one activity (see {@link STALL_BUDGET_FRACTION}). */
 export function stallThresholdFor(activity: StatusActivity): number {
   const budget = activity.idleBudgetMs
@@ -179,10 +208,15 @@ export interface FormatActivityOptions {
 
 /** Render the structured activity payload as a compact status-row infix. */
 export function formatActivityInfix(
-  activity: StatusActivity | undefined,
+  rawActivity: StatusActivity | undefined,
   opts: FormatActivityOptions = {},
 ): string {
-  if (!activity) return ""
+  if (!rawActivity) return ""
+  // Every reader below (arrow, stall verdict, byte/token pick, rate) sees the
+  // same direction, measured or derived from the phase.
+  const direction = effectiveDirection(rawActivity)
+  const activity: StatusActivity =
+    direction === rawActivity.direction ? rawActivity : { ...rawActivity, direction }
   const now = opts.now ?? Date.now()
   const stallThresh = opts.stallThresholdMs ?? stallThresholdFor(activity)
   const dir = activity.direction
