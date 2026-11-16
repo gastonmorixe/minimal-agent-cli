@@ -57,6 +57,12 @@ interface ReadyResponse {
 }
 
 const DEFAULT_TIMEOUT_MS = 1_000
+/**
+ * Consecutive request timeouts before highlighting gives up for the session.
+ * One slow patch is survivable (fail it, respawn, carry on); an unbounded
+ * respawn loop on an overloaded machine is not.
+ */
+const MAX_CONSECUTIVE_TIMEOUTS = 3
 const MAX_LINE_CODE_UNITS = 16 * 1024 * 1024
 
 /**
@@ -82,6 +88,12 @@ export class MdstreamCodeHighlighter implements CodeHighlighter {
   private protocol = 1
   private disabled = false
   private closing: Promise<void> | null = null
+  /**
+   * Timeouts since the last successful response. A single slow patch should
+   * cost one request; a machine where EVERY request times out must not pay a
+   * timeout plus a respawn forever, so consecutive timeouts eventually give up.
+   */
+  private consecutiveTimeouts = 0
 
   constructor(formatterArgv: readonly string[], options: MdstreamCodeHighlighterOptions = {}) {
     this.formatterArgv = [...formatterArgv]
@@ -199,11 +211,32 @@ export class MdstreamCodeHighlighter implements CodeHighlighter {
       void this.stdin!.write(line)
       await this.stdin!.flush()
 
-      const response = await withTimeout(this.readResponseLine(), this.timeoutMs)
+      let response: HighlightResponse | null
+      try {
+        response = await withTimeout(this.readResponseLine(), this.timeoutMs)
+      } catch (error) {
+        // A timeout is not corruption: the sidecar is alive but busy, and its
+        // answer is still in the pipe. Reusing the pipe would hand that stale
+        // response to the next request, so respawn and fail only THIS request.
+        // Permanent disable stays reserved for real protocol failures (closed
+        // stdout, bad JSON, id mismatch) below.
+        if (error instanceof TimeoutError) {
+          this.stopProcess()
+          // Give up only when timeouts are consecutive: a slow patch in an
+          // otherwise healthy session must not lose highlighting permanently,
+          // while a session where nothing ever answers should stop paying for
+          // a blocked second plus a respawn on every render.
+          this.consecutiveTimeouts += 1
+          if (this.consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS) this.disabled = true
+          return null
+        }
+        throw error
+      }
       if (!isHighlightResponse(response) || response.id !== id) {
         this.disable()
         return null
       }
+      this.consecutiveTimeouts = 0
       // A correlated JSON error is a valid protocol response, not stream
       // corruption. Fail this presentation request closed but keep the sidecar
       // alive so the caller can use its local compositor fallback and later raw
@@ -237,7 +270,16 @@ export class MdstreamCodeHighlighter implements CodeHighlighter {
       this.reader = proc.stdout.getReader()
       proc.unref()
       void drain(proc.stderr).catch(() => undefined)
-      void proc.exited.then(() => this.disable()).catch(() => this.disable())
+      // A sidecar we deliberately killed on timeout must not disable the client:
+      // its exit is our doing, and the next request respawns. Only an exit of
+      // the CURRENT process that we did not ask for is a protocol failure.
+      void proc.exited
+        .then(() => {
+          if (this.proc === proc) this.disable()
+        })
+        .catch(() => {
+          if (this.proc === proc) this.disable()
+        })
 
       const ready = await withTimeout(this.readJsonLine(), this.timeoutMs)
       if (!isReadyResponse(ready)) {
@@ -283,6 +325,19 @@ export class MdstreamCodeHighlighter implements CodeHighlighter {
   private disable(): void {
     if (this.disabled && !this.proc) return
     this.disabled = true
+    this.stopProcess()
+  }
+
+  /**
+   * Kill the sidecar and drop its pipe WITHOUT disabling the client.
+   *
+   * Used for a request timeout: the process is alive but slow, and its late
+   * answer is still buffered in stdout, so the next request would read a stale
+   * id. Dropping the process discards that answer, and the next call re-enters
+   * `ensureStarted` and spawns a fresh sidecar. Permanent disable stays for
+   * protocol corruption, where retrying cannot help.
+   */
+  private stopProcess(): void {
     const proc = this.proc
     const stdin = this.stdin
     this.clearProcessState()
@@ -510,9 +565,20 @@ export function lineEndsWithOpenBackground(line: string): boolean {
   return scanSgr(content)?.backgroundOpen ?? true
 }
 
+/**
+ * A request exceeded its time budget. Distinguishable from other failures
+ * because a timeout is recoverable (respawn) while protocol corruption is not.
+ */
+class TimeoutError extends Error {
+  constructor() {
+    super("mdstream highlight timeout")
+    this.name = "TimeoutError"
+  }
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("mdstream highlight timeout")), timeoutMs)
+    const timer = setTimeout(() => reject(new TimeoutError()), timeoutMs)
     timer.unref()
     promise.then(
       (value) => {

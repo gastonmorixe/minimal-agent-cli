@@ -140,8 +140,8 @@ describe("MdstreamCodeHighlighter", () => {
     await highlighter.close()
   })
 
-  it("fails closed on timeout, malformed responses, bad handshake, and child exit", async () => {
-    for (const mode of ["timeout", "malformed", "bad-ready", "exit"]) {
+  it("permanently disables on malformed responses, bad handshake, and child exit", async () => {
+    for (const mode of ["malformed", "bad-ready", "exit"]) {
       const highlighter = new MdstreamCodeHighlighter(["mdstream"], {
         spawn: fakeSpawn(mode),
         timeoutMs: 30,
@@ -150,6 +150,32 @@ describe("MdstreamCodeHighlighter", () => {
       expect(await highlighter.highlight({ language: "javascript", code: "let y" })).toBeNull()
       await highlighter.close()
     }
+  })
+
+  it("a timeout fails only that request, and the next one respawns", async () => {
+    // Regression: a timeout used to disable the client permanently, so one slow
+    // patch (a large diff easily takes over a second) silently lost
+    // highlighting for the REST OF THE SESSION, including Read. A timeout is not
+    // corruption: the sidecar is alive but busy, so the request fails closed and
+    // the next call starts a fresh sidecar rather than reading the stale answer
+    // still buffered in the old pipe.
+    const starts: string[] = []
+    let spawned = 0
+    const highlighter = new MdstreamCodeHighlighter(["mdstream"], {
+      timeoutMs: 40,
+      spawn: (argv) => {
+        starts.push(argv.join(" "))
+        // The first sidecar never answers; every later one behaves.
+        return fakeSpawn(spawned++ === 0 ? "timeout" : "normal")(argv)
+      },
+    })
+
+    expect(await highlighter.highlight({ language: "javascript", code: "let x" })).toBeNull()
+    expect(await highlighter.highlight({ language: "javascript", code: "let y" })).toBe(
+      "ANSI[javascript:let y]",
+    )
+    expect(starts.length).toBe(2)
+    await highlighter.close()
   })
 
   it("close() keeps the process alive until the warmed sidecar exits", async () => {
@@ -221,5 +247,65 @@ describe("MdstreamCodeHighlighter", () => {
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe("consecutive timeout circuit breaker", () => {
+  it("recovers from a single timeout", async () => {
+    let spawned = 0
+    const highlighter = new MdstreamCodeHighlighter(["mdstream"], {
+      timeoutMs: 40,
+      spawn: (argv) => fakeSpawn(spawned++ === 0 ? "timeout" : "normal")(argv),
+    })
+    expect(await highlighter.highlight({ language: "js", code: "let x" })).toBeNull()
+    expect(await highlighter.highlight({ language: "js", code: "let y" })).toBe("ANSI[js:let y]")
+    await highlighter.close()
+  })
+
+  it("gives up after consecutive timeouts, and a success resets the count", async () => {
+    // A machine where nothing ever answers must not pay a blocked second plus a
+    // respawn on every render forever. But TWO timeouts then a success must not
+    // disable, because the count resets. `hang-after-first` answers once, then
+    // goes silent, so one live process cannot answer across the alternation.
+    let spawned = 0
+    const highlighter = new MdstreamCodeHighlighter(["mdstream"], {
+      timeoutMs: 40,
+      spawn: (argv) => {
+        spawned++
+        // Spawn 1 answers then hangs; spawn 2 answers then hangs; ...
+        return fakeSpawn("hang-after-first")(argv)
+      },
+    })
+
+    // Spawn 1: answers `a`, hangs on `b` -> timeout #1, respawn.
+    expect(await highlighter.highlight({ language: "js", code: "a" })).toBe("ANSI[js:a]")
+    expect(await highlighter.highlight({ language: "js", code: "b" })).toBeNull()
+    // Spawn 2: answers `c` -> resets the count.
+    expect(await highlighter.highlight({ language: "js", code: "c" })).toBe("ANSI[js:c]")
+    // Spawn 2 then hangs on `d` -> timeout #1 again, not #2.
+    expect(await highlighter.highlight({ language: "js", code: "d" })).toBeNull()
+    // Spawn 3 answers `e`: proof the client is still alive after two timeouts
+    // separated by successes.
+    expect(await highlighter.highlight({ language: "js", code: "e" })).toBe("ANSI[js:e]")
+    expect(spawned).toBe(3)
+    await highlighter.close()
+  })
+
+  it("disables after three consecutive timeouts with no success between", async () => {
+    let spawned = 0
+    const highlighter = new MdstreamCodeHighlighter(["mdstream"], {
+      timeoutMs: 40,
+      spawn: (argv) => {
+        spawned++
+        return fakeSpawn("timeout")(argv)
+      },
+    })
+    for (const code of ["a", "b", "c"]) {
+      expect(await highlighter.highlight({ language: "js", code })).toBeNull()
+    }
+    // Disabled: this call does not spawn a fourth sidecar.
+    expect(await highlighter.highlight({ language: "js", code: "d" })).toBeNull()
+    expect(spawned).toBe(3)
+    await highlighter.close()
   })
 })
