@@ -23,7 +23,7 @@ import { afterAll, describe, expect, it } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
-import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
+import { SIBLING_REPO_ROOT, siblingPluginPresent } from "../test-utils/sibling-repo.ts"
 import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 
 // Needs the opencode-go provider and the dry-run plugin from the sibling
@@ -85,6 +85,9 @@ function childEnv(extra: Record<string, string>): Record<string, string> {
     MINIMAL_AGENT_TEST_RESPONSE: "PONG",
     MINIMAL_AGENT_PROVIDER: "opencode-go",
     MINIMAL_AGENT_MODEL: "qwen3.7-plus",
+    // The plugins checkout the skip check used (honors MA_PLUGINS_DIR). Without
+    // it the child probes only the implicit ../minimal-agent-plugins sibling.
+    MINIMAL_AGENT_PLUGIN_SIBLINGS: SIBLING_REPO_ROOT,
     ...extra,
   }
 }
