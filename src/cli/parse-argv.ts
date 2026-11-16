@@ -25,7 +25,7 @@ import type { SystemPromptOverrides } from "@minimal-agent/core/host/system-prom
 import type { ToolNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
 
 import type { CliUserConfig } from "../config/terminal-config.ts"
-import { resolveShowHeader } from "./non-interactive-defaults.ts"
+import { resolveHeaderFormat, resolveShowHeader } from "./non-interactive-defaults.ts"
 import { type OutputFormat, resolveOutputFormat } from "./output-format.ts"
 import { type PrintFormat, parsePrintFormat } from "./print-format.ts"
 
@@ -110,6 +110,8 @@ export interface CliOptions {
   readonly inputFormat: InputFormat
   readonly spinnerName: string | undefined
   readonly showHeader: boolean
+  /** Header template for plugins, or undefined. See `resolveHeaderFormat`. */
+  readonly headerFormat: string | undefined
   readonly effort: string | undefined
   readonly effortSource: EffortSource | undefined
   readonly thinkingDisplay: "summarized" | "omitted" | undefined
@@ -346,11 +348,13 @@ export function parseCliOptions(
   const bare = args.includes("--bare")
   const inputFormat = parseInputFormat(args)
 
-  const showHeader = resolveShowHeader({
+  const headerInputs = {
     args: [...args],
-    env: { HEADER: env.MINIMAL_AGENT_HEADER },
-    config: { header: userConfig.header },
-  })
+    env: { HEADER: env.MINIMAL_AGENT_HEADER, HEADER_FORMAT: env.MINIMAL_AGENT_HEADER_FORMAT },
+    config: { header: userConfig.header, headerFormat: userConfig.headerFormat },
+  }
+  const showHeader = resolveShowHeader(headerInputs)
+  const headerFormat = resolveHeaderFormat(headerInputs)
 
   const spinnerName = rawAfter(args, "--spinner") ?? env.MINIMAL_AGENT_SPINNER ?? userConfig.spinner
 
@@ -463,6 +467,7 @@ export function parseCliOptions(
     inputFormat,
     spinnerName,
     showHeader,
+    headerFormat,
     effort,
     effortSource,
     thinkingDisplay,

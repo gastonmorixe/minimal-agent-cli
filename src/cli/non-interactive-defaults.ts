@@ -24,8 +24,8 @@ import { extractPromptFromArgs } from "./extract-prompt.ts"
  */
 export interface ResolveInputs {
   args: readonly string[]
-  env: { HEADER?: string; MODE?: string }
-  config: { header?: boolean; mode?: string }
+  env: { HEADER?: string; MODE?: string; HEADER_FORMAT?: string }
+  config: { header?: boolean; mode?: string; headerFormat?: string }
 }
 
 /**
@@ -64,11 +64,37 @@ function readFlagValue(args: readonly string[], name: string): string | undefine
 export function resolveShowHeader(inp: ResolveInputs): boolean {
   if (inp.args.includes("--no-header")) return false
   if (inp.args.includes("--header")) return true
+  // A header template replaces the startup tree. A plugin prints it.
+  if (resolveHeaderFormat(inp) !== undefined) return false
   const env = inp.env.HEADER
   if (env === "0" || env === "false") return false
   if (env === "1" || env === "true") return true
   if (typeof inp.config.header === "boolean") return inp.config.header
   return !isNonInteractive(inp.args)
+}
+
+/**
+ * Resolve the header template text. The CLI does not read it: it hands it
+ * to plugins through `MINIMAL_AGENT_HEADER_FORMAT`, and a plugin (for
+ * example `header-template`) renders it.
+ *
+ * Precedence (highest wins):
+ *   1. `--no-header`: no template.
+ *   2. `--header-format <template>`.
+ *   3. `MINIMAL_AGENT_HEADER_FORMAT`.
+ *   4. `config.headerFormat`.
+ *
+ * A blank value counts as unset.
+ */
+export function resolveHeaderFormat(inp: ResolveInputs): string | undefined {
+  if (inp.args.includes("--no-header")) return undefined
+  const pick = (v: string | undefined): string | undefined =>
+    v !== undefined && v.trim() !== "" ? v : undefined
+  return (
+    pick(readFlagValue(inp.args, "--header-format")) ??
+    pick(inp.env.HEADER_FORMAT) ??
+    pick(inp.config.headerFormat)
+  )
 }
 
 /**

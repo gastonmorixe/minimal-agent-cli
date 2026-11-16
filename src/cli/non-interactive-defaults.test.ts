@@ -2,12 +2,43 @@ import { describe, expect, test } from "bun:test"
 
 import {
   isNonInteractive,
+  resolveHeaderFormat,
   resolveInitialModeId,
   resolveShowHeader,
 } from "./non-interactive-defaults.ts"
 
 const NO_ENV = {} as const
 const NO_CFG = {} as const
+
+describe("resolveHeaderFormat", () => {
+  const T = "%%sid.short%%"
+  test("flag > env > config, blank is unset", () => {
+    const env = { HEADER_FORMAT: "env" }
+    const config = { headerFormat: "cfg" }
+    expect(resolveHeaderFormat({ args: ["--header-format", T], env, config })).toBe(T)
+    expect(resolveHeaderFormat({ args: [], env, config })).toBe("env")
+    expect(resolveHeaderFormat({ args: [], env: { HEADER_FORMAT: " " }, config })).toBe("cfg")
+    expect(resolveHeaderFormat({ args: [], env: NO_ENV, config: NO_CFG })).toBeUndefined()
+  })
+
+  test("--no-header turns it off", () => {
+    const args = ["--no-header", "--header-format", T]
+    expect(resolveHeaderFormat({ args, env: NO_ENV, config: NO_CFG })).toBeUndefined()
+  })
+
+  test("a template hides the startup tree; --header still forces it", () => {
+    const args = ["--header-format", T]
+    expect(resolveShowHeader({ args, env: NO_ENV, config: NO_CFG })).toBe(false)
+    expect(resolveShowHeader({ args: [...args, "--header"], env: NO_ENV, config: NO_CFG })).toBe(
+      true,
+    )
+  })
+
+  test("the template is not taken as the prompt", () => {
+    expect(isNonInteractive(["--header-format", T])).toBe(false)
+    expect(isNonInteractive(["--header-format", T, "hi"])).toBe(true)
+  })
+})
 
 describe("isNonInteractive", () => {
   test("empty argv → interactive", () => {
