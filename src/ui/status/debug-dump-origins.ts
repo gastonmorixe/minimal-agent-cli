@@ -13,7 +13,7 @@
  * @module ui/status/debug-dump-origins
  */
 
-import { TOOL_DEFINITIONS } from "@minimal-agent/core/host/tool-catalog"
+import { BUILTIN_TOOL_NAMES } from "@minimal-agent/core/host/tool-catalog"
 import type { DumpBlockRef } from "./debug-dump-contract.ts"
 
 /** A core system prompt slot (mirror of core `SystemSlotId`). */
@@ -264,7 +264,7 @@ export function systemRefs(text: string, src: DumpOriginSource | undefined): Pla
 }
 
 /** Core built-in tool names. */
-const CORE_TOOLS: ReadonlySet<string> = new Set(TOOL_DEFINITIONS.map((t) => t.name))
+const CORE_TOOLS: ReadonlySet<string> = new Set(BUILTIN_TOOL_NAMES)
 
 /**
  * The owner of one tool: the plugin from the loader's owner map, else core
