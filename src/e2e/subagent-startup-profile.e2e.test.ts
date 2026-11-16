@@ -54,7 +54,7 @@ writeFileSync(join(WORK, "AGENTS.md"), `${AGENTS_MARKER}\n`)
 /** Text from the default instructions section (core prompts/instructions.md). */
 const INSTRUCTIONS_PROBE = "# Instructions (INS)"
 /** Text from the default loop-safety section. */
-const LOOP_SAFETY_PROBE = "Tool-use loop safety"
+const LOOP_SAFETY_PROBE = "# Tool loop safety"
 /** Text that only plugin prompts add (the `<ma::sys::...>` blocks). */
 const PLUGIN_PROMPT_PROBE = "<ma::sys::"
 
