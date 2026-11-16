@@ -197,6 +197,7 @@ const ONESHOT_NO_VALUE: Readonly<Record<string, string>> = {
 const PLUGIN_PROMPTS_WITH_VALUES: Readonly<Record<string, string>> = {
   "--no-plugin-prompts-for": "plugin prompt text: required <id>, repeatable",
   "--plugin-prompts-for": "plugin prompt text: required <id>, repeatable",
+  "--header-format": "header template for a plugin: required <template>",
 }
 
 /** The boolean half of the plugin prompt-text suppression flags. */

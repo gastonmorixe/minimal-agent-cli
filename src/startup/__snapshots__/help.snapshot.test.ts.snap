@@ -75,24 +75,28 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       --effort-levels <levels>  Generic endpoint effort ladder, comma-separated
                                 (env: MINIMAL_AGENT_EFFORT_LEVELS)
     Output
-      -p, --prompt <text>      Non-interactive: send the prompt, print, exit
+      -p, --prompt <text>         Non-interactive: send the prompt, print, exit
       --output-format <text|json|stream-json>
-                               Non-interactive output format, --json is short
-                               for json (default: text)
-      --diagnostics            With --output-format json, also write diagnostics
-      --output-schema <file>   Constrain the final answer to a JSON Schema
-      -f, --formatter <cmd>    Pipe output through a formatter command (default:
-                               mdstream)
-      --formatter-args <args>  Extra formatter args, for example --table-fit
-                               (env: MINIMAL_AGENT_FORMATTER_ARGS)
-      -s, --spinner <preset>   Pick a status spinner preset, see spinners (env:
-                               MINIMAL_AGENT_SPINNER)
-      --header / --no-header   Force the startup tree on or off (env:
-                               MINIMAL_AGENT_HEADER)
-      --no-color               Print help with no color, as do NO_COLOR and
-                               TERM=dumb
-      --show-hidden-chars      Show spaces, tabs, and newlines as faint glyphs
-                               (env: MINIMAL_AGENT_SHOW_HIDDEN_CHARS)
+                                  Non-interactive output format, --json is short
+                                  for json (default: text)
+      --diagnostics               With --output-format json, also write
+                                  diagnostics
+      --output-schema <file>      Constrain the final answer to a JSON Schema
+      -f, --formatter <cmd>       Pipe output through a formatter command
+                                  (default: mdstream)
+      --formatter-args <args>     Extra formatter args, for example --table-fit
+                                  (env: MINIMAL_AGENT_FORMATTER_ARGS)
+      -s, --spinner <preset>      Pick a status spinner preset, see spinners
+                                  (env: MINIMAL_AGENT_SPINNER)
+      --header / --no-header      Force the startup tree on or off (env:
+                                  MINIMAL_AGENT_HEADER)
+      --header-format <template>  Replace the startup tree with a %%name%%
+                                  header template (env:
+                                  MINIMAL_AGENT_HEADER_FORMAT)
+      --no-color                  Print help with no color, as do NO_COLOR and
+                                  TERM=dumb
+      --show-hidden-chars         Show spaces, tabs, and newlines as faint
+                                  glyphs (env: MINIMAL_AGENT_SHOW_HIDDEN_CHARS)
     Tools and modes
       --mode <id|none>  Initial mode id, or none (env: MINIMAL_AGENT_MODE)
       --tools <names>   Advertise only these tools, comma-separated
@@ -215,6 +219,8 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
     MINIMAL_AGENT_NO_LIVE_AREA          Disable the live-area REPL (set to 1)
     MINIMAL_AGENT_HEADER                Force the startup tree: 0 or 1 (flag:
                                         --header)
+    MINIMAL_AGENT_HEADER_FORMAT         Header template that replaces the
+                                        startup tree (flag: --header-format)
     MINIMAL_AGENT_MODE                  Initial mode id, or none (flag: --mode)
     MINIMAL_AGENT_CONTINUATION_PROMPT   Override the continuation-prompt prefix
                                         (default: " ")
@@ -359,6 +365,8 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
                                                MINIMAL_AGENT_FORMATTER_ARGS)
       -s, --spinner <preset>                   Pick a status spinner preset, see spinners (env: MINIMAL_AGENT_SPINNER)
       --header / --no-header                   Force the startup tree on or off (env: MINIMAL_AGENT_HEADER)
+      --header-format <template>               Replace the startup tree with a %%name%% header template (env:
+                                               MINIMAL_AGENT_HEADER_FORMAT)
       --no-color                               Print help with no color, as do NO_COLOR and TERM=dumb
       --show-hidden-chars                      Show spaces, tabs, and newlines as faint glyphs (env:
                                                MINIMAL_AGENT_SHOW_HIDDEN_CHARS)
@@ -440,6 +448,7 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
     MINIMAL_AGENT_THEME                 UI theme: dark, light, or high-contrast
     MINIMAL_AGENT_NO_LIVE_AREA          Disable the live-area REPL (set to 1)
     MINIMAL_AGENT_HEADER                Force the startup tree: 0 or 1 (flag: --header)
+    MINIMAL_AGENT_HEADER_FORMAT         Header template that replaces the startup tree (flag: --header-format)
     MINIMAL_AGENT_MODE                  Initial mode id, or none (flag: --mode)
     MINIMAL_AGENT_CONTINUATION_PROMPT   Override the continuation-prompt prefix (default: "  ")
     MINIMAL_AGENT_SHOW_HIDDEN_CHARS     Show spaces, tabs, and newlines as faint glyphs (set to 1; flag:

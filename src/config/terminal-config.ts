@@ -59,6 +59,12 @@ export interface TerminalConfig {
    */
   header?: boolean
   /**
+   * Header template (`%%name%%` placeholders) that replaces the startup
+   * tree. A plugin renders it. Override with `--header-format` or
+   * `MINIMAL_AGENT_HEADER_FORMAT`.
+   */
+  headerFormat?: string
+  /**
    * Auto-ASK heuristic. `true` or unset: on. `false`: off. Override with
    * `MINIMAL_AGENT_AUTO_ASK=0`.
    */
@@ -126,6 +132,9 @@ export function parseTerminalConfig(obj: Record<string, unknown>): TerminalConfi
     if (parsed.length > 0) out.formatterArgs = parsed
   }
   if (typeof obj.header === "boolean") out.header = obj.header
+  if (typeof obj.headerFormat === "string" && obj.headerFormat.trim() !== "") {
+    out.headerFormat = obj.headerFormat
+  }
   if (typeof obj.autoAsk === "boolean") out.autoAsk = obj.autoAsk
   if (typeof obj.skipQuota === "boolean") out.skipQuota = obj.skipQuota
   // nerdGlyphCells: the numbers 1 or 2, or the string "auto". The strings

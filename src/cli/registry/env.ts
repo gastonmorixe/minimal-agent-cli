@@ -151,6 +151,11 @@ const VISIBLE_ENV: readonly BuiltinEnvSpec[] = [
     description: ["Default: hidden in non-interactive runs."],
   },
   {
+    name: "MINIMAL_AGENT_HEADER_FORMAT",
+    flag: "header-format",
+    summary: "Header template that replaces the startup tree",
+  },
+  {
     name: "MINIMAL_AGENT_MODE",
     flag: "mode",
     summary: "Initial mode id, or none",
