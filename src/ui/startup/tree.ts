@@ -182,6 +182,11 @@ export function printStartupToolsRow(
   lastStartupRow = { lines: printed }
 }
 
+/** Forget the last printed row (the tree was closed by other lines). */
+export function resetStartupTreeRow(): void {
+  lastStartupRow = null
+}
+
 /**
  * Close the startup tree with the tools list as the final row, using the
  * `╰` closer directly. No cursor-up rewrite, no manual wrapping — the

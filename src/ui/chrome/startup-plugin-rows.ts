@@ -26,6 +26,8 @@
  * - A row with an empty `summary` and no children is skipped.
  * - Row line: `  │ <label.padEnd(9)>  <summary parts joined by " · ">`.
  * - Child line: `  │   ├ <label padded to the widest child label>  <value>`.
+ *   Padding uses display width (`displayWidth`), so CJK/emoji labels align.
+ * - An unknown tone paints as `default` (the emit layer maps it too).
  *   The last shown child uses `└`.
  * - Child value: the first part, two spaces, then the other parts
  *   joined by " · " (`Stop → run-tests.sh  claude · untrusted`).
@@ -46,7 +48,7 @@
  */
 
 import type { StartupRow, StartupRowPart } from "@minimal-agent/core/plugin-api"
-import { truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { displayWidth, truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { c } from "../style/ansi.ts"
 
@@ -94,7 +96,8 @@ function makeTheme(plain: boolean): Theme {
     return { tone: (p) => p.text, sep: identity, rail: identity, label: identity }
   }
   return {
-    tone: (p) => TONE_PAINTERS[p.tone ?? "default"](p.text),
+    // Second guard behind sanitizeRows: an unknown tone paints as default.
+    tone: (p) => (TONE_PAINTERS[p.tone ?? "default"] ?? identity)(p.text),
     sep: c.dim,
     rail: c.faintWhite,
     label: c.sky,
@@ -137,12 +140,12 @@ function renderRow(row: StartupRow, closes: boolean, theme: Theme): string[] {
   const children = row.children ?? []
   const shown = children.slice(0, MAX_STARTUP_CHILDREN)
   const hidden = children.length - shown.length
-  const width = Math.max(0, ...shown.map((ch) => ch.label.length))
+  const width = Math.max(0, ...shown.map((ch) => displayWidth(ch.label)))
   shown.forEach((ch, i) => {
     const isLast = i === shown.length - 1 && hidden === 0
     const glyph = theme.rail(isLast ? "└" : "├")
     const value = formatChildValue(ch.value, theme)
-    const label = ch.label.padEnd(width)
+    const label = ch.label + " ".repeat(Math.max(0, width - displayWidth(ch.label)))
     const line = `  ${childGutter}   ${glyph} ${label}${value === "" ? "" : `  ${value}`}`
     lines.push(value === "" ? line.trimEnd() : line)
   })
