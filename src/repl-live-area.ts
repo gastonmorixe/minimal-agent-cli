@@ -938,15 +938,14 @@ export async function runReplLiveArea(
       persistQueue()
       // Model-facing rewrite (e.g. intercom at-mentions → peer XML).
       // Scrollback still uses item.commitLines (human form).
-      let text = item.text
-      {
-        const will = await applyTurnWillStart(loader ?? null, text)
-        text = will.text
-        if (will.halted) {
-          flushQueueItemToScrollback(item)
-          renderDecoration()
-          continue
-        }
+      const will = await applyTurnWillStart(loader ?? null, item.text, {
+        agentMode: modeManager?.activeId() ?? null,
+      })
+      const text = will.text
+      if (will.halted) {
+        flushQueueItemToScrollback(item)
+        renderDecoration()
+        continue
       }
       // Flush the deferred scrollback commit NOW (the editor stopped
       // writing at submit time : Bug 393). For queued items this is
@@ -1301,6 +1300,7 @@ export async function runReplLiveArea(
           }),
           inputQueue: { take: takeQueuedText },
           ...(askUser ? { askUser } : {}),
+          additionalContext: will.additionalContext,
         })
         while (true) {
           const { done, value } = await gen.next()

@@ -56,6 +56,7 @@ import {
   setHostTarget,
 } from "./host-targets.ts"
 import { turnBlockedError } from "./run-non-interactive.ts"
+import { announceSessionWillStart } from "./session-will-start.ts"
 
 /** Default time the entry has to end after the first shutdown signal. */
 const DEFAULT_SIGNAL_GRACE_MS = 5000
@@ -424,8 +425,28 @@ function buildHostRuntime(
         cwd: process.cwd(),
         model: sessionDeps.model,
       })
+      // Host mode opens a fresh session (no `initialMessages`), so the
+      // source is always "startup". Awaited: the context must be queued
+      // before the entry can call `run`.
+      await announceSessionWillStart(
+        input.hostLifecycle,
+        liveAgentCore,
+        {
+          source: "startup",
+          sid: input.sessionId,
+          cwd: process.cwd(),
+          model: sessionDeps.model,
+        },
+        stderr,
+      )
       let closed = false
-      const run = hostSessionRun(session, input.loader, stderr, () => closed)
+      const run = hostSessionRun(
+        session,
+        input.loader,
+        stderr,
+        () => closed,
+        () => sessionDeps.modeManager?.activeId() ?? null,
+      )
       return {
         sessionId: input.sessionId,
         run,
@@ -543,6 +564,7 @@ function hostSessionRun(
   loader: PluginLoader,
   stderr: Pick<NodeJS.WriteStream, "write">,
   isClosed: () => boolean,
+  activeMode: () => string | null = () => null,
 ): HostSession["run"] {
   let busy = false
   // One warning per session per unsupported option.
@@ -576,7 +598,10 @@ function hostSessionRun(
     const started = (async (): Promise<
       AsyncIterable<SessionEntry> & { readonly result: Promise<TurnResult> }
     > => {
-      const turn = await applyTurnWillStart(loader, text)
+      const turn = await applyTurnWillStart(loader, text, {
+        sid: session.id,
+        agentMode: activeMode(),
+      })
       if (turn.halted) {
         const err = turnBlockedError()
         stderr.write(`${err.message}\n`)
@@ -603,9 +628,13 @@ function hostSessionRun(
           armed.push("setNextRunTemperature")
         }
       }
+      // turn.willStart context rides the first request of this run, after
+      // the prompt (the core run option).
+      const context =
+        turn.additionalContext.length > 0 ? { additionalContext: [...turn.additionalContext] } : {}
       let inner: ReturnType<Session["run"]>
       try {
-        inner = session.run(turn.text, runOptions)
+        inner = session.run(turn.text, { ...runOptions, ...context })
       } catch (err) {
         for (const name of armed) core[name]?.(undefined)
         throw err

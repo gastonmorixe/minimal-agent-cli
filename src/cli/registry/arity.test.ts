@@ -205,6 +205,11 @@ const PLUGIN_PROMPTS_NO_VALUE: Readonly<Record<string, string>> = {
   "--plugin-prompts": "plugin prompt text: none",
 }
 
+/** Intended addition: `--trust-hooks` sets MA_TRUST_HOOKS=1 before plugins load. */
+const TRUST_HOOKS_NO_VALUE: Readonly<Record<string, string>> = {
+  "--trust-hooks": "plugins: none",
+}
+
 /** Intended addition: `-V, --version` (plan 2.1). Startup reads it before the scan. */
 const VERSION_NO_VALUE: Readonly<Record<string, string>> = {
   "--version": "version: none",
@@ -260,6 +265,7 @@ describe("V-18: derived arity tables equal the old hand tables plus the pinned g
           ...Object.keys(GAINED_NO_VALUE),
           ...Object.keys(ONESHOT_NO_VALUE),
           ...Object.keys(PLUGIN_PROMPTS_NO_VALUE),
+          ...Object.keys(TRUST_HOOKS_NO_VALUE),
           ...Object.keys(VERSION_NO_VALUE),
           ...Object.keys(UPDATE_NO_VALUE),
         ]),

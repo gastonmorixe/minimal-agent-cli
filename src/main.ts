@@ -127,6 +127,11 @@ import { runStartupSubcommand } from "./startup/run-subcommand.ts"
 import { publishSessionEnv } from "./startup/session-env.ts"
 import { bootSessionStores, resumeTargetOf } from "./startup/session-store-boot.ts"
 import {
+  announceSessionWillStart,
+  sessionStartSource,
+  withSessionContext,
+} from "./startup/session-will-start.ts"
+import {
   printStartupConfigRows,
   printTerminalViewportRow,
   publishResolvedRequestEnv,
@@ -619,6 +624,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // Publish the RESOLVED effort + fast-mode state into process.env as the
   // authoritative output the quota-status footer / session-info read.
   publishResolvedRequestEnv(hidesReasoning, effort, speedFast)
+  // The header template (flag > env > config) for the plugin that renders it.
+  if (opts.headerFormat !== undefined) env.MINIMAL_AGENT_HEADER_FORMAT = opts.headerFormat
+  else delete env.MINIMAL_AGENT_HEADER_FORMAT
   // Effective platform for plugin/tool `platforms` whitelist gating:
   // --platform > MINIMAL_AGENT_PLATFORM > detected (process.platform).
   // `all` (or `any`/`*`) bypasses gating for the session.
@@ -1123,6 +1131,13 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     systemPromptOverrides: opts.systemPromptOverrides,
   })
   void hostLifecycle.sessionStart?.({ sid: getSessionId(), cwd, model: selectedModel })
+  // session.willStart: awaited, so its context is queued before the first turn.
+  const sessionContext = await announceSessionWillStart(hostLifecycle, agent.agentCore(), {
+    source: sessionStartSource(resumeSid !== null),
+    sid: getSessionId(),
+    cwd,
+    model: selectedModel,
+  })
   // Host slash commands that need a live agent (not plugin-declared).
   // Must run after session construction so `/compact` and `/continue` appear in
   // listCommands / slash-menu and dispatch through CommandRegistry.
@@ -1252,34 +1267,39 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         // STREAM_JSON_EVENT_KINDS (adds run_finished) for stream-json. `text` /
         // `--output-schema` never call this (see wantsEventStream), so those
         // paths stay byte-identical.
+        // The event-stream route runs on its own Session, so it gets the
+        // session.willStart context too (the agent above never runs there).
         openEventStreamSession: () =>
-          openAgentCoreSession(
-            // S23/S28: status rows and plugin-bus telemetry, like the REPL.
-            withHostPorts({
-              // Same sid the store was opened with, so the stream carries the CLI id.
-              sessionId: sid,
-              auth,
-              model: selectedModel,
-              providerId: selectedProviderId,
-              ...(credentialName ? { credentialName } : {}),
-              effort,
-              serviceTier,
-              thinkingDisplay,
-              cacheTtl,
-              initialMessages,
-              ...(roundCheckpoint ? { initialCheckpoint: roundCheckpoint } : {}),
-              loader: hasPlugins ? loader : null,
-              modeManager,
-              toolNamePolicy: opts.cliToolFilter,
-              store,
-              blobStore,
-              fileTrackingStore,
-              saveEcho,
-              turnAttachments: turnAttachmentSeam.producers,
-              codeHighlighter,
-              systemPromptOverrides: opts.systemPromptOverrides,
-              ...appendDeps,
-            }),
+          withSessionContext(
+            sessionContext,
+            openAgentCoreSession(
+              // S23/S28: status rows and plugin-bus telemetry, like the REPL.
+              withHostPorts({
+                // Same sid the store was opened with, so the stream carries the CLI id.
+                sessionId: sid,
+                auth,
+                model: selectedModel,
+                providerId: selectedProviderId,
+                ...(credentialName ? { credentialName } : {}),
+                effort,
+                serviceTier,
+                thinkingDisplay,
+                cacheTtl,
+                initialMessages,
+                ...(roundCheckpoint ? { initialCheckpoint: roundCheckpoint } : {}),
+                loader: hasPlugins ? loader : null,
+                modeManager,
+                toolNamePolicy: opts.cliToolFilter,
+                store,
+                blobStore,
+                fileTrackingStore,
+                saveEcho,
+                turnAttachments: turnAttachmentSeam.producers,
+                codeHighlighter,
+                systemPromptOverrides: opts.systemPromptOverrides,
+                ...appendDeps,
+              }),
+            ),
           ),
       })
     } finally {

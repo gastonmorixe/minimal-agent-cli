@@ -141,4 +141,12 @@ describe("renderTurnNotice (TUI treatment per kind)", () => {
     expect(line).toContain('"live-only"')
     expect(line).toContain('kept "model-a"')
   })
+
+  it("renders a warn marker for stop_hook_capped with the cap", () => {
+    const line = renderTurnNotice({ kind: "stop_hook_capped", severity: "warn", cap: 8 })
+    expect(line).toContain("turn.willStop")
+    expect(line).toContain("blocked the stop more than 8 times in a row. Ended the turn.")
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: asserting presence of SGR
+    expect(line).toMatch(/\x1b\[/)
+  })
 })
