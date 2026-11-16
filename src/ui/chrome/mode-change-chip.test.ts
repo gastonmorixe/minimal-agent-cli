@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test"
 
 import { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { ManifestMode } from "@minimal-agent/core/plugin-api/types/plugin"
+import type { SyntheticTextResolverLike } from "@minimal-agent/core/sdk/ports"
 import { modeLabelFgOpen } from "../style/mode-prompt.ts"
 
 import {
@@ -290,7 +291,19 @@ describe("ModeManager.peekPendingAttachment", () => {
   })
 
   test("peek is non-mutating: subsequent consume still produces the attachment", () => {
-    const m = new ModeManager([ASK_MODE])
+    // consume returns null when the `mode.change` text is "" (no resolver),
+    // so give the manager a stub resolver with non-empty text.
+    const text: SyntheticTextResolverLike = { resolve: () => "mode changed" }
+    const m = new ModeManager(
+      [ASK_MODE],
+      null,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      text,
+    )
     m.setMode("ask")
     expect(m.peekPendingAttachment()).not.toBeNull()
     expect(m.peekPendingAttachment()).not.toBeNull()
