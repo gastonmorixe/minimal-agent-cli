@@ -15,10 +15,15 @@ const stub = (text: string): SyntheticTextProvider => ({
   text: () => text,
 })
 
-function loaderWith(providers: SyntheticTextProvider[]): PluginLoader {
+/** A stub loader with these providers, and optionally a ready resolver. */
+function loaderWith(
+  providers: SyntheticTextProvider[],
+  resolver?: { resolve: () => string },
+): PluginLoader {
   return {
     syntheticTextProviders: () => providers,
     toolTextProviders: () => [],
+    ...(resolver ? { syntheticText: () => resolver } : {}),
   } as unknown as PluginLoader
 }
 
@@ -48,18 +53,12 @@ describe("textProvidersOf (B1)", () => {
 
   it("reuses the loader's one resolver, so the core builds no second one", () => {
     const resolver = { resolve: () => "R" }
-    const loader = {
-      ...loaderWith([stub("X-cli")]),
-      syntheticText: () => resolver,
-    } as unknown as PluginLoader
+    const loader = loaderWith([stub("X-cli")], resolver)
     expect(textProvidersOf({ loader }).syntheticTextResolver).toBe(resolver as never)
   })
 
   it("gives no loader resolver when the caller passes its own providers", () => {
-    const loader = {
-      ...loaderWith([stub("X-cli")]),
-      syntheticText: () => ({ resolve: () => "R" }),
-    } as unknown as PluginLoader
+    const loader = loaderWith([stub("X-cli")], { resolve: () => "R" })
     const out = textProvidersOf({ loader, syntheticTextProviders: [stub("X-explicit")] })
     expect(out.syntheticTextResolver).toBeUndefined()
   })
