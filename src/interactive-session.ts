@@ -200,6 +200,29 @@ export function withAppendContributor<C extends object>(
 }
 
 /**
+ * The synthetic and tool text providers for a runtime session (B1). An
+ * explicit deps value wins. Else the loader's providers. Same default as
+ * core `buildAgentCore`, which this path does not go through.
+ */
+export function textProvidersOf(
+  deps: Pick<BuildAgentCoreDeps, "loader" | "syntheticTextProviders" | "toolTextProviders">,
+): Pick<BuildAgentCoreDeps, "syntheticTextProviders" | "toolTextProviders"> {
+  const loader = deps.loader
+  const synthetic =
+    deps.syntheticTextProviders ??
+    (typeof loader?.syntheticTextProviders === "function"
+      ? loader.syntheticTextProviders()
+      : undefined)
+  const tool =
+    deps.toolTextProviders ??
+    (typeof loader?.toolTextProviders === "function" ? loader.toolTextProviders() : undefined)
+  return {
+    ...(synthetic ? { syntheticTextProviders: synthetic } : {}),
+    ...(tool ? { toolTextProviders: tool } : {}),
+  }
+}
+
+/**
  * Build the `Session` behind one {@link InteractiveSession}: the same
  * host collaborators `buildAgentCore` wires (plugin-loaded tool registry,
  * mode manager, session persistence, lifecycle hooks, media resolver),
@@ -297,6 +320,8 @@ async function openInteractiveSession(
     toolExecutor,
     ...(sessionPersistence ? { sessionPersistence } : {}),
     promptContributors: withAppendContributor(promptContributor, deps),
+    // B1: the runtime has no loader, so pass the loader's text providers.
+    ...textProvidersOf(deps),
     ...(modeProvider ? { modeProvider } : {}),
     mediaResolver,
     lifecycle,
