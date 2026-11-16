@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, type Mock, spyOn } from "bun:test"
 
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { openAgentCoreSession } from "@minimal-agent/core/host-kit/build-agent-core"
+import type { SyntheticTextProvider } from "@minimal-agent/core/plugin-api/types/synthetic-text"
 import { InteractiveSession } from "../interactive-session.ts"
 import type { ReplAgentLike } from "../repl.ts"
 import type {
@@ -42,6 +43,12 @@ function spyAll(ns: Record<string, unknown>): Array<Mock<(...args: unknown[]) =>
 }
 
 /** Round 1: a tool call. Round 2: a cut response (a notice). Round 3: text. */
+/** Synthetic text for a `max_tokens` continuation after an empty response (test text, not core). */
+const CONTINUE_TEXT: SyntheticTextProvider = {
+  kinds: ["continue.max_tokens", "assistant.placeholder"],
+  text: (kind) => `<${kind}>`,
+}
+
 function toolTurnSendFn(): (opts: SendOptions) => AsyncGenerator<string, StreamedResponse> {
   let round = 0
   return async function* (opts: SendOptions): AsyncGenerator<string, StreamedResponse> {
@@ -114,6 +121,10 @@ describe("--output-format json route", () => {
             blobStore: null,
             saveEcho: null,
             turnAttachments: [],
+            // Inline continuation text: bare core ends a cut turn as
+            // truncated with no notice (core follow-up 15a). This test is
+            // about the notice route, not the text.
+            syntheticTextProviders: [CONTINUE_TEXT],
           }),
         ),
     }
