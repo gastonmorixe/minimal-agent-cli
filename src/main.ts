@@ -841,6 +841,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
           undefined,
           (modeId) => modeUserOverrides.get(modeId) ?? null,
           opts.cliToolFilter,
+          // The plugin text resolver owns the mode refusal, stamp and change text.
+          hasPlugins ? loader.syntheticText() : undefined,
         )
       : null
   // Write `<sid>.profile.json` and wire `ctx.startupProfile` + `ctx.queryHostPolicy`.
