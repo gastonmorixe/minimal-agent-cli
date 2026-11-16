@@ -124,11 +124,26 @@ export const coreBootErrorRenderer: ErrorRenderer = {
     err.kind === "ContractCheckFailedError" ? contractCheckFailedText(err) : undefined,
 }
 
+/**
+ * CLI text of a `CompactNoProviderError`: local compaction stopped before the
+ * summary request because no plugin gave `compact.summary_system`.
+ */
+export const COMPACT_NO_PROVIDER_TEXT =
+  "Local compaction needs the compaction text (compact.summary_system). " +
+  "No plugin gives this text. Examine your plugin overrides, or use /compact tail."
+
+/** The host renderer for compaction errors. */
+export const coreCompactErrorRenderer: ErrorRenderer = {
+  kinds: ["CompactNoProviderError"],
+  render: (err) => (err.kind === "CompactNoProviderError" ? COMPACT_NO_PROVIDER_TEXT : undefined),
+}
+
 /** Make a registry that holds the CLI renderers (owner "host"). */
 export function createCliErrorRegistry(): ErrorRendererRegistry {
   const registry = createErrorRendererRegistry()
   registry.register(coreAuthErrorRenderer, HOST_OWNER_ID)
   registry.register(coreBootErrorRenderer, HOST_OWNER_ID)
+  registry.register(coreCompactErrorRenderer, HOST_OWNER_ID)
   return registry
 }
 
