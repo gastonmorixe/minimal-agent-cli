@@ -60,7 +60,7 @@ function findOpenTag(code: string): number {
  * `PHP Source` has been in the bundled syntax pack for years, so it highlights
  * on every mdstream version. The `php-source` alias only exists from 0.3.9, and
  * on older servers it resolves to plain text — the flat output this change
- * exists to remove. Switch to the alias once the CLI can require >= 0.3.9 (the
+ * exists to remove. Switch to the alias once the CLI can require \>= 0.3.9 (the
  * ready line carries no version, so there is no runtime gate yet).
  */
 const PHP_SOURCE_TOKEN = "PHP Source"
