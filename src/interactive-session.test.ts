@@ -22,6 +22,7 @@ import type { BuildAgentCoreDeps } from "@minimal-agent/core/host-kit/build-agen
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
+import type { SyntheticTextProvider } from "@minimal-agent/core/plugin-api/types/synthetic-text"
 import type { Message } from "@minimal-agent/core/sdk/messages"
 import {
   InteractiveSession,
@@ -53,6 +54,12 @@ function fakeModel(id: string): ModelEntry {
 }
 
 const AUTH: AuthResult = { type: "api-key", token: "test-token" }
+
+/** Synthetic text for a `max_tokens` continuation after an empty response (test text, not core). */
+const CONTINUE_TEXT: SyntheticTextProvider = {
+  kinds: ["continue.max_tokens", "assistant.placeholder"],
+  text: (kind) => `<${kind}>`,
+}
 
 type RunOptions = NonNullable<Parameters<InteractiveSession["run"]>[1]>
 
@@ -287,7 +294,12 @@ describe("InteractiveSession", () => {
       yield "done"
       return response("done")
     }
-    const session = await createSession(sendFn)
+    // Inline continuation text: bare core ends a cut turn as truncated with no
+    // notice (core follow-up 15a). This test is about notice rendering.
+    const session = await InteractiveSession.create({
+      ...baseDeps(sendFn),
+      syntheticTextProviders: [CONTINUE_TEXT],
+    })
     const transcript: string[] = []
     await drain(session.run("go", { onTranscriptLine: (line) => transcript.push(line) }))
     expect(transcript).toHaveLength(1)
