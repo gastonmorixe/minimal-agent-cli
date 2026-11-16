@@ -25,7 +25,11 @@ bun install                  # installs @minimal-agent/core (git pin) and the to
 bun run src/index.ts --help  # show every command and flag
 bun run src/index.ts         # interactive REPL
 bun run start -- --help      # the same entry point, through package.json
+./ma --help                  # the same entry point, through the root script
 ```
+
+`./ma` resolves its own location through symlinks and keeps your working
+directory, so `ln -sf "$PWD/ma" ~/.local/bin/ma` makes it runnable anywhere.
 
 The bin is `src/index.ts` (`package.json#bin`, name `minimal-agent`). It calls
 `src/main.ts`, which does the startup work.
