@@ -628,8 +628,8 @@ function hostSessionRun(
           armed.push("setNextRunTemperature")
         }
       }
-      // turn.willStart context rides the first request of this run, after
-      // the prompt (the core run option).
+      // turn.willStart context rides the first request of this run, before
+      // or after the prompt per entry position (the core run option).
       const context =
         turn.additionalContext.length > 0 ? { additionalContext: [...turn.additionalContext] } : {}
       let inner: ReturnType<Session["run"]>

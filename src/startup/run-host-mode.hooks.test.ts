@@ -18,6 +18,7 @@ import type { createLifecyclePort } from "@minimal-agent/core/host-kit/build-age
 import type { HostModeContext, HostModeHandler } from "@minimal-agent/core/host-kit/host-mode"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
+import type { HookContextEntry } from "@minimal-agent/core/sdk/lifecycle"
 import type {
   TestSendParams as SendOptions,
   TestSendResult as StreamedResponse,
@@ -49,7 +50,7 @@ function registerFixtureModel(id: string): void {
 type Lifecycle = ReturnType<typeof createLifecyclePort>
 
 /** A loader stub: one host mode, plus a `turn.willStart` chain that records payloads. */
-function stubLoader(handler: HostModeHandler, willStartSeen: unknown[], ctx: string[]) {
+function stubLoader(handler: HostModeHandler, willStartSeen: unknown[], ctx: HookContextEntry[]) {
   return {
     findHostMode: (id: string) =>
       id === "test"
@@ -95,7 +96,7 @@ function makeInput(
   lifecycle: Partial<Lifecycle>,
   requests: string[],
   willStartSeen: unknown[],
-  turnCtx: string[],
+  turnCtx: HookContextEntry[],
   stderrLines: string[] = [],
 ): RunHostModeInput {
   return {
@@ -182,5 +183,17 @@ describe("runHostMode hooks context", () => {
     const req = requests[0] ?? ""
     expect(req.indexOf("hello")).toBeGreaterThanOrEqual(0)
     expect(req.indexOf("hello")).toBeLessThan(req.indexOf("TURN-CTX-LINE"))
+  })
+
+  it("turn.willStart: a before entry keeps its position, the after string follows the prompt", async () => {
+    registerFixtureModel("model-a")
+    const requests: string[] = []
+    const ctx: HookContextEntry[] = [{ text: "BEFORE-CTX", position: "before" }, "AFTER-CTX"]
+    await runHostMode(makeInput(oneTurn, {}, requests, [], ctx))
+    // Not flattened to a string: a flattened entry would land after the prompt.
+    const req = requests[0] ?? ""
+    expect(req.indexOf("BEFORE-CTX")).toBeGreaterThanOrEqual(0)
+    expect(req.indexOf("BEFORE-CTX")).toBeLessThan(req.indexOf("hello"))
+    expect(req.indexOf("hello")).toBeLessThan(req.indexOf("AFTER-CTX"))
   })
 })
