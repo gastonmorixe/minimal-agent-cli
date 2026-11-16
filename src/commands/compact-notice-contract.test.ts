@@ -19,12 +19,27 @@ const MODEL = "compact-notice-model"
 const PROVIDER = "compact-notice-provider"
 const SUMMARY = "## Goal\nPreserve the complete checkpoint."
 
+/**
+ * Stub compaction text: core owns none (15d.4 makes the 3 `compact.*` kinds
+ * required, and local compaction with no `compact.summary_system` text throws
+ * `CompactNoProviderError`). The notice must equal whatever core commits.
+ */
+const COMPACT_TEXT = {
+  resolve: (kind: string, facts: Readonly<Record<string, unknown>>) =>
+    kind.startsWith("compact.")
+      ? `[${kind}]` +
+        (facts.focus ? ` focus: ${facts.focus}` : "") +
+        (facts.summary ? `\n\n${facts.summary}` : "")
+      : "",
+}
+
 function fixtureCore(messages: Message[], appendCompact: (record: unknown) => void) {
   const store = {
     appendNote() {},
     appendCompact,
   } as unknown as SessionStore
   return new AgentCore({
+    syntheticTextResolver: COMPACT_TEXT,
     auth: { type: "api-key", token: "fixture" },
     model: MODEL,
     providerId: PROVIDER,
