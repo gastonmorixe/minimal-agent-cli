@@ -130,6 +130,13 @@ describe("manifestRefs", () => {
     })
     expect([...refs.modules].sort()).toEqual(["./base.ts", "./st.ts"])
   })
+
+  test("collects the toolText entries", () => {
+    const refs = manifestRefs({
+      toolText: [{ id: "tools", entry: "./tool-text.ts", tools: ["Bash"] }, { id: "x" }],
+    })
+    expect([...refs.modules]).toEqual(["./tool-text.ts"])
+  })
 })
 
 describe("prompt assets", () => {
