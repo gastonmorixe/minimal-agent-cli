@@ -199,6 +199,11 @@ export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): Entryp
   if (args.includes("--show-hidden-chars")) {
     input.env.MINIMAL_AGENT_SHOW_HIDDEN_CHARS = "1"
   }
+  // ma-hooks-plugin reads MA_TRUST_HOOKS when it loads, so set it here,
+  // before any plugin step.
+  if (args.includes("--trust-hooks")) {
+    input.env.MA_TRUST_HOOKS = "1"
+  }
 
   const userConfig = loadCliUserConfig()
   let systemPromptOverrides

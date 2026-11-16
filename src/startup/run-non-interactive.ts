@@ -111,7 +111,6 @@ import { Formatter } from "../ui/formatter/formatter.ts"
 
 import { DRY_RUN_DONE_MESSAGE, isDryRunHalt } from "./dry-run.ts"
 import { isHostModeRun } from "./resume-mode.ts"
-
 import {
   type StreamInfo,
   setStreamJsonWrite,
@@ -378,13 +377,16 @@ function armRunOutputSchema(session: Session, schema: object): void {
  * carry the assistant text, matching the frozen SDK wire contract
  * (`events-jsonl.integration.test.ts`).
  */
-async function runCoreEventStream(input: RunNonInteractivePromptInput): Promise<void> {
+async function runCoreEventStream(
+  input: RunNonInteractivePromptInput,
+  turnContext: readonly string[] = [],
+): Promise<void> {
   // The host may install the guard at boot. Otherwise this run installs it
   // and removes it at the end.
   const ownGuard = activeGuard === null
   const guard = installJsonStdioGuard()
   try {
-    await runGuardedEventStream(input, guard)
+    await runGuardedEventStream(input, guard, turnContext)
   } finally {
     if (ownGuard) guard.restore()
   }
@@ -394,6 +396,7 @@ async function runCoreEventStream(input: RunNonInteractivePromptInput): Promise<
 async function runGuardedEventStream(
   input: RunNonInteractivePromptInput,
   guard: JsonStdioGuard,
+  turnContext: readonly string[],
 ): Promise<void> {
   const write = input.stdout ?? guard.write
   // Never call process.exit after writing the stream. On a slow pipe reader,
@@ -460,7 +463,11 @@ async function runGuardedEventStream(
     if (!turn.resume && input.outputSchema !== undefined) {
       armRunOutputSchema(session, input.outputSchema)
     }
-    const ok = await runEventStreamTurn(session, turn, out)
+    const ok = await runEventStreamTurn(
+      session,
+      turn.resume ? turn : { ...turn, additionalContext: turnContext },
+      out,
+    )
     if (!ok) {
       runOk = false
       fail(1)
@@ -586,7 +593,7 @@ function writeResultLine(
  */
 async function runEventStreamTurn(
   session: Session,
-  turn: { text: string; resume: boolean },
+  turn: { text: string; resume: boolean; additionalContext?: readonly string[] },
   out: {
     write: (chunk: string) => void
     keep: ReadonlySet<string>
@@ -607,6 +614,9 @@ async function runEventStreamTurn(
     const run = session.run(turn.text, {
       emitDeltas: out.emitDeltas,
       ...(turn.resume ? { resume: true } : {}),
+      ...(!turn.resume && turn.additionalContext !== undefined && turn.additionalContext.length > 0
+        ? { additionalContext: [...turn.additionalContext] }
+        : {}),
     })
     for await (const entry of run) {
       if (entry.ch === "event") {
@@ -686,8 +696,10 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
   // A continued turn has no new user text, so no hook runs for it.
   const turn =
     input.prompt.length > 0
-      ? await applyTurnWillStart(loader, input.prompt)
-      : { text: "", halted: false }
+      ? await applyTurnWillStart(loader, input.prompt, {
+          agentMode: agent.getActiveMode?.()?.id ?? null,
+        })
+      : { text: "", halted: false, additionalContext: [] }
   if (turn.halted) {
     process.stderr.write(`${TURN_BLOCKED_MESSAGE}\n`)
     // stream-json still ends stdout with error and run_finished failed lines.
@@ -698,12 +710,14 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
     exit(1)
   }
   const prompt = turn.text
+  // turn.willStart context, passed as the prompt run's additionalContext.
+  const turnContext = turn.additionalContext
 
   // Structured event-stream route (`--output-format json` / `stream-json`).
   // Bypasses the formatter/plugin-stream/human-answer machinery entirely: the
   // JSONL event stream is the whole output.
   if (wantsEventStream(input)) {
-    await runCoreEventStream({ ...input, prompt })
+    await runCoreEventStream({ ...input, prompt }, turnContext)
     return
   }
   // open-responses needs the event route. Without a session factory, write
@@ -763,7 +777,10 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
       if (input.oneShotRunOptions !== undefined) {
         armOneShotRun(agentCoreOf(agent), input.oneShotRunOptions)
       }
-      return agent.run(prompt)
+      return agent.run(
+        prompt,
+        turnContext.length > 0 ? { additionalContext: [...turnContext] } : undefined,
+      )
     })
   }
   try {

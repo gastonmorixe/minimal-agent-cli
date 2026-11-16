@@ -173,6 +173,29 @@ describe("prepareEntrypointArgs", () => {
     expect(env.MINIMAL_AGENT_SHOW_HIDDEN_CHARS).toBe("1")
   })
 
+  it("accepts --trust-hooks (no exit 2) and sets MA_TRUST_HOOKS=1", () => {
+    const h = makeHarness()
+    const env: Record<string, string | undefined> = {}
+    // The harness exit throws ExitSignal, so a normal return proves no exit.
+    const prepared = prepareEntrypointArgs({
+      rawArgv: ["--trust-hooks"],
+      env,
+      cwd: "/tmp",
+      ...h.deps,
+      helpCatalog: () => [],
+    })
+    expect(h.writes).toEqual([])
+    expect(prepared.args).toContain("--trust-hooks")
+    expect(env.MA_TRUST_HOOKS).toBe("1")
+  })
+
+  it("does not set MA_TRUST_HOOKS without --trust-hooks", () => {
+    const h = makeHarness()
+    const env: Record<string, string | undefined> = {}
+    prepareEntrypointArgs({ rawArgv: ["--debug"], env, cwd: "/tmp", ...h.deps })
+    expect(env.MA_TRUST_HOOKS).toBeUndefined()
+  })
+
   it("returns normalized args, a command plan, and a working readFlagValue", () => {
     const h = makeHarness()
     const prepared = prepareEntrypointArgs({

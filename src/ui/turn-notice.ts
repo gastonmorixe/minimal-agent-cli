@@ -89,6 +89,10 @@ export function renderTurnNotice(notice: TurnNotice): string {
       return `\n  ${c.boldYellow("!")} ${c.yellow(
         `Could not adopt model "${notice.requested}" (${notice.reason}) — kept "${notice.model}"`,
       )}`
+    case "stop_hook_capped":
+      return `\n  ${c.boldYellow("!")} ${c.yellow(
+        `A turn.willStop hook blocked the stop more than ${notice.cap} times in a row. Ended the turn.`,
+      )}`
     default: {
       const _exhaustive: never = notice
       return _exhaustive

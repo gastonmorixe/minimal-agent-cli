@@ -7,6 +7,8 @@
  * open/close.
  */
 
+import { getSessionId } from "@minimal-agent/core/host/session-id"
+import type { TurnWillStartPayload } from "@minimal-agent/core/sdk/lifecycle"
 import { FOOTER_LAYER_OVERLAY, FOOTER_PRIORITY_OVERLAY } from "./editor-controller.ts"
 import { Picker, type PickerItem } from "./ui/picker.ts"
 
@@ -43,6 +45,7 @@ export interface EditorHooksLoader {
     ) => Promise<{
       payload: T
       halted?: boolean
+      additionalContext?: string[]
     }>
   }
 }
@@ -274,20 +277,51 @@ export function registerEditorPluginHooks(
   )
 }
 
+/** Optional session facts for the `turn.willStart` payload. */
+export interface TurnWillStartFacts {
+  /** Session id. Defaults to the process session id (`getSessionId()`). */
+  readonly sid?: string
+  /** Active agent mode id. Absent or null: no `agentMode` on the payload. */
+  readonly agentMode?: string | null
+}
+
+/** What {@link applyTurnWillStart} returns. */
+export interface TurnWillStartOutcome {
+  text: string
+  halted: boolean
+  /** Hook context lines for the core run (`opts.additionalContext`). Always an array. */
+  additionalContext: string[]
+}
+
+/** The string items of a chain result's `additionalContext`, or `[]`. */
+function contextOf(result: unknown): string[] {
+  if (!result || typeof result !== "object") return []
+  const ctx = (result as { additionalContext?: unknown }).additionalContext
+  return Array.isArray(ctx) ? ctx.filter((l): l is string => typeof l === "string") : []
+}
+
 /**
  * Run the `turn.willStart` chain so plugins can rewrite model-facing text
  * (e.g. expand at-mentions to peer XML) without changing scrollback.
+ * The payload carries `text`, `sid`, and `agentMode` (when a mode is active).
  *
- * Returns the (possibly rewritten) text and whether a listener halted.
+ * Returns the (possibly rewritten) text, whether a listener halted, and the
+ * listeners' `additionalContext` (pass it to the core run).
  * Never throws: chain failures log to stderr and pass the original text.
  */
 export async function applyTurnWillStart(
   loader: EditorHooksLoader | null | undefined,
   text: string,
-): Promise<{ text: string; halted: boolean }> {
-  if (!loader) return { text, halted: false }
+  facts: TurnWillStartFacts = {},
+): Promise<TurnWillStartOutcome> {
+  if (!loader) return { text, halted: false, additionalContext: [] }
   try {
-    const result = await loader.hooks().emitChain<{ text: string }>("turn.willStart", { text })
+    const payload: TurnWillStartPayload = {
+      text,
+      sid: facts.sid ?? getSessionId(),
+      ...(facts.agentMode ? { agentMode: facts.agentMode } : {}),
+    }
+    const result = await loader.hooks().emitChain<TurnWillStartPayload>("turn.willStart", payload)
     let next = text
     if (
       result &&
@@ -297,11 +331,11 @@ export async function applyTurnWillStart(
     ) {
       next = (result.payload as { text: string }).text
     }
-    return { text: next, halted: result?.halted === true }
+    return { text: next, halted: result?.halted === true, additionalContext: contextOf(result) }
   } catch (e) {
     process.stderr.write(
       `[repl] turn.willStart chain failed: ${e instanceof Error ? e.message : String(e)}\n`,
     )
-    return { text, halted: false }
+    return { text, halted: false, additionalContext: [] }
   }
 }

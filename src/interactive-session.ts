@@ -458,6 +458,8 @@ export class InteractiveSession implements ReplAgentLike {
       askUser?: (issue: PreflightIssue) => Promise<string | null>
       /** Continue the unfinished turn at its next round (S50). `userText` is not used. */
       resume?: boolean
+      /** Hook context lines (`turn.willStart`) that go after the prompt in this turn. */
+      additionalContext?: string[]
     },
   ): AsyncGenerator<string, TurnResult, undefined> {
     const pump = new TurnRenderPump(opts?.signal)
@@ -495,6 +497,9 @@ export class InteractiveSession implements ReplAgentLike {
         ...(opts?.signal ? { signal: opts.signal } : {}),
         ...(opts?.askUser ? { askUser: opts.askUser } : {}),
         ...(opts?.resume ? { resume: true } : {}),
+        ...(opts?.additionalContext && opts.additionalContext.length > 0
+          ? { additionalContext: opts.additionalContext }
+          : {}),
       })
       // The entry stream ends when the turn ends, and throws on a run
       // failure. The pump gets the same entries through the subscription.

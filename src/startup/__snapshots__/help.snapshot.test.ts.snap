@@ -119,6 +119,8 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       --platform <os>               Override the platform for plugin and tool
                                     gating (one of: macos, linux, windows, all;
                                     env: MINIMAL_AGENT_PLATFORM)
+      --trust-hooks                 Trust all hooks for this run, sets
+                                    MA_TRUST_HOOKS=1
       --host-mode <id>              Hand the process to a plugin host mode, for
                                     example acp
     Session
@@ -377,6 +379,7 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       --plugin-prompts-for <id>     Keep the prompt text of these plugins on
       --platform <os>               Override the platform for plugin and tool gating (one of: macos, linux, windows,
                                     all; env: MINIMAL_AGENT_PLATFORM)
+      --trust-hooks                 Trust all hooks for this run, sets MA_TRUST_HOOKS=1
       --host-mode <id>              Hand the process to a plugin host mode, for example acp
     Session
       --session-id <uuid>  Pin the session id of this run (env: MINIMAL_AGENT_SESSION_ID)

@@ -113,6 +113,11 @@ export interface ReplAgentLike {
        * next round (S50). `userText` is not used.
        */
       resume?: boolean
+      /**
+       * Optional. Hook context lines (`turn.willStart`) for this turn. The
+       * core puts them after the prompt in the first user message.
+       */
+      additionalContext?: string[]
     },
   ): AsyncGenerator<string, TurnResult, undefined>
   /** Optional: current model id (for diagnostics/recovery prompts). */
