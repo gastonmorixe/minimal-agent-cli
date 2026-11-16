@@ -226,7 +226,9 @@ export function compactFailureText(f: CompactFailure): string {
     case "remote_unavailable":
       return "remote compaction is not available (no adapter.compact or no model entry)"
     case "unknown_model":
-      return `the model "${f.model ?? ""}" is unknown`
+      return optText(f.model) !== undefined
+        ? `the model "${f.model}" is unknown`
+        : "the model is unknown"
     case "empty_summary":
       return "the summary has no text"
     default: {
