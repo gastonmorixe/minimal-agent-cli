@@ -34,9 +34,9 @@ const ROWS: ReadonlyArray<readonly [string, ToolPresentation]> = [
   ["FilesStats", { icon: "▦", color: "cyan" }], // core
   ["Mode", { icon: "◐", color: "sky" }], // core
   // Plugin tools.
-  ["CloudCloudStatus", { icon: "☁", color: "sky" }], // ma-agent-cloud
-  ["CloudCloudLogin", { icon: "☁", color: "sky" }], // ma-agent-cloud
-  ["CloudCloudPush", { icon: "☁", color: "sky" }], // ma-agent-cloud
+  ["CloudStatus", { icon: "☁", color: "sky" }], // ma-agent-cloud
+  ["CloudLogin", { icon: "☁", color: "sky" }], // ma-agent-cloud
+  ["CloudPush", { icon: "☁", color: "sky" }], // ma-agent-cloud
   ["BackgroundRun", { icon: "▶", color: "cyan" }], // ma-background-plugin
   ["BackgroundStatus", { icon: "◎", color: "violet" }], // ma-background-plugin
   ["BackgroundLogs", { icon: "▤", color: "sky" }], // ma-background-plugin
