@@ -3,42 +3,48 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { BinaryStore } from "@minimal-agent/core/host/binaries"
-
 import {
   extractWithBunArchive,
-  MDSTREAM_PIN,
-  mdstreamSpecFor,
+  fetchLatestTag,
+  MDSTREAM_ASSETS,
+  mdstreamUrlFor,
   type ResolveFormatterDeps,
   resolveFormatter,
 } from "./auto.ts"
 
 const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
 
+const REL = "https://github.com/gastonmorixe/mdstream/releases"
+
 /** A real `.tar.gz` holding `mdstream` (nested, like some release layouts). */
 async function tarball(
-  body = "#!/bin/sh\necho mdstream 0.3.7\n",
+  body = "#!/bin/sh\necho mdstream 0.3.9\n",
 ): Promise<Uint8Array<ArrayBuffer>> {
   const blob = await new Bun.Archive({ "pkg/mdstream": body }, { compress: "gzip" }).blob()
   return new Uint8Array(await blob.arrayBuffer())
 }
 
-function sha256(bytes: Uint8Array): string {
-  return new Bun.CryptoHasher("sha256").update(bytes).digest("hex")
-}
-
-describe("mdstream pin", () => {
-  test("every target pins a v-tag download URL and a sha256", () => {
-    for (const key of Object.keys(MDSTREAM_PIN.assets)) {
-      const spec = mdstreamSpecFor(key)
-      expect(spec?.sha256).toMatch(/^[0-9a-f]{64}$/)
-      const url = spec?.source.kind === "url" ? spec.source.url : ""
-      expect(url).toStartWith(
-        `https://github.com/gastonmorixe/mdstream/releases/download/v${MDSTREAM_PIN.version}/`,
-      )
-      expect(url).not.toContain("api.github.com")
+describe("mdstream urls", () => {
+  test("tagged and latest-alias download URLs, never the API", () => {
+    for (const key of Object.keys(MDSTREAM_ASSETS)) {
+      const asset = MDSTREAM_ASSETS[key]
+      expect(mdstreamUrlFor(key, "v0.3.9")).toBe(`${REL}/download/v0.3.9/${asset}`)
+      expect(mdstreamUrlFor(key)).toBe(`${REL}/latest/download/${asset}`)
     }
-    expect(mdstreamSpecFor("freebsd-x64")).toBeNull()
+    expect(mdstreamUrlFor("freebsd-x64")).toBeNull()
+  })
+
+  test("fetchLatestTag reads the releases/latest redirect", async () => {
+    const f = (async () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: `${REL}/tag/v0.3.9` },
+      })) as unknown as typeof fetch
+    expect(await fetchLatestTag(f)).toBe("v0.3.9")
+    const offline = (async () => {
+      throw new TypeError("offline")
+    }) as unknown as typeof fetch
+    expect(await fetchLatestTag(offline)).toBeNull()
   })
 })
 
@@ -73,9 +79,13 @@ describe("resolveFormatter", () => {
     rmSync(binDir, { recursive: true, force: true })
   })
 
-  /** Deps with no PATH mdstream and a store whose fetch serves `bytes`. */
+  /**
+   * Deps with no PATH mdstream. `latest` is the tag the redirect names (null:
+   * lookup fails); `bytes` is what a download serves (null: offline).
+   */
   function deps(
     bytes: Uint8Array<ArrayBuffer> | null,
+    latest: string | null,
     over: Partial<ResolveFormatterDeps> = {},
     versions: Record<string, string | null> = {},
   ): ResolveFormatterDeps {
@@ -84,85 +94,111 @@ describe("resolveFormatter", () => {
       queryVersion: async (cmd) => versions[cmd] ?? null,
       platformKey: "linux-x64",
       binDir,
-      makeStore: async (dir, onProgress) =>
-        new BinaryStore(dir, {
-          onProgress,
-          extractFn: extractWithBunArchive,
-          fetchFn: (async (url: string | URL | Request) => {
-            fetched.push(String(url))
-            if (!bytes) throw new TypeError("fetch failed: offline")
-            return new Response(bytes)
-          }) as unknown as typeof fetch,
-        }),
+      fetchFn: (async (url: string | URL | Request) => {
+        const u = String(url)
+        fetched.push(u)
+        if (u.endsWith("/releases/latest")) {
+          if (!latest) throw new TypeError("fetch failed: offline")
+          return new Response(null, { status: 302, headers: { location: `${REL}/tag/${latest}` } })
+        }
+        if (!bytes) throw new TypeError("fetch failed: offline")
+        return new Response(bytes)
+      }) as unknown as typeof fetch,
       ...over,
     }
   }
 
   test("an explicit --formatter wins with no lookup", async () => {
-    const r = await resolveFormatter(["cat"], deps(null))
+    const r = await resolveFormatter(["cat"], deps(null, null))
     expect(r).toEqual({ cmd: ["cat"], label: "cat" })
     expect(fetched).toEqual([])
   })
 
   test("mdstream on PATH wins", async () => {
-    const r = await resolveFormatter(undefined, deps(null, { which: () => "/usr/bin/mdstream" }))
+    const r = await resolveFormatter(
+      undefined,
+      deps(null, "v0.3.9", { which: () => "/usr/bin/mdstream" }),
+    )
     expect(r.cmd).toEqual(["mdstream"])
     expect(fetched).toEqual([])
   })
 
-  test("a current managed copy is used with no network", async () => {
+  test("a copy at the latest version is used with no download", async () => {
     const bin = join(binDir, "mdstream")
-    writeFileSync(bin, "old installer copy")
-    const r = await resolveFormatter(undefined, deps(null, {}, { [bin]: "v0.3.7" }))
+    writeFileSync(bin, "current copy")
+    const r = await resolveFormatter(undefined, deps(null, "v0.3.9", {}, { [bin]: "v0.3.9" }))
     expect(r.cmd).toEqual([bin])
-    expect(strip(r.label ?? "")).toBe("mdstream v0.3.7 (cached)")
-    expect(fetched).toEqual([])
+    expect(strip(r.label ?? "")).toBe("mdstream v0.3.9 (cached)")
+    expect(fetched).toEqual([`${REL}/latest`])
   })
 
-  test("fresh install verifies the pinned sha256 and records it in the store", async () => {
-    const bytes = await tarball()
-    // Pin this test's tarball so the store's sha256 check passes.
-    const prev = MDSTREAM_PIN.assets["linux-x64"]!
-    MDSTREAM_PIN.assets["linux-x64"] = { asset: prev.asset, sha256: sha256(bytes) }
-    try {
-      const r = await resolveFormatter(undefined, deps(bytes))
-      const bin = join(binDir, "mdstream")
-      expect(r.cmd).toEqual([bin])
-      expect(fetched).toEqual([
-        `https://github.com/gastonmorixe/mdstream/releases/download/v${MDSTREAM_PIN.version}/${prev.asset}`,
-      ])
-      expect(statSync(bin).mode & 0o111).not.toBe(0)
-      const manifest = JSON.parse(readFileSync(join(binDir, ".binaries.json"), "utf8"))
-      expect(manifest.entries[0]).toMatchObject({ name: "mdstream", version: MDSTREAM_PIN.version })
-    } finally {
-      MDSTREAM_PIN.assets["linux-x64"] = prev
-    }
+  test("fresh install downloads the latest release, no checksum", async () => {
+    const r = await resolveFormatter(undefined, deps(await tarball(), "v0.3.9"))
+    const bin = join(binDir, "mdstream")
+    expect(r.cmd).toEqual([bin])
+    expect(fetched).toEqual([
+      `${REL}/latest`,
+      `${REL}/download/v0.3.9/${MDSTREAM_ASSETS["linux-x64"]}`,
+    ])
+    expect(readFileSync(bin, "utf8")).toContain("mdstream 0.3.9")
+    expect(statSync(bin).mode & 0o111).not.toBe(0)
+    expect(strip(r.label ?? "")).toBe("mdstream v0.3.9 (auto-downloaded)")
   })
 
-  test("a sha256 mismatch installs nothing and warns", async () => {
-    const r = await resolveFormatter(undefined, deps(await tarball("tampered")))
-    expect(r.cmd).toBeUndefined()
-    expect(strip(r.warn ?? "")).toContain("sha256 mismatch")
-    expect(existsSync(join(binDir, "mdstream"))).toBe(false)
+  test("an older copy is upgraded to the latest", async () => {
+    const bin = join(binDir, "mdstream")
+    writeFileSync(bin, "v0.3.7 copy")
+    const r = await resolveFormatter(
+      undefined,
+      deps(await tarball(), "v0.3.9", {}, { [bin]: "v0.3.7" }),
+    )
+    expect(r.cmd).toEqual([bin])
+    expect(readFileSync(bin, "utf8")).toContain("mdstream 0.3.9")
+  })
+
+  test("an older copy is kept when the upgrade download fails", async () => {
+    const bin = join(binDir, "mdstream")
+    writeFileSync(bin, "v0.3.7 copy")
+    const r = await resolveFormatter(undefined, deps(null, "v0.3.9", {}, { [bin]: "v0.3.7" }))
+    expect(fetched).toHaveLength(2)
+    expect(r.cmd).toEqual([bin])
+    expect(readFileSync(bin, "utf8")).toBe("v0.3.7 copy")
+  })
+
+  test("offline with a copy: keep it, no download", async () => {
+    const bin = join(binDir, "mdstream")
+    writeFileSync(bin, "v0.3.7 copy")
+    const r = await resolveFormatter(undefined, deps(null, null, {}, { [bin]: "v0.3.7" }))
+    expect(r.cmd).toEqual([bin])
+    expect(fetched).toEqual([`${REL}/latest`])
+  })
+
+  test("lookup fails with nothing installed: falls back to the latest alias", async () => {
+    const r = await resolveFormatter(undefined, deps(await tarball(), null))
+    expect(r.cmd).toEqual([join(binDir, "mdstream")])
+    expect(fetched[1]).toBe(`${REL}/latest/download/${MDSTREAM_ASSETS["linux-x64"]}`)
   })
 
   test("offline with nothing installed: plain output with a warning, never a throw", async () => {
-    const r = await resolveFormatter(undefined, deps(null))
+    const r = await resolveFormatter(undefined, deps(null, null))
     expect(r.cmd).toBeUndefined()
     expect(strip(r.warn ?? "")).toContain("could not install mdstream")
   })
 
-  test("an older copy is upgraded, and kept when the upgrade fails", async () => {
-    const bin = join(binDir, "mdstream")
-    writeFileSync(bin, "v0.3.6 copy")
-    const r = await resolveFormatter(undefined, deps(null, {}, { [bin]: "v0.3.6" }))
-    expect(fetched).toHaveLength(1)
-    expect(r.cmd).toEqual([bin])
-    expect(readFileSync(bin, "utf8")).toBe("v0.3.6 copy")
+  test("a bad archive installs nothing and warns", async () => {
+    const r = await resolveFormatter(
+      undefined,
+      deps(new Uint8Array(new TextEncoder().encode("not a tarball")), "v0.3.9"),
+    )
+    expect(r.cmd).toBeUndefined()
+    expect(existsSync(join(binDir, "mdstream"))).toBe(false)
   })
 
   test("an unsupported platform with no copy warns", async () => {
-    const r = await resolveFormatter(undefined, deps(null, { platformKey: "freebsd-x64" }))
+    const r = await resolveFormatter(
+      undefined,
+      deps(null, "v0.3.9", { platformKey: "freebsd-x64" }),
+    )
     expect(r.cmd).toBeUndefined()
     expect(strip(r.warn ?? "")).toContain("no mdstream release")
     expect(fetched).toEqual([])
@@ -171,7 +207,10 @@ describe("resolveFormatter", () => {
   test("an unsupported platform still uses an existing copy", async () => {
     const bin = join(binDir, "mdstream")
     writeFileSync(bin, "x")
-    const r = await resolveFormatter(undefined, deps(null, { platformKey: "freebsd-x64" }))
+    const r = await resolveFormatter(
+      undefined,
+      deps(null, "v0.3.9", { platformKey: "freebsd-x64" }),
+    )
     expect(r.cmd).toEqual([bin])
   })
 })

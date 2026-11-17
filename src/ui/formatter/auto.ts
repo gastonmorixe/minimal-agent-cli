@@ -2,69 +2,51 @@
  * Auto-formatter resolver for mdstream.
  *
  * When no `--formatter` flag is given and `mdstream` is not already on PATH,
- * this module installs a PINNED mdstream release into the managed bin dir
- * (`~/.minimal-agent/bin/mdstream`) through the core binary store, the same
- * store that provisions plugin binaries (download, sha256 verify, atomic
- * install, `.binaries.json` record, audit log).
+ * this module keeps the LATEST mdstream release installed in the managed bin
+ * dir (`~/.minimal-agent/bin/mdstream`). No version pin, no checksum.
  *
  * **Resolution order (no `--formatter` flag)**:
- * 1. `mdstream` found on PATH → use it.
- * 2. Managed copy at `~/.minimal-agent/bin/mdstream`:
- *    - recorded by the store at the pinned version or newer → use it;
- *    - an older or unrecorded copy (installed by the previous auto-installer,
- *      which used `releases/latest` and no checksum) → use it as is when its
- *      `--version` is the pinned version or newer, else upgrade to the pin.
- *      A failed upgrade keeps the old copy, so an offline start never loses a
- *      working formatter.
- * 3. Nothing installed → install the pinned release for this OS + arch. No
- *    release for this platform, or any failure → a warning, no formatter
- *    (plain output). Never fatal.
+ * 1. `mdstream` found on PATH → use it (user-managed, never touched).
+ * 2. Ask GitHub for the latest release tag (the `releases/latest` redirect,
+ *    short timeout). Managed copy at `~/.minimal-agent/bin/mdstream`:
+ *    - its `--version` is the latest or newer → use it;
+ *    - older, unknown version, or the lookup failed → see 3 / keep the copy.
+ * 3. Download the latest release tarball for this OS + arch, extract it
+ *    in-process, and atomically replace the managed copy. Any failure keeps
+ *    an existing copy (an offline start never loses a working formatter), or
+ *    falls back to plain output with a warning. Never fatal.
  *
- * Network: one anonymous GET of a public `github.com/.../releases/download`
- * URL, only when an install or upgrade is needed. No `api.github.com` call,
- * so no rate limit. Subprocesses: only `mdstream --version`. The archive is
- * extracted in-process with `Bun.Archive` (no `tar`, `find`, `cp`, `rm`).
- *
- * To move to a newer mdstream, bump {@link MDSTREAM_PIN}: version, then the
- * asset sha256 per target. `gh release view <tag> -R gastonmorixe/mdstream`
- * with `--json assets` prints each asset's `digest`.
+ * Network: an anonymous request to `github.com/<repo>/releases/latest` (the
+ * redirect names the tag; no `api.github.com`, so no rate limit), plus one
+ * `releases/download` GET only when an install or upgrade is needed.
+ * Subprocesses: only `mdstream --version`. The archive is extracted with
+ * `Bun.Archive` (no `tar`, `find`, `cp`, `rm`).
  *
  * @module ui/formatter/auto
  */
 
-import { existsSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import type { BinarySpec, BinaryStore, InstallProgress } from "@minimal-agent/core/host/binaries"
+import { findMember } from "@minimal-agent/core/host/binaries"
 import { resolveAgentHome } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import { ansiStyle as A } from "../../terminal-kit/ansi.ts"
 
 import { startStartupProgressSpinner } from "../startup/progress-spinner.ts"
 
 /** Public repo that publishes mdstream release tarballs. */
-const MDSTREAM_REPO = "gastonmorixe/mdstream"
+export const MDSTREAM_REPO = "gastonmorixe/mdstream"
 
-/**
- * The mdstream release this CLI installs. One entry per published target,
- * keyed by `${process.platform}-${process.arch}`. sha256 is of the tarball.
- */
-export const MDSTREAM_PIN = {
-  version: "0.3.7",
-  assets: {
-    "linux-arm64": {
-      asset: "mdstream-linux-aarch64.tar.gz",
-      sha256: "bf17cde5e94fba9bb3dc7ade13fdd8956c98a2a08941680592010a580ae092a1",
-    },
-    "linux-x64": {
-      asset: "mdstream-linux-x86_64.tar.gz",
-      sha256: "413d8968e67e04d808f294c9ca7de38807fe481b9b63c6e369a04dd46475f7e8",
-    },
-    "darwin-arm64": {
-      asset: "mdstream-macos-aarch64.tar.gz",
-      sha256: "a5eab1911cf4e768771bec2d3953d909a8ce252fa666fc0543d9ccba5bd4a3c3",
-    },
-  } as Record<string, { asset: string; sha256: string }>,
-} as const
+/** Release asset per `${process.platform}-${process.arch}`. */
+export const MDSTREAM_ASSETS: Record<string, string> = {
+  "linux-arm64": "mdstream-linux-aarch64.tar.gz",
+  "linux-x64": "mdstream-linux-x86_64.tar.gz",
+  "darwin-arm64": "mdstream-macos-aarch64.tar.gz",
+}
+
+/** How long the startup "what is latest" lookup may take before we skip it. */
+const LATEST_LOOKUP_TIMEOUT_MS = 2500
 
 /** Result of {@link resolveFormatter}. */
 export type FormatterResolution =
@@ -83,33 +65,77 @@ export type FormatterResolution =
     }
 
 /**
- * The pinned store spec for a platform key, or null when mdstream publishes
- * no build for it. Pure.
+ * Download URL for a platform. With a tag, that exact release; without one,
+ * GitHub's `releases/latest/download` alias. Null when mdstream publishes no
+ * build for the platform. Pure.
  */
-export function mdstreamSpecFor(platformKey: string): BinarySpec | null {
-  const entry = MDSTREAM_PIN.assets[platformKey]
-  if (!entry) return null
-  return {
-    name: "mdstream",
-    version: MDSTREAM_PIN.version,
-    source: {
-      kind: "url",
-      url: `https://github.com/${MDSTREAM_REPO}/releases/download/v${MDSTREAM_PIN.version}/${entry.asset}`,
-      archive: true,
-    },
-    sha256: entry.sha256,
-    archiveMember: "mdstream",
+export function mdstreamUrlFor(platformKey: string, tag?: string | null): string | null {
+  const asset = MDSTREAM_ASSETS[platformKey]
+  if (!asset) return null
+  const base = `https://github.com/${MDSTREAM_REPO}/releases`
+  return tag ? `${base}/download/${tag}/${asset}` : `${base}/latest/download/${asset}`
+}
+
+/**
+ * Latest release tag (e.g. `"v0.3.9"`) from the `releases/latest` redirect,
+ * or null on any failure / timeout.
+ */
+export async function fetchLatestTag(fetchFn: typeof fetch = fetch): Promise<string | null> {
+  try {
+    const res = await fetchFn(`https://github.com/${MDSTREAM_REPO}/releases/latest`, {
+      method: "HEAD",
+      redirect: "manual",
+      signal: AbortSignal.timeout(LATEST_LOOKUP_TIMEOUT_MS),
+    })
+    const loc = res.headers.get("location") ?? res.url
+    const m = loc?.match(/\/releases\/tag\/([^/?#]+)/)
+    return m ? decodeURIComponent(m[1]!) : null
+  } catch {
+    return null
   }
 }
 
 /**
- * Extract a `.tar.gz` in-process with `Bun.Archive`. Replaces the store's
- * default `tar` subprocess. `Bun.Archive` confines entries to `destDir`
- * (`../` and absolute member paths are rewritten under it).
+ * Extract a `.tar.gz` in-process with `Bun.Archive`. `Bun.Archive` confines
+ * entries to `destDir` (`../` and absolute member paths are rewritten under it).
  */
 export async function extractWithBunArchive(archivePath: string, destDir: string): Promise<void> {
   const archive = new Bun.Archive(await Bun.file(archivePath).arrayBuffer())
   await archive.extract(destDir)
+}
+
+/**
+ * Download `url` (a tarball holding `mdstream`), extract it, and atomically
+ * install the binary at `dest`. Throws on any failure; `dest` is untouched
+ * unless the final rename succeeds.
+ */
+async function downloadAndInstall(url: string, dest: string, fetchFn: typeof fetch): Promise<void> {
+  const work = mkdtempSync(join(tmpdir(), "ma-mdstream-"))
+  try {
+    const res = await fetchFn(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`)
+    const archivePath = join(work, "mdstream.tar.gz")
+    await Bun.write(archivePath, await res.arrayBuffer())
+    const extractDir = join(work, "x")
+    mkdirSync(extractDir, { recursive: true })
+    await extractWithBunArchive(archivePath, extractDir)
+    const found = findMember(extractDir, "mdstream")
+    if (!found) throw new Error(`"mdstream" not found in ${url}`)
+    // Stage next to dest (same filesystem), then rename into place.
+    const binDir = join(dest, "..")
+    mkdirSync(binDir, { recursive: true })
+    const staged = join(binDir, `.mdstream.${process.pid}.staged`)
+    try {
+      await Bun.write(staged, Bun.file(found))
+      chmodSync(staged, 0o755)
+      renameSync(staged, dest)
+    } catch (err) {
+      rmSync(staged, { force: true })
+      throw err
+    }
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
 }
 
 /**
@@ -142,39 +168,8 @@ export interface ResolveFormatterDeps {
   platformKey?: string
   /** Managed bin dir. Default `<agent-home>/bin`. */
   binDir?: string
-  /** Store factory (receives the progress sink). Default: the core `BinaryStore`. */
-  makeStore?: (binDir: string, onProgress: (p: InstallProgress) => void) => Promise<BinaryStore>
-}
-
-async function defaultMakeStore(
-  binDir: string,
-  onProgress: (p: InstallProgress) => void,
-): Promise<BinaryStore> {
-  const { BinaryStore } = await import("@minimal-agent/core/host/binaries")
-  const { getDiagnosticBus, Facility, Severity } = await import(
-    "@minimal-agent/core/host/diagnostics"
-  )
-  const severity = {
-    info: Severity.Info,
-    notice: Severity.Notice,
-    warn: Severity.Warning,
-    error: Severity.Error,
-  } as const
-  return new BinaryStore(binDir, {
-    onProgress,
-    extractFn: extractWithBunArchive,
-    // Same audit trail as plugin binaries (`ma.log`).
-    log: (level, source, message, structuredData) => {
-      getDiagnosticBus().emit({
-        ts: Date.now(),
-        severity: severity[level],
-        facility: Facility.User,
-        source,
-        message,
-        structuredData,
-      })
-    },
-  })
+  /** Fetch used for the latest lookup and the download. Default global `fetch`. */
+  fetchFn?: typeof fetch
 }
 
 /** `"v0.3.7"` → `[0, 3, 7]`, or null. */
@@ -195,7 +190,8 @@ function atLeast(have: string | null, want: string): boolean {
 }
 
 /**
- * Resolve the formatter command, installing the pinned mdstream if needed.
+ * Resolve the formatter command, installing or upgrading to the latest
+ * mdstream release if needed.
  *
  * @param explicitCmd - Parsed argv when `--formatter <cmd>` was supplied.
  *   When present the function returns immediately with that command (no
@@ -212,6 +208,7 @@ export async function resolveFormatter(
   }
   const which = deps.which ?? ((cmd: string) => Bun.which(cmd))
   const queryVersion = deps.queryVersion ?? queryMdstreamVersion
+  const fetchFn = deps.fetchFn ?? fetch
 
   // 1. mdstream on PATH
   if (which("mdstream")) {
@@ -225,21 +222,15 @@ export async function resolveFormatter(
   const binDir = deps.binDir ?? join(resolveAgentHome(), "bin")
   const cachedBin = join(binDir, "mdstream")
   const platformKey = deps.platformKey ?? `${process.platform}-${process.arch}`
-  const spec = mdstreamSpecFor(platformKey)
+  const supported = mdstreamUrlFor(platformKey) !== null
   const cachedLabel = (ver: string | null): string =>
     `mdstream${ver ? ` ${A.sky(ver)}` : ""} ${A.dim("(cached)")}`
 
   const hasCopy = existsSync(cachedBin)
-  let cachedVer: string | null = null
-  if (hasCopy) {
-    cachedVer = await queryVersion(cachedBin)
-    // No pin for this platform, or the copy is already current: no network.
-    if (!spec || atLeast(cachedVer, MDSTREAM_PIN.version)) {
-      return { cmd: [cachedBin], label: cachedLabel(cachedVer) }
-    }
-  }
+  const cachedVer = hasCopy ? await queryVersion(cachedBin) : null
 
-  if (!spec) {
+  if (!supported) {
+    if (hasCopy) return { cmd: [cachedBin], label: cachedLabel(cachedVer) }
     return {
       cmd: undefined,
       warn:
@@ -248,42 +239,32 @@ export async function resolveFormatter(
     }
   }
 
-  // 3. Install (or upgrade an older copy) through the binary store.
+  const latest = await fetchLatestTag(fetchFn)
+  if (hasCopy && (!latest || atLeast(cachedVer, latest))) {
+    // Current, or we cannot tell what is latest (offline): keep the copy.
+    return { cmd: [cachedBin], label: cachedLabel(cachedVer) }
+  }
+
+  // 3. Install (or upgrade an older copy) to the latest release.
+  const url = mdstreamUrlFor(platformKey, latest)!
   const platformLabel = A.dim(platformKey.replace("-", " · "))
-  const versionLabel = A.sky(`v${MDSTREAM_PIN.version}`)
+  const versionLabel = A.sky(latest ?? "latest")
   const verb = hasCopy ? "updating" : "downloading"
   const spinner = startStartupProgressSpinner(
     `${A.dim(verb)}  ${A.bold("mdstream")} ${versionLabel}  ${platformLabel}`,
   )
-  const phaseWord: Partial<Record<InstallProgress["phase"], string>> = {
-    verifying: "verifying",
-    extracting: "extracting",
-    installing: "installing",
-  }
-  let lastPhase: InstallProgress["phase"] | null = null
-  const onProgress = (p: InstallProgress): void => {
-    if (p.phase === lastPhase) return
-    lastPhase = p.phase
-    const word = phaseWord[p.phase]
-    if (word) {
-      spinner.setPhase(`${A.dim(word)}  ${A.bold("mdstream")} ${versionLabel}  ${platformLabel}`)
-    }
-  }
 
   let detail: string
   try {
-    const store = await (deps.makeStore ?? defaultMakeStore)(binDir, onProgress)
-    const outcome = await store.install(spec)
-    if (outcome.ok) {
-      spinner.done(
-        `${A.bold("mdstream")} ${versionLabel}  ${A.dim(hasCopy ? "updated" : "installed")}  ${A.faintWhite("→")}  ${A.dim(outcome.installed.path)}`,
-      )
-      return {
-        cmd: [outcome.installed.path],
-        label: `mdstream v${MDSTREAM_PIN.version} ${A.dim("(auto-downloaded)")}`,
-      }
+    await downloadAndInstall(url, cachedBin, fetchFn)
+    const ver = latest ?? (await queryVersion(cachedBin))
+    spinner.done(
+      `${A.bold("mdstream")} ${A.sky(ver ?? "latest")}  ${A.dim(hasCopy ? "updated" : "installed")}  ${A.faintWhite("→")}  ${A.dim(cachedBin)}`,
+    )
+    return {
+      cmd: [cachedBin],
+      label: `mdstream${ver ? ` ${ver}` : ""} ${A.dim("(auto-downloaded)")}`,
     }
-    detail = outcome.detail
   } catch (err) {
     detail = err instanceof Error ? err.message : String(err)
   }
