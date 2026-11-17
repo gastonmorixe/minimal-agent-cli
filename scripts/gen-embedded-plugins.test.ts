@@ -137,6 +137,14 @@ describe("manifestRefs", () => {
     })
     expect([...refs.modules]).toEqual(["./tool-text.ts"])
   })
+
+  test("collects the toolResultTransforms entry", () => {
+    const refs = manifestRefs({
+      toolResultTransforms: { id: "probe", entry: "./transforms.ts", timeoutMs: 500 },
+    })
+    expect([...refs.modules]).toEqual(["./transforms.ts"])
+    expect(manifestRefs({ toolResultTransforms: { id: "x" } }).modules).toEqual([])
+  })
 })
 
 describe("prompt assets", () => {

@@ -26,8 +26,8 @@
  *     replay renderers, turn attachments, `ui.setup`, `ui.liveAreaSlots`,
  *     `cli.commands` handlers), `promptTemplate.entry`, `systemPromptBase.entry`,
  *     `errorRenderers[].entry`, `syntheticText[].entry`, `toolText[].entry`,
- *     `sidebandCodec.entry`, every `scripts` value, and `provider.json`
- *     `entry`. Literal `() => import("<abs path>")` thunks.
+ *     `sidebandCodec.entry`, `toolResultTransforms.entry`, every `scripts`
+ *     value, and `provider.json` `entry`. Literal `() => import("<abs path>")` thunks.
  *   - files: every relative subprocess `command[0]` that is not a `.ts`/`.js`
  *     module (today `ma-env-info-plugin/gather.sh`). Imported
  *     `with { type: "file" }`, so core can extract it before exec. A file is
@@ -117,6 +117,7 @@ export function manifestRefs(manifest: unknown): Refs {
   entryOf(manifest.promptTemplate)
   entryOf(manifest.systemPromptBase)
   entryOf(manifest.sidebandCodec)
+  entryOf(manifest.toolResultTransforms)
   if (Array.isArray(manifest.errorRenderers)) manifest.errorRenderers.forEach(entryOf)
   if (Array.isArray(manifest.syntheticText)) manifest.syntheticText.forEach(entryOf)
   if (Array.isArray(manifest.toolText)) manifest.toolText.forEach(entryOf)
