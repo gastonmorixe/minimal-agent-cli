@@ -39,6 +39,13 @@ const KIND = "probe-mark"
 const TOOL = "ProbeTool"
 const CONTENT = "probe ok"
 const LOG_KEY = "__cliChainProbeLog"
+/**
+ * True when production passes `ctx.signal` (an `AbortSignal`) to each stage.
+ * TODO(helen): set to `true` when the core runner passes `ctx`. Today core
+ * `runPhase` (`loops/tool-result-chain.ts`) calls `transform(current)` with
+ * one argument, so each stage logs `false`. That file is Gabriel's (W1).
+ */
+const SIGNAL_PASSED = false
 
 function phaseLog(): string[] {
   const g = globalThis as unknown as Record<string, string[] | undefined>
@@ -108,8 +115,8 @@ function writeChainProbe(): string {
 const stage = (phase) => ({
   phase,
   order: 0,
-  transform: (s) => {
-    log().push(phase)
+  transform: (s, ctx) => {
+    log().push(phase + ":" + (ctx?.signal instanceof AbortSignal))
     return phase === "stamp" ? { ...s, kind: ${JSON.stringify(KIND)} } : s
   },
 })
@@ -218,7 +225,8 @@ describe("InteractiveSession tool-result chain (test E, spec v6.1 M0)", () => {
       const gen = session.run("go")
       while (!(await gen.next()).done) {}
 
-      expect(phaseLog()).toEqual([...PHASES])
+      // Each stage logs `<phase>:<ctx.signal is an AbortSignal>`.
+      expect(phaseLog()).toEqual(PHASES.map((p) => `${p}:${SIGNAL_PASSED}`))
       const block = toolResultOf(session.history())
       expect(block?.content).toBe(CONTENT)
       expect(block?.sideband).toEqual({ kind: KIND })
