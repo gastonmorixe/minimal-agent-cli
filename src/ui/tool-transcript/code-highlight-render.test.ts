@@ -191,9 +191,13 @@ describe("embedded-language refinement for diffs", () => {
 
   it("keeps the HTML grammar when a changed line opens with a tag", async () => {
     const rec = nativeRecorder()
-    const patch = ["--- a/x.php", "+++ b/x.php", "@@ -1 +1 @@", '-<?php echo 1;', "+<?php echo 2;"].join(
-      "\n",
-    )
+    const patch = [
+      "--- a/x.php",
+      "+++ b/x.php",
+      "@@ -1 +1 @@",
+      "-<?php echo 1;",
+      "+<?php echo 2;",
+    ].join("\n")
     await highlightUnifiedDiff(patch, "php", rec.highlighter)
     expect(rec.languages).toEqual(["php"])
   })
@@ -202,9 +206,13 @@ describe("embedded-language refinement for diffs", () => {
     // No native mode: the local compositor lexes old and new payloads
     // separately, so each side may choose differently for the same patch.
     const rec = recordingHighlighter()
-    const patch = ["--- a/x.php", "+++ b/x.php", "@@ -1 +1 @@", "-<?php echo 1;", "+class Foo {}"].join(
-      "\n",
-    )
+    const patch = [
+      "--- a/x.php",
+      "+++ b/x.php",
+      "@@ -1 +1 @@",
+      "-<?php echo 1;",
+      "+class Foo {}",
+    ].join("\n")
     const out = await highlightUnifiedDiff(patch, "php", rec.highlighter)
     expect(out).not.toBeNull()
     expect(rec.languages).toEqual(["php", "PHP Source"])

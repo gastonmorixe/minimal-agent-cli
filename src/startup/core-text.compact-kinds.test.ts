@@ -93,7 +93,9 @@ describe("CompactFailure codes: CLI text", () => {
   test("facts appear in the text", () => {
     expect(compactFailureText({ code: "send_denied", reason: "no" })).toContain(": no")
     expect(compactFailureText({ code: "unknown_model", model: "m-x" })).toContain('"m-x"')
-    expect(compactFailureText({ code: "unknown_model", model: "m-x" })).toBe('the model "m-x" is unknown')
+    expect(compactFailureText({ code: "unknown_model", model: "m-x" })).toBe(
+      'the model "m-x" is unknown',
+    )
     // No model fact: a model-free text, never `""`.
     expect(compactFailureText({ code: "unknown_model" })).toBe("the model is unknown")
     expect(compactFailureText({ code: "unknown_model", model: " " })).toBe("the model is unknown")
