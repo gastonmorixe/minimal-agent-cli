@@ -5,6 +5,11 @@
  * `loader`. The adapter must get the tool-result chain and the frozen
  * sideband registry from the real `PluginLoader` by its loader fallback.
  *
+ * The test needs the text plugins of the sibling plugins checkout. When the
+ * checkout is missing, it skips. Under `CI` (for example `CI=1` or
+ * `CI=true`) or `MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES=1`, it runs and FAILS
+ * instead (M6): same rule as `test-utils/text-fixtures-required.ts`.
+ *
  * The fixture plugin is written as split JSON into a temp dir (the plugin is
  * not under a plugin root, so no golden scenario loads it). Its stages log to
  * a CLI-only global, so this file does not share state with the core tests.
@@ -22,6 +27,7 @@ import type { Message } from "@minimal-agent/core/sdk/messages"
 
 import { InteractiveSession } from "./interactive-session.ts"
 import { textCoreDeps, textFixturesPresent } from "./test-utils/text-fixture-providers.ts"
+import { type FixtureEnv, textFixturesRequired } from "./test-utils/text-fixtures-required.ts"
 import type {
   TestSendParams as SendOptions,
   TestSendResult as StreamedResponse,
@@ -145,7 +151,25 @@ function toolResultOf(history: readonly Message[]) {
   return undefined
 }
 
+/**
+ * Skip only when the plugins checkout is missing AND no CI setting requires
+ * it. Under CI a missing checkout runs the test, and the test fails.
+ */
+function skipChainTest(present: boolean, env: FixtureEnv = process.env): boolean {
+  return !present && !textFixturesRequired(env)
+}
+
 describe("InteractiveSession tool-result chain (test E, spec v6.1 M0)", () => {
+  it("a missing plugins checkout skips locally and fails under CI=1 or CI=true (M6)", () => {
+    expect(skipChainTest(false, {})).toBe(true)
+    expect(skipChainTest(false, { CI: "" })).toBe(true)
+    expect(skipChainTest(false, { CI: "false" })).toBe(true)
+    expect(skipChainTest(false, { CI: "1" })).toBe(false)
+    expect(skipChainTest(false, { CI: "true" })).toBe(false)
+    expect(skipChainTest(false, { MINIMAL_AGENT_REQUIRE_TEXT_FIXTURES: "1" })).toBe(false)
+    expect(skipChainTest(true, {})).toBe(false)
+  })
+
   it("the CLI resolves the local core package", () => {
     const cliRoot = resolve(import.meta.dir, "..")
     const coreRoot = realpathSync(resolve(cliRoot, "../minimal-agent-core"))
@@ -156,9 +180,13 @@ describe("InteractiveSession tool-result chain (test E, spec v6.1 M0)", () => {
     expect(dirname(resolved)).toBe(join(coreRoot, "src/host-public"))
   })
 
-  it.skipIf(!textFixturesPresent())(
+  it.skipIf(skipChainTest(textFixturesPresent()))(
     "runs every phase stage and keeps the sideband mark in live history",
     async () => {
+      // Under CI with no checkout, this test runs: fail with a clear reason.
+      if (!textFixturesPresent()) {
+        throw new Error("the plugins checkout is missing, and CI requires it")
+      }
       const loader = await PluginLoader.load({
         roots: { embedded: [writeChainProbe()] },
         logger: () => {},
