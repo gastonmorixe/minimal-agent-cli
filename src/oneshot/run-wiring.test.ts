@@ -1,7 +1,7 @@
 /**
  * `runNonInteractivePrompt` arms the one-shot run values (`--temperature`,
  * `--strict`) on the core before the prompt run, on the text route and on
- * the event-stream route, and only for the new prompt turn.
+ * the event-stream route.
  *
  * @module oneshot/run-wiring.test
  */
@@ -93,17 +93,6 @@ describe("runNonInteractivePrompt one-shot run options", () => {
       ),
     )
     expect(log).toEqual(["temperature=0.2", "strict=true", "run:go"])
-  })
-
-  test("text route: a continued turn does not get them, the new turn does", async () => {
-    const log: string[] = []
-    const agent = textAgent(log, recordingCore(log))
-    await quietStdout(() =>
-      runNonInteractivePrompt(
-        input({ agent, continueTurn: true, oneShotRunOptions: { temperature: 1 } }),
-      ),
-    )
-    expect(log).toEqual(["run:", "temperature=1", "run:go"])
   })
 
   test("text route: an agent with no core (older core) runs without them, no throw", async () => {

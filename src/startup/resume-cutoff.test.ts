@@ -7,10 +7,11 @@
  *
  * 1. Run 1 does one normal Bash round. In round 2, the Bash call kills the
  *    CLI with SIGKILL while the tool runs.
- * 2. Resume 1 continues the turn. Core closes the cut-off call with a
+ * 2. Resume 1 continues the turn on `/continue` (a resumed session never
+ *    continues by itself). Core closes the cut-off call with a
  *    synthetic error result (the note). The model asks for one more Bash
  *    call, and that call kills the CLI again while it runs.
- * 3. Resume 2 continues the turn. Its request must hold each tool_use and
+ * 3. Resume 2 continues the turn on `/continue`. Its request must hold each tool_use and
  *    tool_result pair exactly once, in order, with the note for each cut-off
  *    call. No tool may run again by itself.
  *
@@ -103,10 +104,10 @@ afterAll(() => {
   rmSync(HOME_DIR, { recursive: true, force: true })
 })
 
-async function runChild(args: string[]) {
+async function runChild(args: string[], stdinText?: string) {
   const p = Bun.spawn(["bun", "run", CHILD, "--skip-quota", "--formatter", "cat", ...args], {
     cwd: CLI_ROOT,
-    stdin: "ignore",
+    stdin: stdinText === undefined ? "ignore" : new Blob([stdinText]),
     stdout: "pipe",
     stderr: "pipe",
     timeout: 30000,
@@ -190,12 +191,12 @@ describe.skipIf(TEXT_PLUGIN_DIRS.length === 0)(
       expect(first.signalCode).toBe("SIGKILL")
       expect(lines(MARK)).toEqual(["r1", "c2"])
 
-      const resume1 = await runChild(["--resume", SID])
+      const resume1 = await runChild(["--resume", SID], "/continue\n")
       expect(resume1.signalCode).toBe("SIGKILL")
       expect(lines(MARK)).toEqual(["r1", "c2", "c3"])
       const sid1 = newSession([`${SID}.jsonl`])
 
-      const resume2 = await runChild(["--resume", sid1])
+      const resume2 = await runChild(["--resume", sid1], "/continue\n")
       expect(resume2.stderr).not.toContain("fatal")
       expect(resume2.exitCode).toBe(0)
       expect(resume2.stdout).toContain("CUTOFF-ANSWER")
