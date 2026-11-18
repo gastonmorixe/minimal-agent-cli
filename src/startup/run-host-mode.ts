@@ -46,6 +46,7 @@ import { applyTurnWillStart } from "../repl-editor-hooks.ts"
 import { errorText } from "./core-text.ts"
 
 import { withHostPorts } from "./host-ports.ts"
+import { prepareHostResume } from "./host-resume.ts"
 import {
   credentialNamesFrom,
   type DiscoverTargets,
@@ -57,7 +58,7 @@ import {
 } from "./host-targets.ts"
 import { followLiveTarget } from "./live-target.ts"
 import { turnBlockedError } from "./run-non-interactive.ts"
-import { announceSessionWillStart } from "./session-will-start.ts"
+import { announceSessionWillStart, sessionStartSource } from "./session-will-start.ts"
 
 /** Default time the entry has to end after the first shutdown signal. */
 const DEFAULT_SIGNAL_GRACE_MS = 5000
@@ -116,6 +117,8 @@ export interface RunHostModeInput {
   readonly discoverTargets?: DiscoverTargets
   /** Auth resolution for `setTarget`. Injectable for tests. Defaults to `resolveStartupAuth`. */
   readonly resolveTargetAuth?: ResolveTargetAuth
+  /** Where `resumeSession` reads saved sessions. Injectable for tests. Defaults to the configured dir. */
+  readonly sessionsDir?: string
 }
 
 /**
@@ -361,9 +364,21 @@ export function detectHostRuntimeCapabilities(): HostRuntimeCapabilities {
   }
 }
 
-/** The {@link HostRuntime} plus {@link HostRuntimeCapabilities}. */
+/**
+ * The {@link HostRuntime} plus {@link HostRuntimeCapabilities} and
+ * `resumeSession`. Both are declared here, not in core, so a plugin
+ * feature-detects them (an older CLI has neither).
+ */
 export type HostRuntimeWithCapabilities = HostRuntime & {
   readonly capabilities: HostRuntimeCapabilities
+  /**
+   * Like `openSession`, but reopens the saved session `sessionId` in place:
+   * the same id, its history, and new records appended to its file. Shares
+   * the one-session limit with `openSession`. An id with no saved session
+   * throws an Error with `code` `"session.not-found"`, and the runtime can
+   * still open a session after it.
+   */
+  resumeSession(sessionId: string, options?: HostOpenSessionOptions): Promise<HostSession>
 }
 
 /**
@@ -398,69 +413,82 @@ function buildHostRuntime(
     }
   }
 
-  return {
-    capabilities,
-    async openSession(options?: HostOpenSessionOptions): Promise<HostSession> {
-      if (opened) {
-        throw new Error(
-          "HostRuntime.openSession was already called once in this process " +
-            "(Level 1 is one session per process; see src/host-public/host-mode.ts)",
-        )
-      }
-      opened = true
-      // `wireModelInfoSource`: the ModelInfo tool reads THIS session's live
-      // model. The loader's boot-time closure stays on the boot model,
-      // because only the REPL path rebinds it. Without this, a model switch
-      // over the protocol leaves ModelInfo on the old model.
-      const session = await openAgentCoreSession({
-        // S23/S28: status rows and plugin-bus telemetry, like the human path.
-        ...withHostPorts(withSystemPromptOption(sessionDeps, options?.systemPrompt, stderr)),
-        wireModelInfoSource: true,
-        // switchTarget checks an explicit credential name against the store.
-        credentialNames: credentialNamesFrom(discover),
-        sessionId: input.sessionId,
-      })
-      liveAgentCore = session.agentCore()
-      // The same side effects as the TUI: the env and the `target.didSwitch` bus event.
-      followLiveTarget(liveAgentCore, { loader: input.loader })
-      void input.hostLifecycle.sessionStart?.({
-        sid: input.sessionId,
+  /**
+   * Opens the one session of this process: a fresh one under the boot id,
+   * or (`resumeSid` set) a saved one in place under its own id.
+   */
+  const openOnce = async (
+    options: HostOpenSessionOptions | undefined,
+    resumeSid?: string,
+  ): Promise<HostSession> => {
+    if (opened) {
+      throw new Error(
+        "HostRuntime.openSession was already called once in this process " +
+          "(Level 1 is one session per process; see src/host-public/host-mode.ts)",
+      )
+    }
+    // An unknown id throws here, before `opened` is set, so the client can
+    // still open a fresh session after a failed resume.
+    const resume =
+      resumeSid === undefined
+        ? undefined
+        : prepareHostResume(resumeSid, sessionDeps, input.sessionsDir)
+    opened = true
+    const sid = resumeSid ?? input.sessionId
+    const deps = resume?.deps ?? sessionDeps
+    // `wireModelInfoSource`: the ModelInfo tool reads THIS session's live
+    // model. The loader's boot-time closure stays on the boot model,
+    // because only the REPL path rebinds it. Without this, a model switch
+    // over the protocol leaves ModelInfo on the old model.
+    const session = await openAgentCoreSession({
+      // S23/S28: status rows and plugin-bus telemetry, like the human path.
+      ...withHostPorts(withSystemPromptOption(deps, options?.systemPrompt, stderr)),
+      wireModelInfoSource: true,
+      // switchTarget checks an explicit credential name against the store.
+      credentialNames: credentialNamesFrom(discover),
+      sessionId: sid,
+    })
+    liveAgentCore = session.agentCore()
+    // The same side effects as the TUI: the env and the `target.didSwitch` bus event.
+    followLiveTarget(liveAgentCore, { loader: input.loader })
+    void input.hostLifecycle.sessionStart?.({ sid, cwd: process.cwd(), model: sessionDeps.model })
+    // Awaited: the context must be queued before the entry can call `run`.
+    await announceSessionWillStart(
+      input.hostLifecycle,
+      liveAgentCore,
+      {
+        source: sessionStartSource(resume !== undefined),
+        sid,
         cwd: process.cwd(),
         model: sessionDeps.model,
-      })
-      // Host mode opens a fresh session (no `initialMessages`), so the
-      // source is always "startup". Awaited: the context must be queued
-      // before the entry can call `run`.
-      await announceSessionWillStart(
-        input.hostLifecycle,
-        liveAgentCore,
-        {
-          source: "startup",
-          sid: input.sessionId,
-          cwd: process.cwd(),
-          model: sessionDeps.model,
-        },
-        stderr,
-      )
-      let closed = false
-      const run = hostSessionRun(
-        session,
-        input.loader,
-        stderr,
-        () => closed,
-        () => sessionDeps.modeManager?.activeId() ?? null,
-      )
-      return {
-        sessionId: input.sessionId,
-        run,
-        answer: (askId, answer) => session.answer(askId, answer),
-        async close(): Promise<void> {
-          closed = true
-          session.close()
-          void input.hostLifecycle.sessionEnd?.({ sid: input.sessionId })
-        },
-      }
-    },
+      },
+      stderr,
+    )
+    let closed = false
+    const run = hostSessionRun(
+      session,
+      input.loader,
+      stderr,
+      () => closed,
+      () => sessionDeps.modeManager?.activeId() ?? null,
+    )
+    return {
+      sessionId: sid,
+      run,
+      answer: (askId, answer) => session.answer(askId, answer),
+      async close(): Promise<void> {
+        closed = true
+        session.close()
+        void input.hostLifecycle.sessionEnd?.({ sid })
+      },
+    }
+  }
+
+  return {
+    capabilities,
+    openSession: (options?: HostOpenSessionOptions) => openOnce(options),
+    resumeSession: (sessionId: string, options?: HostOpenSessionOptions) =>
+      openOnce(options, sessionId),
     listModels(): readonly HostModelView[] {
       // The LIVE provider: setTarget can change it after openSession.
       const providerId = liveProviderId()
