@@ -44,6 +44,7 @@ import {
   TOOL_PREVIEW_LINES,
   TOOL_PREVIEW_LINES_DEFAULT,
   type ToolPresentation,
+  validBodyEnd,
 } from "./format.ts"
 import type { ToolTimeTracker } from "./tool-time.ts"
 
@@ -294,6 +295,8 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
     const language = languagePath ? resolveFileLanguage({ path: languagePath, content }) : null
     const highlighter = opts.codeHighlighter ?? null
     let previewContent = content
+    // The core cut, when valid. A highlighted Read body changes it (below).
+    let previewBodyEnd = validBodyEnd(content, outcome.outcome?.bodyEnd)
     let contentHasAnsi = false
     let diffStyled = false
     if (!isError && language && highlighter && !content.includes(ESC)) {
@@ -301,17 +304,21 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
         // Model-only annotations are plain metadata, not source code. Strip
         // them for the highlighter, then put them back, so the preview's
         // annotation strip still sees the canonical content.
+        // The core `bodyEnd` is the cut. Without it, guess from 3 prefixes.
         const annotationMatches = [
           content.indexOf("\n\n<ma::"),
           content.indexOf("\n\n[truncated:"),
           content.indexOf("\n\n[note:"),
         ].filter((index) => index >= 0)
-        const annotationIdx = annotationMatches.length === 0 ? -1 : Math.min(...annotationMatches)
+        const annotationIdx =
+          previewBodyEnd ?? (annotationMatches.length === 0 ? -1 : Math.min(...annotationMatches))
         const readBody = annotationIdx < 0 ? content : content.slice(0, annotationIdx)
         const annotation = annotationIdx < 0 ? "" : content.slice(annotationIdx)
         const highlighted = await highlightReadBody(readBody, language, highlighter)
         if (highlighted !== null) {
           previewContent = highlighted + annotation
+          // The body length changed: the new cut is the end of `highlighted`.
+          previewBodyEnd = highlighted.length
           contentHasAnsi = true
         }
       } else if (editPatch !== undefined) {
@@ -350,6 +357,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
       footer: displayFooter,
       cols: state.cols,
       ansiContent: contentHasAnsi,
+      ...(previewBodyEnd === undefined ? {} : { bodyEnd: previewBodyEnd }),
     })
     const panel =
       outcome.findings.length > 0

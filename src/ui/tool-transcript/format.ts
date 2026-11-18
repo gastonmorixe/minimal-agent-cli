@@ -997,6 +997,21 @@ function findAnnotationStart(content: string): number {
 }
 
 /**
+ * Return `bodyEnd` when it is a safe cut offset for `content`: a finite
+ * integer with `0 <= bodyEnd <= content.length`. Return `undefined` for any
+ * other value, so the caller uses the `findAnnotationStart` fallback. It
+ * never throws.
+ */
+export function validBodyEnd(content: string, bodyEnd: unknown): number | undefined {
+  return typeof bodyEnd === "number" &&
+    Number.isInteger(bodyEnd) &&
+    bodyEnd >= 0 &&
+    bodyEnd <= content.length
+    ? bodyEnd
+    : undefined
+}
+
+/**
  * Compute the TUI vs body line gap for the `<ma::agent::output-preview>` annotation.
  * Returns `null` when the body fits in the per-tool budget or there's no
  * body at all.
@@ -1354,6 +1369,11 @@ export function formatToolPreview(
     cols?: number
     /** Content already carries balanced syntax-highlighting ANSI. */
     ansiContent?: boolean
+    /**
+     * Offset in `content` where the body ends (`ToolViewOutcome.outcome.bodyEnd`).
+     * A bad value is ignored and the annotation regex cuts the body.
+     */
+    bodyEnd?: number
   },
 ): string[] {
   // If the tool provided a pre-rendered display string (e.g. ANSI-colored
@@ -1425,7 +1445,9 @@ export function formatToolPreview(
   //    from there. The structured `info` (when supplied) carries the same
   //    truncation numbers in machine form : we render those as the
   //    bare-facts footer instead.
-  const noticeIdx = findAnnotationStart(content)
+  //    A valid `opts.bodyEnd` (from the core outcome) is the cut; the regex
+  //    stays as the fallback.
+  const noticeIdx = validBodyEnd(content, opts?.bodyEnd) ?? findAnnotationStart(content)
   let body = noticeIdx >= 0 ? content.slice(0, noticeIdx) : content
 
   // 2. Per-line width clamp (display-width-aware so wide chars / emoji /
