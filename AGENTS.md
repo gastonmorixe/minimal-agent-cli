@@ -47,6 +47,8 @@ The three config files extend `@minimal-agent/config`:
 - `tsconfig.json` extends `@minimal-agent/config/tsconfig.json` and keeps `include` only.
 - `tsconfig.scripts.json` extends the local `tsconfig.json` for `scripts/compile.ts`.
 
+No module may write to the process stdout or stderr on its own. The oxlint rule `ma/no-direct-stdio` (shipped by core, loaded from `node_modules/@minimal-agent/core/scripts/lint/`) enforces it, and `src/architecture/no-direct-stdio.test.ts` keeps the allowlist in `src/architecture/no-direct-stdio.baseline.json` exact: a file outside it fails lint, a file inside it cannot write more than its recorded count, and a file that got clean must leave the list (`node node_modules/@minimal-agent/core/scripts/lint/verify-no-direct-stdio.mjs --repo . --sync`). Diagnostics go through the bus (`getDiagnosticBus()` from `@minimal-agent/core/host/diagnostics`; sinks attach in `src/main.ts` at `attachStartupDiagnosticSinks`, so a diagnostic from a subcommand that runs earlier reaches no sink). Product output goes through an injected writer. Only final renderers belong in the baseline: the TUI output layer, the startup banner, the protocol writers.
+
 The product runs on Bun, but architecture checks currently execute TypeScript source under Node using built-in type stripping. Keep Node at 22.18.0 or newer, or set `NODE` to a compatible executable. The checker imports the explicitly unstable `typescript/unstable/ast` and `typescript/unstable/sync` surfaces, so TypeScript is exact-pinned to 7.0.2. Treat TypeScript or Node baseline updates as coordinated checker changes.
 
 ## Git and release posture

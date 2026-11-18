@@ -7,6 +7,7 @@
  * open/close.
  */
 
+import { Severity } from "@minimal-agent/core/host/diagnostics"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
 import {
   type HookContextEntry,
@@ -14,6 +15,7 @@ import {
   type TurnWillStartPayload,
 } from "@minimal-agent/core/sdk/lifecycle"
 import { FOOTER_LAYER_OVERLAY, FOOTER_PRIORITY_OVERLAY } from "./editor-controller.ts"
+import { emitDiagnostic } from "./logging/emit-diagnostic.ts"
 import { Picker, type PickerItem } from "./ui/picker.ts"
 
 /** Minimal editor surface the hooks touch. */
@@ -314,7 +316,8 @@ function contextOf(result: unknown): HookContextEntry[] {
  *
  * Returns the (possibly rewritten) text, whether a listener halted, and the
  * listeners' `additionalContext` (pass it to the core run).
- * Never throws: chain failures log to stderr and pass the original text.
+ * Never throws: a chain failure is reported on the diagnostic bus
+ * (`repl.hook-chain-failed`, Warning) and the original text passes through.
  */
 export async function applyTurnWillStart(
   loader: EditorHooksLoader | null | undefined,
@@ -340,8 +343,11 @@ export async function applyTurnWillStart(
     }
     return { text: next, halted: result?.halted === true, additionalContext: contextOf(result) }
   } catch (e) {
-    process.stderr.write(
-      `[repl] turn.willStart chain failed: ${e instanceof Error ? e.message : String(e)}\n`,
+    emitDiagnostic(
+      Severity.Warning,
+      "repl.hook-chain-failed",
+      e instanceof Error ? e.message : String(e),
+      { chain: "turn.willStart" },
     )
     return { text, halted: false, additionalContext: [] }
   }

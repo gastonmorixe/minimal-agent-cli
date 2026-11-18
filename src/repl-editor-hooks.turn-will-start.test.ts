@@ -1,4 +1,5 @@
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it, spyOn } from "bun:test"
+import { getDiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
 
 import { applyTurnWillStart, type EditorHooksLoader } from "./repl-editor-hooks.ts"
@@ -52,6 +53,50 @@ describe("applyTurnWillStart", () => {
       expect(out).toEqual({ text: "x", halted: false, additionalContext: [] })
     } finally {
       ;(process.stderr as unknown as { write: typeof orig }).write = orig
+    }
+  })
+})
+
+describe("applyTurnWillStart: a failing chain goes to the diagnostic bus", () => {
+  it("emits a Warning repl.hook-chain-failed, passes the text through and writes nothing to stderr", async () => {
+    const events: LogEvent[] = []
+    const off = getDiagnosticBus().on("*", (e) => events.push(e))
+    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(() => true)
+    try {
+      const failing = loaderWith(async () => {
+        throw new Error("chain boom")
+      })
+      const out = await applyTurnWillStart(failing, "keep me")
+      expect(out).toEqual({ text: "keep me", halted: false, additionalContext: [] })
+
+      const got = events.filter((e) => e.source === "repl.hook-chain-failed")
+      expect(got).toHaveLength(1)
+      expect(got[0]?.severity).toBe(Severity.Warning)
+      expect(got[0]?.message).toBe("chain boom")
+      expect(got[0]?.structuredData).toEqual({ chain: "turn.willStart" })
+      expect(stderrWrite).not.toHaveBeenCalled()
+    } finally {
+      stderrWrite.mockRestore()
+      off()
+    }
+  })
+
+  it("reports a non-Error throw by its string form", async () => {
+    const events: LogEvent[] = []
+    const off = getDiagnosticBus().on("*", (e) => events.push(e))
+    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(() => true)
+    try {
+      const failing = loaderWith(async () => {
+        throw "plain string"
+      })
+      await applyTurnWillStart(failing, "x")
+      const got = events.filter((e) => e.source === "repl.hook-chain-failed")
+      expect(got).toHaveLength(1)
+      expect(got[0]?.message).toBe("plain string")
+      expect(stderrWrite).not.toHaveBeenCalled()
+    } finally {
+      stderrWrite.mockRestore()
+      off()
     }
   })
 })

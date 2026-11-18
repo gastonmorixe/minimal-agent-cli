@@ -56,8 +56,9 @@
  *    when, say, the slash-menu was below the reflection cooldown but
  *    the user pressed Enter on the menu (closing it) before the
  *    cooldown elapsed.
- *  - **Handler errors are absorbed**: a throwing handler is logged
- *    (best-effort) and treated as "did not claim", so a buggy capture
+ *  - **Handler errors are absorbed**: a throwing handler is reported on the
+ *    diagnostic bus (Warning `input.capture-threw`, best-effort) and treated
+ *    as "did not claim", so a buggy capture
  *    cannot trap subsequent ones or wedge the dispatch loop.
  *  - **Idempotent disposers**: calling the returned dispose twice is a
  *    no-op the second time.
@@ -85,6 +86,9 @@
  *
  * @module input-capture-stack
  */
+
+import { Severity } from "@minimal-agent/core/host/diagnostics"
+import { emitDiagnostic } from "../logging/emit-diagnostic.ts"
 
 /**
  * Opaque-ish identifier for a capture. Used for diagnostics and for
@@ -157,7 +161,7 @@ export class InputCaptureStack {
    * Walk the stack top-down; the first handler to return truthy claims
    * the key (returns `true` from `dispatch`). Walks ALL entries if
    * nobody claims (returns `false`). A throwing handler is treated as
-   * "did not claim" (logged best-effort, propagation continues).
+   * "did not claim" (reported on the diagnostic bus, propagation continues).
    *
    * The handler set is snapshotted at entry so that releases happening
    * during dispatch (e.g. a handler calls its own disposer and then
@@ -173,10 +177,13 @@ export class InputCaptureStack {
       try {
         claimed = entry.handler(key) === true
       } catch (e) {
-        process.stderr.write(
-          `[input-capture-stack] capture "${entry.id}" threw on key "${key}": ${
-            e instanceof Error ? e.message : String(e)
-          }\n`,
+        // `key` is a canonical key name (today the stack is only fed "Escape"
+        // and "EscapeEscape"), not typed text, so it is safe to record.
+        emitDiagnostic(
+          Severity.Warning,
+          "input.capture-threw",
+          e instanceof Error ? e.message : String(e),
+          { capture: entry.id, key },
         )
         claimed = false
       }

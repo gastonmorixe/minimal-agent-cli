@@ -17,6 +17,7 @@
 
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { clipboardText } from "@minimal-agent/core/host/clipboard"
+import { Severity } from "@minimal-agent/core/host/diagnostics"
 import { getGlobalEventBus } from "@minimal-agent/core/host/global-bus"
 import { mediaPasteInterceptor } from "@minimal-agent/core/host/paste-intercept"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
@@ -25,6 +26,7 @@ import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import type { ResolvedLiveAreaSlot } from "@minimal-agent/core/plugin-api/types/plugin"
 import type { CliUserConfig } from "../config/terminal-config.ts"
+import { emitDiagnostic } from "../logging/emit-diagnostic.ts"
 import type { ReplAgentLike, runRepl } from "../repl.ts"
 import type { Spinner } from "../ui/spinner/index.ts"
 import { attachLiveAreaRequestDump } from "../ui/status/debug-dump-live.ts"
@@ -57,6 +59,22 @@ export interface LiveAreaReplOptions {
   liveAreaSlots: readonly ResolvedLiveAreaSlot[]
   /** Unsent draft restored from a resumed session, or `null`. */
   pendingDraft: string | null
+}
+
+/**
+ * The Auto-ASK trace logger. A trace line is a Debug event on the diagnostic
+ * bus (`auto-ask.trace`): the file log keeps it and no terminal surface
+ * paints it. Only `DEBUG=1` turns it on, as before, because a trace line
+ * quotes the first characters of what the user typed.
+ *
+ * @param env - The process environment (only `DEBUG` is read).
+ * @returns The logger, or `undefined` (the controller then logs nothing).
+ */
+export function autoAskLogger(
+  env: Readonly<Record<string, string | undefined>>,
+): ((message: string) => void) | undefined {
+  if (env.DEBUG !== "1") return undefined
+  return (message) => emitDiagnostic(Severity.Debug, "auto-ask.trace", message)
 }
 
 /**
@@ -245,10 +263,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     if (!envOff && !cfgOff) {
       // Controller installs itself on the editor; the reference is intentionally
       // not retained — it lives until the editor is destroyed.
-      void new AutoAskController(editor, modeManager, {
-        logger:
-          process.env.DEBUG === "1" ? (m) => process.stderr.write(`[auto-ask] ${m}\n`) : undefined,
-      })
+      void new AutoAskController(editor, modeManager, { logger: autoAskLogger(process.env) })
     }
   }
 

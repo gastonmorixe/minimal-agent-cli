@@ -7,7 +7,8 @@
  * silently regress the contract that EditorController + reflection
  * cooldown rely on.
  */
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it, spyOn } from "bun:test"
+import { getDiagnosticBus, type LogEvent, Severity } from "@minimal-agent/core/host/diagnostics"
 
 import { InputCaptureStack } from "./input-capture-stack.ts"
 
@@ -252,6 +253,73 @@ describe("InputCaptureStack — handler error absorption", () => {
       expect(s.depth()).toBe(depthBefore)
     } finally {
       ;(process.stderr.write as unknown) = origWrite
+    }
+  })
+})
+
+describe("InputCaptureStack — a throwing handler is reported on the diagnostic bus", () => {
+  it("emits a Warning input.capture-threw with the capture id and key, and writes nothing to stderr", () => {
+    const events: LogEvent[] = []
+    const off = getDiagnosticBus().on("*", (e) => events.push(e))
+    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(() => true)
+    try {
+      const s = new InputCaptureStack()
+      s.push("bottom", () => true)
+      s.push("wobbly-modal", () => {
+        throw new Error("modal boom")
+      })
+      expect(s.dispatch("Escape")).toBe(true) // the throw is absorbed, bottom claims
+
+      const got = events.filter((e) => e.source === "input.capture-threw")
+      expect(got).toHaveLength(1)
+      expect(got[0]?.severity).toBe(Severity.Warning)
+      expect(got[0]?.message).toBe("modal boom")
+      expect(got[0]?.structuredData).toEqual({ capture: "wobbly-modal", key: "Escape" })
+      expect(stderrWrite).not.toHaveBeenCalled()
+    } finally {
+      stderrWrite.mockRestore()
+      off()
+    }
+  })
+
+  it("reports a non-Error throw by its string form and keeps walking", () => {
+    const events: LogEvent[] = []
+    const off = getDiagnosticBus().on("*", (e) => events.push(e))
+    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(() => true)
+    try {
+      const s = new InputCaptureStack()
+      const calls: string[] = []
+      s.push("bottom", (k) => {
+        calls.push(`bottom:${k}`)
+        return true
+      })
+      s.push("odd", () => {
+        throw "plain string"
+      })
+      expect(s.dispatch("EscapeEscape")).toBe(true)
+      expect(calls).toEqual(["bottom:EscapeEscape"])
+
+      const got = events.filter((e) => e.source === "input.capture-threw")
+      expect(got).toHaveLength(1)
+      expect(got[0]?.message).toBe("plain string")
+      expect(got[0]?.structuredData).toEqual({ capture: "odd", key: "EscapeEscape" })
+      expect(stderrWrite).not.toHaveBeenCalled()
+    } finally {
+      stderrWrite.mockRestore()
+      off()
+    }
+  })
+
+  it("emits nothing when no handler throws", () => {
+    const events: LogEvent[] = []
+    const off = getDiagnosticBus().on("*", (e) => events.push(e))
+    try {
+      const s = new InputCaptureStack()
+      s.push("fine", () => true)
+      s.dispatch("Escape")
+      expect(events.filter((e) => e.source === "input.capture-threw")).toEqual([])
+    } finally {
+      off()
     }
   })
 })
