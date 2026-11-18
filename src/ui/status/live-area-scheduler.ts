@@ -569,6 +569,13 @@ export class LiveAreaScheduler {
 
   private scheduleNext(s: SlotState): void {
     if (this.stopped) return
+    // One periodic timer per slot. A `refreshOn` event fires the slot while
+    // its periodic timer is still pending, and each settle comes back here.
+    // Without this clear, every event left one more self-re-arming chain.
+    if (s.timer) {
+      this.clearT(s.timer)
+      s.timer = null
+    }
     const refreshMs = Math.max(1000, s.slot.definition.refreshMs ?? 60_000)
     s.timer = this.setT(() => {
       s.timer = null
