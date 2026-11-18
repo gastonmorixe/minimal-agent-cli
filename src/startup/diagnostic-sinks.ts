@@ -13,6 +13,9 @@
  * `closeStartupTree()` commits the final row. Without that split, a warning
  * emitted mid-banner would tear through the box mid-paint.
  *
+ * Once the live-area REPL has a compositor, {@link routeDiagnosticsThroughCompositor}
+ * moves the sink's output onto it, so a block starts on a row of its own.
+ *
  * The sinks attach by stdio mode (S38). The file and global logs attach in
  * every mode. The scrollback sink does not attach in `protocol` mode, so no
  * human chrome reaches stderr there. `--debug` (or
@@ -117,4 +120,35 @@ export async function attachStartupDiagnosticSinks(
   if (opts.showHeader) scrollbackSink.startBuffering()
 
   return scrollbackSink
+}
+
+/** The slice of the compositor that the scrollback sink writes through. */
+export interface DiagnosticBlockWriter {
+  writeBlock(text: string): void
+}
+
+/**
+ * Route the scrollback sink through the compositor of the live-area REPL.
+ *
+ * By default the sink writes to stderr. In the live-area REPL the stdio
+ * interceptor turns that into `compositor.writeStream`, which appends at the
+ * stream cursor. While a response streams, the cursor is at the end of the
+ * last response row, so a `⚠ warn` block joined that row. `writeBlock` holds
+ * the block until that row is complete, then writes it on rows of its own.
+ * It does not end the row itself: a markdown formatter rewrites its open row
+ * when the line ends, and a line feed in between would leave the raw echo of
+ * that row in scrollback as a duplicate.
+ *
+ * @param sink - The sink from {@link attachStartupDiagnosticSinks}, or `null`
+ *   when the plan attached none (`protocol` mode).
+ * @param compositor - The compositor that owns the scrollback stream.
+ * @returns A function that puts the previous writer back. Call it before the
+ *   compositor goes away. It does nothing for a `null` sink.
+ */
+export function routeDiagnosticsThroughCompositor(
+  sink: ScrollbackDiagnosticSink | null,
+  compositor: DiagnosticBlockWriter,
+): () => void {
+  if (sink === null) return () => undefined
+  return sink.bindWriter((text) => compositor.writeBlock(text))
 }

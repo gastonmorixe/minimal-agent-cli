@@ -1355,6 +1355,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         loader,
         liveAreaSlots: pluginUi.liveAreaSlots,
         pendingDraft,
+        scrollbackSink,
       })
     }
   } finally {
