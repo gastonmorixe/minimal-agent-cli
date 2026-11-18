@@ -102,7 +102,11 @@ describe("CLI smoke", () => {
       // The startup tree renders a `model` row (the registry default); pin its
       // presence without naming a vendor.
       expect(stderr).toMatch(/model\s/)
-      expect(stderr).not.toContain("cache anomaly")
+      // The sibling `cache` plugin (ma-cache-plugin) writes a warn diagnostic
+      // with source `cache.anomaly` when the prompt cache fails. The test
+      // transport reports a cache write on this one turn, which is a healthy
+      // cache, so no cache warning may show.
+      expect(stderr).not.toContain("cache.anomaly")
       // Non-interactive defaults: ASK mode is auto-applied. The mode row
       // is only printed when the header is shown — which it is here via
       // `--header` — so verifying it pins both behaviors at once. ANSI

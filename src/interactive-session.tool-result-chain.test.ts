@@ -41,11 +41,9 @@ const CONTENT = "probe ok"
 const LOG_KEY = "__cliChainProbeLog"
 /**
  * True when production passes `ctx.signal` (an `AbortSignal`) to each stage.
- * TODO(helen): set to `true` when the core runner passes `ctx`. Today core
- * `runPhase` (`loops/tool-result-chain.ts`) calls `transform(current)` with
- * one argument, so each stage logs `false`. That file is Gabriel's (W1).
+ * The core runner (`loops/tool-result-chain.ts`) passes `{ signal }` to each stage.
  */
-const SIGNAL_PASSED = false
+const SIGNAL_PASSED = true
 
 function phaseLog(): string[] {
   const g = globalThis as unknown as Record<string, string[] | undefined>

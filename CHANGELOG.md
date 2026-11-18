@@ -21,6 +21,26 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-17: Switch the credential, provider, model or effort at any time
+  in the TUI, also during a turn or a quota wait, with no restart.
+  - `/provider [credential] [model]` (alias `/credential-name`): the
+    credential gives the provider. The model stays when the new provider
+    has it. If not, the command asks for a model and changes nothing.
+  - `/model [model-id]`: a model of the live provider.
+  - `/effort [level|default]`: a level of the live model.
+  - With no argument, each command lists the valid values. A value on the
+    right that is not valid any more resets, and the command says so.
+  - The core ends the wait, builds the system prompt again, and discards
+    the old thinking. The prompt cache starts again after a switch.
+  - `src/startup/live-target.ts` follows each change for the TUI and for
+    host mode (ACP): it writes `MINIMAL_AGENT_MODEL`,
+    `MINIMAL_AGENT_PROVIDER`, `MINIMAL_AGENT_CREDENTIAL_NAME` and
+    `MINIMAL_AGENT_EFFORT`, sets `ctx.queryTarget`, and emits the plugin
+    bus event `target.didSwitch` with `{from, to}`.
+  - The ModelInfo tool and new sub-agents now get the live provider. Before,
+    they kept the boot provider after a switch.
+  - The TUI session gives the core the stored credential names, so an
+    unknown credential name is refused.
 - 2026-11-12: A compiled binary carries every first-party plugin.
   `scripts/gen-embedded-plugins.ts` writes a table of literal `import()`
   thunks plus text and file imports for each plugin dir with a
