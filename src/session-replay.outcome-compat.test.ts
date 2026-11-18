@@ -164,3 +164,61 @@ describe("T7: tool_result records with and without outcome replay the same in th
     expect(plain).toContain("+NEW")
   })
 })
+
+describe("M3-5: the Read highlight cut reads the stored outcome", () => {
+  const CODE = "1\tconst a = 1\n2\tconst b = 2"
+  const FOOTER = "\n\n[truncated: at 64 KB...]"
+  /** A fake highlighter: it marks each code line, so a cut error shows in the text. */
+  const highlighter = {
+    warmup: async () => true,
+    highlight: async (req: { code: string }) =>
+      req.code
+        .split("\n")
+        .map((l) => `<<${l}>>`)
+        .join("\n"),
+    close: async () => {},
+  }
+
+  async function readScrollback(outcome: unknown): Promise<string> {
+    const content = `${CODE}${FOOTER}`
+    const block = { type: "tool_result", tool_use_id: "tu_read", content, outcome }
+    if (outcome === undefined) delete (block as { outcome?: unknown }).outcome
+    const messages = [
+      { role: "user", content: "read it" },
+      {
+        role: "assistant",
+        content: [
+          { type: "tool_use", id: "tu_read", name: "Read", input: { file_path: "/tmp/a.ts" } },
+        ],
+      },
+      { role: "user", content: [block] },
+    ]
+    let out = ""
+    await replayToScrollback(
+      messages as never,
+      { write: (s: string) => (out += s) },
+      { toolPresentation: new Map(), codeHighlighter: highlighter },
+    )
+    return out
+  }
+
+  it("a Read with a [truncated:] footer and a valid outcome gives the same scrollback", async () => {
+    const without = await readScrollback(undefined)
+    const start = CODE.length
+    const valid = {
+      v: 1,
+      bodyEnd: start,
+      annotations: [{ kind: "output-truncated", start, end: start + FOOTER.length }],
+    }
+    const withValid = await readScrollback(valid)
+    expect(stripAnsi(without)).toContain("<<const a = 1>>")
+    expect(withValid).toBe(without)
+  })
+
+  it("a bad outcome gives the same scrollback and does not crash", async () => {
+    const without = await readScrollback(undefined)
+    expect(await readScrollback({ v: 1, bodyEnd: 99999, annotations: [] })).toBe(without)
+    expect(await readScrollback(null)).toBe(without)
+    expect(await readScrollback([])).toBe(without)
+  })
+})
