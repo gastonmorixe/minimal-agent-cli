@@ -20,11 +20,15 @@
  *   name, and the host resolves the auth from the store.
  * - A line that fails gives one diagnostic with the cause. It never has the
  *   mac, the key or the file text.
+ * - Any tool can put a file at the control path. The open does not block
+ *   and does not follow a symlink, and only a regular file of this user is
+ *   read. A FIFO, a directory or a symlink there is ignored, with one
+ *   diagnostic: it cannot stop the worker.
  *
  * @module host/startup/target-control-worker
  */
 
-import { closeSync, fstatSync, openSync, readSync, rmSync } from "node:fs"
+import { closeSync, constants, fstatSync, openSync, readSync, rmSync } from "node:fs"
 
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { findModelForProvider } from "@minimal-agent/core/host/model-registry"
@@ -182,26 +186,41 @@ export interface ControlReader {
 const describe = (t: ControlTarget): string =>
   `${t.providerId ?? "(no provider)"}${t.credentialName ? ` · ${t.credentialName}` : ""} · ${t.model} · effort ${t.effort ?? "default"}`
 
-/** Up to `max` new bytes of the file from `offset`, and the file size. `null`: no file. */
-function readFrom(
-  path: string,
-  offset: number,
-  max: number,
-): { text: Buffer; size: number } | null {
+/** The new bytes of the control file, `"none"` with no file, `"refused"` for a file that is not read. */
+type ControlRead = { text: Buffer; size: number } | "none" | "refused"
+
+// O_NONBLOCK: the open of a FIFO with no writer would block the whole process.
+// O_NOFOLLOW: a symlink at the path is an error, not a read of its target.
+const READ_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
+
+/**
+ * Up to `max` new bytes of the file from `offset`, and the file size. Only a
+ * regular file of this user is read: the type and the owner are checked on
+ * the open descriptor, before a read. Never blocks, never throws.
+ *
+ * `"refused"` is each open or read error that is not "no file": a symlink
+ * (ELOOP), a wrong type or owner, and also an error such as EACCES or EMFILE.
+ * The worker then reads nothing and keeps its target.
+ */
+function readFrom(path: string, offset: number, max: number): ControlRead {
   let fd: number
   try {
-    fd = openSync(path, "r")
-  } catch {
-    return null
+    fd = openSync(path, READ_FLAGS)
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "ENOENT" ? "none" : "refused"
   }
   try {
-    const { size } = fstatSync(fd)
+    const stat = fstatSync(fd)
+    const uid = process.getuid?.()
+    if (!stat.isFile() || (uid !== undefined && stat.uid !== uid)) return "refused"
     // The file became shorter (it was cut): read it again from the start.
-    const start = size < offset ? 0 : offset
-    const length = Math.min(Math.max(size - start, 0), max)
+    const start = stat.size < offset ? 0 : offset
+    const length = Math.min(Math.max(stat.size - start, 0), max)
     const text = Buffer.alloc(length)
     if (length > 0) readSync(fd, text, 0, length, start)
     return { text, size: start + length }
+  } catch {
+    return "refused"
   } finally {
     closeSync(fd)
   }
@@ -211,14 +230,19 @@ function readFrom(
  * A reader for one worker's control file. It keeps the read offset and the
  * last accepted `seq`. A partial last line stays for the next poll. Polls
  * do not overlap.
+ *
+ * Each kind of reject (a bad line, a file that is not read) gives ONE
+ * diagnostic for the life of the worker, so a planted file cannot fill the
+ * log. Only a failed switch is reported again, after a switch that worked.
  */
 export function createControlReader(env: ControlEnv, deps: ControlReaderDeps): ControlReader {
   const registry = deps.registry ?? REGISTRY_FOLLOW
   let offset = 0
   let lastSeq = 0
   let busy = false
-  const reported = new Set<ControlReject | "switch_failed">()
-  const warnOnce = (kind: ControlReject | "switch_failed", message: string): void => {
+  type Reported = ControlReject | "switch_failed" | "bad_file"
+  const reported = new Set<Reported>()
+  const warnOnce = (kind: Reported, message: string): void => {
     if (reported.has(kind)) return
     reported.add(kind)
     deps.warn(message)
@@ -226,7 +250,14 @@ export function createControlReader(env: ControlEnv, deps: ControlReaderDeps): C
 
   const take = (): SwitchTargetLine[] => {
     const read = readFrom(env.path, offset, MAX_CONTROL_READ_BYTES)
-    if (!read) return []
+    if (read === "none") return []
+    if (read === "refused") {
+      warnOnce(
+        "bad_file",
+        "target control: ignored the control file (it could not be read as a regular file of this user)",
+      )
+      return []
+    }
     // `start` is 0 again after the file was cut. The seq rule still rejects its old lines.
     const start = read.size - read.text.length
     const end = read.text.lastIndexOf(0x0a)
@@ -314,7 +345,11 @@ export function watchTargetControl(
   return {
     stop: () => {
       clearInterval(timer)
-      rmSync(env.path, { force: true })
+      try {
+        rmSync(env.path, { force: true })
+      } catch {
+        // Not a file that can be removed (a directory put there): nothing more to do.
+      }
     },
   }
 }
