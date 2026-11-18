@@ -137,6 +137,24 @@ function problemWith(
 }
 
 /**
+ * {@link problemWith}, with a throw of a check as a problem. The checks read
+ * the auth store and the provider registry. A store that cannot be read must
+ * not stop the resume: the record is then not used.
+ */
+function checked(
+  saved: SavedTarget,
+  effort: string | undefined,
+  deps: ResumeTargetDeps,
+): string | null {
+  try {
+    return problemWith(saved, effort, deps)
+  } catch (err) {
+    const cause = err instanceof Error ? err.message : String(err)
+    return `it could not be checked: ${cause}`
+  }
+}
+
+/**
  * The target flags for the provider boot of this run. Without a resume, with
  * any target flag, or with no usable saved target: `{}` (the flags as they
  * are). Else the saved target, in the place of the flags.
@@ -153,7 +171,7 @@ export function resumeTargetFlags(
   if (flags.model || flags.provider || flags.cliCredentialName) return {}
   const saved = deps.savedTarget(resumeArg)
   if (!saved) return {}
-  const problem = problemWith(saved, effort, deps)
+  const problem = checked(saved, effort, deps)
   if (problem) {
     deps.notice(
       `resume: the target that this session last used is not available (${problem}). ` +
