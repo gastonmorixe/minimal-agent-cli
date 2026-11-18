@@ -21,6 +21,14 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-17: the notice of a target switch names each value that changed
+  (`src/startup/turn-notice-text.ts`, `src/ui/turn-notice.ts`), in the order
+  credential, provider, model, effort: `[target] Changed credential to
+  "second" (was "full")`. Before, it named only the model, so a
+  credential-only switch said `Adopted model "m" (was "m")`. This is the text
+  of print mode, of host mode and of a sub-agent that follows its lead; the
+  `/provider`, `/model` and `/effort` commands of the TUI print their own
+  lines, as before. An automatic model adoption keeps its text.
 - 2026-11-17: `--resume` starts on the target that the session last used
   (`src/startup/resume-target.ts`). After a `/provider`, `/model` or
   `/effort` in a session, a resume of it uses the provider, credential and

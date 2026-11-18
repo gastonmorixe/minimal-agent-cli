@@ -15,6 +15,8 @@
 
 import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
 
+import { targetChangeText } from "../startup/turn-notice-text.ts"
+
 import { c } from "./style/ansi.ts"
 
 /**
@@ -80,6 +82,9 @@ export function renderTurnNotice(notice: TurnNotice): string {
         `No host can answer "${notice.title}" (${notice.code}) in this run — denied the ask and sent the request unchanged`,
       )}`
     case "model_adopted": {
+      // A target switch: name each value that changed (the model can be the same).
+      const changed = targetChangeText(notice)
+      if (changed) return `\n  ${c.dim("›")} ${c.dim(`Changed ${changed}`)}`
       const effort = notice.effortReset ? ` (effort reset from "${notice.effortFrom}")` : ""
       return `\n  ${c.dim("›")} ${c.dim(
         `Adopted model "${notice.to}" (was "${notice.from}")${effort}`,
