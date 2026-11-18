@@ -242,8 +242,8 @@ export interface RunNonInteractivePromptInput {
   readonly outputSchema: object | undefined
   /**
    * One-shot values (`--temperature`, `--strict`, SPEC-ONESHOT R6/R9) armed
-   * on the core right before the prompt run, on both routes. A continued
-   * turn (S50) does not get them. A setter the core lacks is skipped.
+   * on the core right before the prompt run, on both routes. A setter the
+   * core lacks is skipped.
    */
   readonly oneShotRunOptions?: OneShotRunOptions
   /** The active plugin loader when plugins loaded, else null. */
@@ -286,13 +286,6 @@ export interface RunNonInteractivePromptInput {
   readonly diagnostics?: boolean
   /** Where the guard's failure note goes. Defaults to `process.stderr`. */
   readonly stderr?: (chunk: string) => void
-  /**
-   * `--resume` of a session whose last turn is unfinished (S50). The run
-   * first continues that turn at its next round, with no new user text.
-   * No human is assumed, so this needs no input. Then it runs `prompt` as
-   * a new turn, when `prompt` is not empty.
-   */
-  readonly continueTurn?: boolean
   /**
    * `--output-format open-responses`: the request had `stream: true`, so
    * write SSE events. Else one `response` JSON object. Default false.
@@ -442,8 +435,6 @@ async function runGuardedEventStream(
   const or = input.outputFormat === "open-responses" ? openOrWriter(input, session, write) : null
   if (or !== null) or.begin()
 
-  // A continued turn goes first. A new turn follows only when the
-  // continued one did not pause or fail.
   const out = {
     write,
     keep: or !== null ? EMPTY_KIND_SET : keep,
@@ -454,25 +445,23 @@ async function runGuardedEventStream(
     ...(or !== null ? { onEvent: (event: AgentEvent) => or.event(event) } : {}),
     isDryRunEnd: (err: unknown) => endsDryRun(input, err),
   }
-  const turns: Array<{ text: string; resume: boolean }> = []
-  if (input.continueTurn) turns.push({ text: "", resume: true })
-  if (input.prompt.length > 0) turns.push({ text: input.prompt, resume: false })
-  for (const turn of turns) {
-    if (!turn.resume && input.oneShotRunOptions !== undefined) {
+  // A resumed session never continues an unfinished turn by itself: only
+  // the REPL's `/continue` does. The prompt runs as a new turn.
+  if (input.prompt.length > 0) {
+    if (input.oneShotRunOptions !== undefined) {
       armOneShotRun(agentCoreOf(session), input.oneShotRunOptions)
     }
-    if (!turn.resume && input.outputSchema !== undefined) {
+    if (input.outputSchema !== undefined) {
       armRunOutputSchema(session, input.outputSchema)
     }
     const ok = await runEventStreamTurn(
       session,
-      turn.resume ? turn : { ...turn, additionalContext: turnContext },
+      { text: input.prompt, additionalContext: turnContext },
       out,
     )
     if (!ok) {
       runOk = false
       fail(1)
-      break
     }
   }
   // R11: one final `result` line after run_finished, then the exit code.
@@ -496,7 +485,7 @@ async function runGuardedEventStream(
     }
     armRunOutputSchema(session, outputSchema)
     const text = correctivePrompt(schema.reason)
-    const ok = await runEventStreamTurn(session, { text, resume: false }, out)
+    const ok = await runEventStreamTurn(session, { text }, out)
     if (!ok) {
       schema = undefined
       fail(1)
@@ -594,7 +583,7 @@ function writeResultLine(
  */
 async function runEventStreamTurn(
   session: Session,
-  turn: { text: string; resume: boolean; additionalContext?: readonly HookContextEntry[] },
+  turn: { text: string; additionalContext?: readonly HookContextEntry[] },
   out: {
     write: (chunk: string) => void
     keep: ReadonlySet<string>
@@ -614,8 +603,7 @@ async function runEventStreamTurn(
   try {
     const run = session.run(turn.text, {
       emitDeltas: out.emitDeltas,
-      ...(turn.resume ? { resume: true } : {}),
-      ...(!turn.resume && turn.additionalContext !== undefined && turn.additionalContext.length > 0
+      ...(turn.additionalContext !== undefined && turn.additionalContext.length > 0
         ? { additionalContext: [...turn.additionalContext] }
         : {}),
     })
@@ -694,7 +682,6 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
   const exit = input.exit ?? ((code: number): never => process.exit(code))
 
   // Parity with REPL: `turn.willStart` may rewrite or halt before the model.
-  // A continued turn has no new user text, so no hook runs for it.
   const turn =
     input.prompt.length > 0
       ? await applyTurnWillStart(loader, input.prompt, {
@@ -769,21 +756,6 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
   const pluginStream = loader ? new PluginStream(baseSink, loader, input.cwd) : null
 
   let finalText = ""
-  // A continued turn goes first (S50), then the new turn. The answer is
-  // the text of the last turn.
-  const runs: Array<() => ReturnType<ReplAgentLike["run"]>> = []
-  if (input.continueTurn) runs.push(() => agent.run("", { resume: true }))
-  if (prompt.length > 0) {
-    runs.push(() => {
-      if (input.oneShotRunOptions !== undefined) {
-        armOneShotRun(agentCoreOf(agent), input.oneShotRunOptions)
-      }
-      return agent.run(
-        prompt,
-        turnContext.length > 0 ? { additionalContext: [...turnContext] } : undefined,
-      )
-    })
-  }
   try {
     const emit = async (value: string): Promise<void> => {
       if (pluginStream) {
@@ -793,11 +765,16 @@ export async function runNonInteractivePrompt(input: RunNonInteractivePromptInpu
         baseSink(value)
       }
     }
-    for (const [index, start] of runs.entries()) {
-      // A blank line keeps the answer of the continued turn apart.
-      if (index > 0) await emit("\n\n")
-      finalText = ""
-      const gen = start()
+    // A resumed session never continues an unfinished turn by itself: only
+    // the REPL's `/continue` does. The prompt runs as a new turn.
+    if (prompt.length > 0) {
+      if (input.oneShotRunOptions !== undefined) {
+        armOneShotRun(agentCoreOf(agent), input.oneShotRunOptions)
+      }
+      const gen = agent.run(
+        prompt,
+        turnContext.length > 0 ? { additionalContext: [...turnContext] } : undefined,
+      )
       while (true) {
         const { done, value } = await gen.next()
         if (done) break
