@@ -29,8 +29,12 @@ terminal client is being moved out of `minimal-agent-core` into this repo
   then the config. With one of those flags the record is not used. A record
   is checked first: the provider must be installed, the model must be one of
   its models, a named credential must be stored, and the effort of the run
-  must be a level of the model. If not, the session starts on the usual
-  target with one notice. The effort of the record is not restored.
+  must be a level of the model. A record of the generic endpoint is used
+  only when this run configures an endpoint and a format (flag, env or
+  config): the record never gives them. A check that throws (an auth store
+  that cannot be read) counts as a record that cannot be used. If not, the
+  session starts on the usual target with one notice. The effort of the
+  record is not restored.
 - 2026-11-17: A RUNNING sub-agent follows a target switch of its lead, in
   place (`src/startup/target-control-worker.ts`). A worker reads its control
   file path and key from its env at boot and removes them, so its own tools
@@ -41,7 +45,10 @@ terminal client is being moved out of `minimal-agent-core` into this repo
   the model has it. It resolves the auth from the store and switches its
   own core. A line that fails a check gives one diagnostic and changes
   nothing. The worker removes the file when it ends. Its own sub-agents
-  follow the same way.
+  follow the same way. Any tool can put a file at the control path, so the
+  open does not block and does not follow a symlink, and only a regular
+  file of this user is read: a FIFO, a symlink or a directory there is
+  ignored with one diagnostic and cannot stop the worker.
 - 2026-11-17: Switch the credential, provider, model or effort at any time
   in the TUI, also during a turn or a quota wait, with no restart.
   - `/provider [credential] [model]` (alias `/credential-name`): the

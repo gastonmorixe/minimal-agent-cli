@@ -14,8 +14,10 @@
  * A record is data from a file, so it is checked before use. The provider
  * must be installed, the model must be one of its models, a named
  * credential must be stored for it, and the effort of this run must be a
- * level of the model. If not, the session starts on the usual target and
- * the user gets one notice. A record never makes a resume fail.
+ * level of the model. A provider whose auth is not in the store (the generic
+ * endpoint) is used only when this run configures an endpoint and a format:
+ * the record never gives them. If not, the session starts on the usual
+ * target and the user gets one notice. A record never makes a resume fail.
  *
  * The effort of the record is not restored: it comes from the flag, the env
  * or the config of the new process, as before.
@@ -49,6 +51,15 @@ export interface TargetFlags {
   model?: string | undefined
   provider?: string | undefined
   cliCredentialName?: string | undefined
+}
+
+/**
+ * The options of this run that {@link resumeTargetFlags} reads: the target
+ * flags, and the generic endpoint of the run (flag, env or config).
+ */
+export interface ResumeRunOptions extends TargetFlags {
+  endpoint?: string | undefined
+  format?: string | undefined
 }
 
 /** What {@link resumeTargetFlags} needs. Injectable, so tests read no session and no auth store. */
@@ -113,6 +124,7 @@ const DEFAULT_DEPS: ResumeTargetDeps = {
 /** Why a saved target cannot be used, or `null` when it can. */
 function problemWith(
   saved: SavedTarget,
+  run: ResumeRunOptions,
   effort: string | undefined,
   deps: ResumeTargetDeps,
 ): string | null {
@@ -126,7 +138,12 @@ function problemWith(
     if (!ofProvider.some((e) => e.credentialName === saved.credentialName)) {
       return `credential "${saved.credentialName}" is not stored for provider "${saved.providerId}"`
     }
-  } else if (ofProvider.length === 0 && deps.needsStoredCredential(saved.providerId)) {
+  } else if (!deps.needsStoredCredential(saved.providerId)) {
+    // Auth from flags or env (the generic endpoint). The record has no endpoint: this run must.
+    if (!run.endpoint || !run.format) {
+      return `this run configures no endpoint and format for provider "${saved.providerId}"`
+    }
+  } else if (ofProvider.length === 0) {
     // No name: the provider default. With no stored credential at all, the boot would fail on auth.
     return `provider "${saved.providerId}" has no stored credential`
   }
@@ -143,11 +160,12 @@ function problemWith(
  */
 function checked(
   saved: SavedTarget,
+  run: ResumeRunOptions,
   effort: string | undefined,
   deps: ResumeTargetDeps,
 ): string | null {
   try {
-    return problemWith(saved, effort, deps)
+    return problemWith(saved, run, effort, deps)
   } catch (err) {
     const cause = err instanceof Error ? err.message : String(err)
     return `it could not be checked: ${cause}`
@@ -163,7 +181,7 @@ function checked(
  */
 export function resumeTargetFlags(
   resumeArg: string | undefined,
-  flags: TargetFlags,
+  flags: ResumeRunOptions,
   effort: string | undefined,
   deps: ResumeTargetDeps = DEFAULT_DEPS,
 ): TargetFlags {
@@ -171,7 +189,7 @@ export function resumeTargetFlags(
   if (flags.model || flags.provider || flags.cliCredentialName) return {}
   const saved = deps.savedTarget(resumeArg)
   if (!saved) return {}
-  const problem = checked(saved, effort, deps)
+  const problem = checked(saved, flags, effort, deps)
   if (problem) {
     deps.notice(
       `resume: the target that this session last used is not available (${problem}). ` +

@@ -118,13 +118,52 @@ describe("resumeTargetFlags", () => {
     expect(resumeTargetFlags("last", {}, "high", d)).toEqual({ model: "m2", provider: "beta" })
   })
 
-  it("a provider whose auth is not in the store (flags or env) needs no stored credential", () => {
-    const d = deps({
-      savedTarget: () => ({ providerId: "beta", model: "m2" }),
-      discover: () => [],
-      needsStoredCredential: () => false,
+  describe("a provider whose auth is not in the store (the generic endpoint)", () => {
+    const generic = (): ResumeTargetDeps & { notices: string[] } => {
+      const notices: string[] = []
+      return Object.assign(
+        deps({
+          savedTarget: () => ({ providerId: "beta", model: "m2" }),
+          discover: () => [],
+          needsStoredCredential: () => false,
+          notices,
+        }),
+        { notices },
+      )
+    }
+
+    it("is used when this run configures an endpoint and a format, with no stored credential", () => {
+      const d = generic()
+      const run = { endpoint: "http://127.0.0.1:1/v1", format: "openai-chat-completions" }
+      expect(resumeTargetFlags("last", run, "high", d)).toEqual({ model: "m2", provider: "beta" })
+      expect(d.notices).toEqual([])
     })
-    expect(resumeTargetFlags("last", {}, "high", d)).toEqual({ model: "m2", provider: "beta" })
+
+    const missing: [string, { endpoint?: string; format?: string }][] = [
+      ["no endpoint and no format", {}],
+      ["a format and no endpoint", { format: "openai-chat-completions" }],
+      ["an endpoint and no format", { endpoint: "http://127.0.0.1:1/v1" }],
+      ["an empty endpoint", { endpoint: "", format: "openai-chat-completions" }],
+    ]
+    for (const [name, run] of missing) {
+      it(`is not used with ${name}: the usual target, with one notice`, () => {
+        const d = generic()
+        expect(resumeTargetFlags("last", run, "high", d)).toEqual({})
+        expect(d.notices).toHaveLength(1)
+        expect(d.notices[0]).toContain(
+          'this run configures no endpoint and format for provider "beta"',
+        )
+      })
+    }
+
+    it("the record never gives an endpoint: the result has only the three target flags", () => {
+      const d = generic()
+      const run = { endpoint: "http://127.0.0.1:1/v1", format: "openai-chat-completions" }
+      expect(Object.keys(resumeTargetFlags("last", run, "high", d)).sort()).toEqual([
+        "model",
+        "provider",
+      ])
+    })
   })
 
   const throwing: [string, Partial<ResumeTargetDeps>][] = [
