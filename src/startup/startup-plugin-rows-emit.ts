@@ -35,6 +35,7 @@ import {
 } from "../plugins-ui/startup-tool-entries.ts"
 import { renderStartupPluginRows } from "../ui/chrome/startup-plugin-rows.ts"
 import { resolveHelpColor } from "../ui/help/policy.ts"
+import { stripAllTerminalControls } from "../ui/sanitize-scrollback.ts"
 import {
   isStartupTreeVisible,
   printStartupToolsRow,
@@ -59,31 +60,14 @@ export const STARTUP_ROWS_BUDGET_MS = 250
 
 const TIMEOUT = Symbol("timeout")
 
-const ESC = String.fromCodePoint(0x1b)
-const C1_CSI = String.fromCodePoint(0x9b)
-/** ESC/C1 sequences: CSI (`ESC [` or U+009B), OSC/DCS/APC/PM/SOS up to BEL or ST, other two-byte ESC forms. */
-const ESC_SEQ_RE = new RegExp(
-  [
-    `(?:${ESC}\\[|${C1_CSI})[0-?]*[ -/]*[@-~]`,
-    `(?:${ESC}[\\]PX^_]|[\\x90\\x98\\x9d\\x9e\\x9f])[^\\x07${ESC}\\x9c]*(?:\\x07|${ESC}\\\\|\\x9c)?`,
-    `${ESC}[ -/]*[0-~]`,
-  ].join("|"),
-  "g",
-)
-// biome-ignore lint/suspicious/noControlCharactersInRegex: control bytes are what we strip
-const CONTROL_RE = /[\x00-\x1f\x7f-\x9f]/g
-
 /**
- * Strip terminal control content from a plugin-supplied string: ESC/C1
- * sequences (CSI, OSC, DCS, ...), then every C0 control, DEL, and C1
- * control. Tab, newline and CR become a space so words stay apart.
+ * Strip terminal control content from a plugin-supplied string: escape
+ * sequences and control strings (CSI, OSC, DCS, ...), then every C0
+ * control, DEL, and C1 control. Tab, newline and CR become a space so
+ * words stay apart (`\r\n` is one space). The scanner is shared with the
+ * scrollback sanitizer (`ui/sanitize-scrollback.ts`).
  */
-export function stripTerminalControls(text: string): string {
-  return text
-    .replace(ESC_SEQ_RE, "")
-    .replace(/[\t\n\r]/g, " ")
-    .replace(CONTROL_RE, "")
-}
+export const stripTerminalControls: (text: string) => string = stripAllTerminalControls
 
 const TONES: ReadonlySet<string> = new Set(["default", "dim", "accent", "warn", "ok"])
 
