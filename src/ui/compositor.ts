@@ -176,6 +176,22 @@ export class Compositor {
   private streamHold = false
   /** Stream bytes held while {@link streamHold} is true. */
   private heldStream = ""
+  /**
+   * True while the last visible byte of the scrollback stream is a line feed,
+   * or nothing was written yet: the stream cursor is at the start of a row and
+   * the row before it is final. A bare `\r` (a formatter that rewrites its row)
+   * leaves it false. See {@link writeBlock}.
+   */
+  private rowClosed = true
+  /** Blocks that wait for a closed row, in arrival order. See {@link writeBlock}. */
+  private pendingBlocks: string[] = []
+  /**
+   * True once the stream moved the cursor with anything but SGR, EL and ED. Such a
+   * formatter may rewrite rows that already ended with a line feed, so no row is
+   * known to be final until the stream ends. Blocks then wait for
+   * {@link flushStream}, which clears it. mdstream 0.3.9 never sets it.
+   */
+  private cursorMoveSeen = false
 
   constructor(opts: CompositorOptions = {}) {
     this.output = opts.output ?? (process.stdout as CompositorOutput)
@@ -231,6 +247,7 @@ export class Compositor {
     this.liveHeightValue = 0
     this.cursorRowInLive = 0
     this.streamCol = 0
+    this.rowClosed = true
     this.consecutiveNewlines = 0
     this.liveSepDrawn = false
     this.sepRowsAboveLive = 0
@@ -257,17 +274,102 @@ export class Compositor {
     }
     const safeChunk = this.streamAnsi.push(chunk)
     if (safeChunk.length === 0) return
-    const capped = this.capBlankLines(safeChunk)
-    if (capped.length === 0) return
-    const forTty = normalizeLfToCrlf(capped)
-    if (this.streamHold) {
-      this.heldStream += forTty
+    // A waiting block goes in right after the first line feed of this chunk: the
+    // earliest row boundary after it arrived. One paint, so one frame.
+    const cut = this.pendingBlocks.length > 0 ? this.blockCut(safeChunk) : -1
+    if (cut === -1) {
+      this.paint(safeChunk)
       return
     }
-    this.writeBufferedStream(forTty)
+    this.paint(safeChunk.slice(0, cut) + this.takeBlocks() + safeChunk.slice(cut))
+  }
+
+  /**
+   * Cap blank lines, track the stream state, and paint (or hold) text that is
+   * already safe to split: it ends outside an escape sequence.
+   */
+  private paint(safe: string): void {
+    const capped = this.capBlankLines(safe)
+    if (capped.length === 0) return
+    const scan = scanChunk(capped)
+    if (scan.lastVisible !== null) this.rowClosed = scan.lastVisible === "\n"
+    if (scan.movesCursor) this.cursorMoveSeen = true
+    const forTty = normalizeLfToCrlf(capped)
+    if (this.streamHold) this.heldStream += forTty
+    else this.writeBufferedStream(forTty)
+  }
+
+  /**
+   * Where a waiting block goes into an escape-safe chunk: just after its first
+   * line feed. `-1` when it has none, or when the stream moves the cursor (see
+   * {@link cursorMoveSeen}): then the block waits for {@link flushStream}.
+   */
+  private blockCut(safe: string): number {
+    if (this.cursorMoveSeen) return -1
+    const scan = scanChunk(safe)
+    return scan.movesCursor ? -1 : scan.firstLineFeedEnd
+  }
+
+  /** Take the waiting blocks, in arrival order. */
+  private takeBlocks(): string {
+    const text = this.pendingBlocks.join("")
+    this.pendingBlocks = []
+    return text
+  }
+
+  /**
+   * Write a self-contained block of scrollback text, such as a `⚠ warn`
+   * diagnostic, on rows of its own.
+   *
+   * A streamed response has no trailing newline until its row is complete, so
+   * the stream cursor sits mid-row while the text streams. {@link writeStream}
+   * appends there, which is right for the response and wrong for a block: the
+   * block joined the last line of the response.
+   *
+   * Ending that row with a newline first does not work. A markdown formatter
+   * such as mdstream echoes the raw partial line on the open row and, at the
+   * newline, rewrites that same row (`\r`, `ESC[K`, the formatted line). A
+   * newline in between moves the cursor off the echo, so the rewrite lands on a
+   * new row and the raw echo stays in scrollback as a duplicate.
+   *
+   * So the block waits. It is written, in arrival order, at the first row
+   * boundary: right after the first line feed of a later chunk, which is the
+   * next end of a row of the response (a paragraph away at most), when the row
+   * before it is final. When the row is already closed the block is written at
+   * once, with no blank row above it. {@link flushStream}, which the REPL calls
+   * when a turn's formatter has ended and {@link unmount} calls too, writes
+   * whatever still waits: no formatter rewrites the row any more, so a block
+   * cannot leak into the next turn.
+   *
+   * @param text - The block, with its own line breaks and a trailing newline. An empty string is a no-op.
+   */
+  writeBlock(text: string): void {
+    if (text.length === 0) return
+    if (!this.tty || !this.mounted) {
+      this.writeStream(text)
+      return
+    }
+    this.pendingBlocks.push(text)
+    if (this.rowClosed && !this.cursorMoveSeen) this.paint(this.takeBlocks())
   }
 
   flushStream(): void {
+    this.flushAnsiTail()
+    this.drainBlocks()
+  }
+
+  /**
+   * The stream is at an end: write the waiting blocks, ending an open row
+   * first. Nothing rewrites that row any more, so the newline is safe.
+   */
+  private drainBlocks(): void {
+    this.cursorMoveSeen = false
+    if (this.pendingBlocks.length === 0) return
+    this.paint((this.rowClosed ? "" : "\n") + this.takeBlocks())
+  }
+
+  /** Write what the ANSI buffer still holds: an escape that never closed. */
+  private flushAnsiTail(): void {
     const tail = this.streamAnsi.flush()
     if (tail.length === 0) return
     if (!this.tty) {
@@ -308,35 +410,7 @@ export class Compositor {
       const ch = chunk[i]
       if (ch === "\x1b") {
         // ANSI escape — pass through verbatim, zero-width.
-        let j = i + 1
-        const next = j < n ? chunk[j] : ""
-        if (next === "[") {
-          j++
-          while (j < n) {
-            const cc = chunk.charCodeAt(j)
-            if (cc >= 0x40 && cc <= 0x7e) {
-              j++
-              break
-            }
-            j++
-          }
-        } else if (next === "]") {
-          j++
-          while (j < n) {
-            if (chunk[j] === "\x07") {
-              j++
-              break
-            }
-            if (chunk[j] === "\x1b" && j + 1 < n && chunk[j + 1] === "\\") {
-              j += 2
-              break
-            }
-            j++
-          }
-        } else {
-          // Single-char ESC sequence (e.g. ESC =, ESC >, ESC M).
-          j = Math.min(j + 1, n)
-        }
+        const j = escapeEnd(chunk, i)
         out += chunk.slice(i, j)
         i = j
       } else if (ch === "\n") {
@@ -553,8 +627,11 @@ export class Compositor {
       return await fn()
     } finally {
       this.streamCol = 0 // assume callback left a clean line
+      this.rowClosed = true
       this.output.write(this.bsu + "\x1b[?25l" + this.drawLiveSeq() + this.esu)
       this.drawnLiveKey = this.liveKey(this.lastLines, this.lastCursor)
+      // Blocks that waited while the callback owned the terminal. The row is closed now.
+      if (this.pendingBlocks.length > 0 && !this.cursorMoveSeen) this.paint(this.takeBlocks())
     }
   }
 
@@ -977,6 +1054,80 @@ function suffixAfterLastRedrawClear(chunk: string): string | null {
     end = (match.index ?? 0) + match[0].length
   }
   return end === -1 ? null : chunk.slice(end)
+}
+
+/**
+ * Index just past the escape sequence that starts at `chunk[i]` (an ESC).
+ * Handles CSI (`ESC [` … final byte), OSC (`ESC ]` … BEL or `ESC \`) and the
+ * single-character forms (`ESC =`, `ESC M`). A sequence that `chunk` does not
+ * close ends at `chunk.length`.
+ */
+function escapeEnd(chunk: string, i: number): number {
+  const n = chunk.length
+  let j = i + 1
+  const next = j < n ? chunk[j] : ""
+  if (next === "[") {
+    j++
+    while (j < n) {
+      const cc = chunk.charCodeAt(j)
+      if (cc >= 0x40 && cc <= 0x7e) {
+        j++
+        break
+      }
+      j++
+    }
+  } else if (next === "]") {
+    j++
+    while (j < n) {
+      if (chunk[j] === "\x07") {
+        j++
+        break
+      }
+      if (chunk[j] === "\x1b" && j + 1 < n && chunk[j + 1] === "\\") {
+        j += 2
+        break
+      }
+      j++
+    }
+  } else {
+    // Single-char ESC sequence (e.g. ESC =, ESC >, ESC M).
+    j = Math.min(j + 1, n)
+  }
+  return j
+}
+
+/** What {@link scanChunk} found in a piece of the scrollback stream. */
+interface ChunkScan {
+  /** The last character that is not part of an escape sequence, or `null` when there is none. */
+  lastVisible: string | null
+  /** Index just past the first line feed that is not part of an escape sequence, or `-1`. */
+  firstLineFeedEnd: number
+  /** An escape moves the cursor: anything but SGR (`m`), EL (`K`), ED (`J`) and OSC. */
+  movesCursor: boolean
+}
+
+/** Walk `text` once, skipping escape sequences. See {@link ChunkScan}. */
+function scanChunk(text: string): ChunkScan {
+  const scan: ChunkScan = { lastVisible: null, firstLineFeedEnd: -1, movesCursor: false }
+  let i = 0
+  while (i < text.length) {
+    if (text[i] === "\x1b") {
+      const end = escapeEnd(text, i)
+      const kind = text[i + 1]
+      if (kind === "[") {
+        if (!"mKJ".includes(text.charAt(end - 1))) scan.movesCursor = true
+      } else if (kind !== "]") {
+        // ESC 7, ESC 8, ESC M and the like: the cursor may move.
+        scan.movesCursor = true
+      }
+      i = end
+      continue
+    }
+    scan.lastVisible = text.charAt(i)
+    if (scan.firstLineFeedEnd === -1 && text[i] === "\n") scan.firstLineFeedEnd = i + 1
+    i++
+  }
+  return scan
 }
 
 /**

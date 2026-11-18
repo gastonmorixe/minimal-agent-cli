@@ -388,6 +388,36 @@ describe("ScrollbackDiagnosticSink — bus wiring", () => {
     expect(w1.calls).toHaveLength(1)
     expect(w2.calls).toHaveLength(1)
   })
+
+  it("bindWriter() returns a function that puts the previous writer back", () => {
+    const w1 = makeWriter()
+    const w2 = makeWriter()
+    const sink = new ScrollbackDiagnosticSink({ write: w1.write, now: () => T0 })
+    const restore = sink.bindWriter(w2.write)
+    sink.onEvent(event({ message: "to-w2" }))
+    expect(w2.calls).toHaveLength(1)
+
+    restore()
+    sink.onEvent(event({ message: "to-w1" }))
+    expect(w1.calls).toHaveLength(1)
+    expect(w2.calls).toHaveLength(1)
+  })
+
+  it("the restore function does nothing once another bindWriter() replaced the writer", () => {
+    const w1 = makeWriter()
+    const w2 = makeWriter()
+    const w3 = makeWriter()
+    const sink = new ScrollbackDiagnosticSink({ write: w1.write, now: () => T0 })
+    const restoreW2 = sink.bindWriter(w2.write)
+    sink.bindWriter(w3.write)
+
+    // A late restore of w2 must not undo the newer binding.
+    restoreW2()
+    sink.onEvent(event({ message: "after-late-restore" }))
+    expect(w3.calls).toHaveLength(1)
+    expect(w1.calls).toHaveLength(0)
+    expect(w2.calls).toHaveLength(0)
+  })
 })
 
 // ---------------------------------------------------------------------------
