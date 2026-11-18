@@ -25,6 +25,7 @@ import type { CompactDisplayBoundary } from "@minimal-agent/core/host/session-re
 import { writePathFromInput } from "@minimal-agent/core/host/tool-input-aliases"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { SessionRecord } from "@minimal-agent/core/host-kit/session-store"
+import { viewPersistedOutcome } from "@minimal-agent/core/plugin-api"
 import type {
   ContentBlock,
   Message,
@@ -538,13 +539,20 @@ export async function replayToScrollback(
           ) {
             const language = resolveFileLanguage({ path: tu.input.file_path, content })
             if (language) {
+              // The stored `outcome` gives the body end. A record with no or a
+              // bad `outcome` (the view is `undefined`) uses the regex cut. The
+              // offsets refer to the first text block: when `content` joins more
+              // blocks, the view text is not `content`, so the regex cut stays.
+              const view = viewPersistedOutcome(result.content, result.outcome)
               const annotationCandidates = [
                 content.indexOf("\n\n<ma::"),
                 content.indexOf("\n\n[truncated:"),
                 content.indexOf("\n\n[note:"),
               ].filter((index) => index >= 0)
-              const annotationIdx =
+              const regexIdx =
                 annotationCandidates.length === 0 ? -1 : Math.min(...annotationCandidates)
+              const annotationIdx =
+                view !== undefined && view.text === content ? view.bodyEnd : regexIdx
               const body = annotationIdx < 0 ? content : content.slice(0, annotationIdx)
               const annotation = annotationIdx < 0 ? "" : content.slice(annotationIdx)
               const highlighted = await highlightReadBody(body, language, codeHighlighter)
@@ -776,6 +784,7 @@ export function toolDisplaysFromRecords(
       toolName: tu.name,
       input: tu.input,
       content: contentStr,
+      outcome: rec.outcome,
       isError: rec.isError,
       callTs: tu.ts,
       sidecarTasks,

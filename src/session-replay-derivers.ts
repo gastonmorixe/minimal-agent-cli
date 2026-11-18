@@ -48,6 +48,7 @@ import {
   writeContentFromInput,
   writePathFromInput,
 } from "@minimal-agent/core/host/tool-input-aliases"
+import { viewPersistedOutcome } from "@minimal-agent/core/plugin-api"
 import { renderUnifiedDiff } from "./ui/render/unified-diff.ts"
 import { c } from "./ui/style/ansi.ts"
 import { diffSummary, displayPatch, newFileDisplay } from "./ui/tool-transcript/diff-rows.ts"
@@ -121,8 +122,13 @@ function stripTrailingAnnotations(content: string): string {
  * tasks plugin's `replayRenderers` handler and reaches replay through
  * {@link registerReplayRenderer}.
  */
-export function deriveTaskDisplay(opts: { content: string }): DerivedDisplay | undefined {
-  const trimmed = stripTrailingAnnotations(opts.content).replace(/\n+$/g, "")
+export function deriveTaskDisplay(opts: {
+  content: string
+  /** Stored `outcome` (not validated here). A bad or missing value uses the regex. */
+  outcome?: unknown
+}): DerivedDisplay | undefined {
+  const view = viewPersistedOutcome(opts.content, opts.outcome)
+  const trimmed = (view ? view.body : stripTrailingAnnotations(opts.content)).replace(/\n+$/g, "")
   if (trimmed.length === 0) return undefined
   const lines = trimmed.split("\n")
   if (lines.length === 1) return { displayHeader: lines[0] }
@@ -242,6 +248,8 @@ export function deriveDisplayFallback(opts: {
   toolName: string
   input: Record<string, unknown> | undefined
   content: string
+  /** Stored `outcome` of the `tool_result` record (not validated here). */
+  outcome?: unknown
   isError: boolean
   /**
    * Wall-clock at the moment the historical call ran. Forwarded to
@@ -281,7 +289,7 @@ export function deriveDisplayFallback(opts: {
   try {
     switch (opts.toolName) {
       case "Task":
-        return deriveTaskDisplay({ content: opts.content })
+        return deriveTaskDisplay({ content: opts.content, outcome: opts.outcome })
       case "Edit":
         return deriveEditDisplay(input)
       case "Write":

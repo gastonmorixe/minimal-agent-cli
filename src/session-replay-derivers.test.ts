@@ -124,6 +124,93 @@ describe("deriveTaskDisplay", () => {
   })
 })
 
+describe("deriveTaskDisplay with a stored outcome (T8 replay parity)", () => {
+  const BODY = ["header", "  body 1", "  body 2", "footer line"].join("\n")
+
+  /** Build a valid outcome by hand: one span from the first `opener` to the end. */
+  function outcomeFor(content: string, opener: string, kind: string) {
+    const start = content.indexOf(opener)
+    return { v: 1, bodyEnd: start, annotations: [{ kind, start, end: content.length }] }
+  }
+
+  it("output-preview: the body from outcome equals the body from the regex", () => {
+    const opener = "\n\n<ma::agent::output-preview"
+    const content = `${BODY}${opener} shown="3" total="5" tool="Task">noise</ma::agent::output-preview>`
+    const outcome = outcomeFor(content, opener, "output-preview")
+    const withOutcome = deriveTaskDisplay({ content, outcome })
+    expect(withOutcome).toEqual(deriveTaskDisplay({ content }))
+    expect(withOutcome?.displayHeader).toBe("header")
+    expect(withOutcome?.display).toBe("  body 1\n  body 2")
+    expect(withOutcome?.displayFooter).toBe("footer line")
+  })
+
+  it("[truncated:] footer: the body from outcome equals the body from the regex", () => {
+    const opener = "\n\n[truncated:"
+    const content = `${BODY}${opener} at 64 KB...]`
+    const outcome = outcomeFor(content, opener, "output-truncated")
+    const withOutcome = deriveTaskDisplay({ content, outcome })
+    expect(withOutcome).toEqual(deriveTaskDisplay({ content }))
+    expect(withOutcome?.displayFooter).toBe("footer line")
+  })
+
+  it("reads the outcome and not the regex: a body that holds an opener-like line is kept", () => {
+    // Only the stored `outcome` knows that the "[note:" line is part of the body.
+    const content = "header\nline\n\n[note: kept]\nfooter"
+    const outcome = { v: 1, bodyEnd: content.length, annotations: [] }
+    expect(deriveTaskDisplay({ content, outcome })?.displayFooter).toBe("footer")
+    // The regex cuts at "[note:" and sees two lines only: no footer.
+    expect(deriveTaskDisplay({ content })?.displayFooter).toBeUndefined()
+  })
+
+  it("a bad outcome falls back to the regex and does not throw", () => {
+    const opener = "\n\n[truncated:"
+    const content = `${BODY}${opener} at 64 KB...]`
+    const expected = deriveTaskDisplay({ content })
+    const good = outcomeFor(content, opener, "output-truncated")
+    const bad: unknown[] = [
+      { ...good, bodyEnd: content.length + 10 },
+      { ...good, bodyEnd: -1 },
+      { ...good, bodyEnd: "5" },
+      { ...good, bodyEnd: 1.5 },
+      { ...good, v: 2 },
+      { ...good, annotations: "none" },
+      { ...good, annotations: [null] },
+      { ...good, annotations: [{ kind: 1, start: 0, end: 1 }] },
+      { v: 1, bodyEnd: 2, annotations: [] },
+      null,
+      [],
+      [good],
+      "outcome",
+      42,
+    ]
+    for (const outcome of bad) {
+      expect(() => deriveTaskDisplay({ content, outcome })).not.toThrow()
+      expect(deriveTaskDisplay({ content, outcome })).toEqual(expected)
+    }
+  })
+
+  it("no outcome: the regex path is unchanged", () => {
+    const content = `${BODY}\n\n[note: x]`
+    expect(deriveTaskDisplay({ content, outcome: undefined })).toEqual(
+      deriveTaskDisplay({ content }),
+    )
+    expect(deriveTaskDisplay({ content })?.displayFooter).toBe("footer line")
+  })
+
+  it("deriveDisplayFallback passes the outcome to the Task deriver", () => {
+    const content = "header\nline\n\n[note: kept]\nfooter"
+    const outcome = { v: 1, bodyEnd: content.length, annotations: [] }
+    const d = deriveDisplayFallback({
+      toolName: "Task",
+      input: {},
+      content,
+      outcome,
+      isError: false,
+    })
+    expect(d?.displayFooter).toBe("footer")
+  })
+})
+
 describe("replay renderer seam (loader-registered plugin renderers)", () => {
   // The seam: a plugin may register a per-tool replay renderer (the
   // loader resolves it from the plugin manifest's `replayRenderers`
