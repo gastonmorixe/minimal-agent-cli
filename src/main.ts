@@ -498,7 +498,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       effortLevels,
       cliCredentialName,
       // A resume starts on the target that the session last used (flags win).
-      ...resumeTargetFlags(effectiveResumeArg, { model, provider, cliCredentialName }, effort),
+      ...resumeTargetFlags(effectiveResumeArg, opts, effort),
     },
     userConfig,
     env: env,
