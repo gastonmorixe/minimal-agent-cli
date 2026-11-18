@@ -8,6 +8,7 @@ import { join } from "node:path"
 import type { CredentialedProvider } from "@minimal-agent/core/host/auth-strategies"
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
 
+import { parseCliOptions } from "../cli/parse-argv.ts"
 import {
   type ResumeTargetDeps,
   readSavedTarget,
@@ -126,6 +127,100 @@ describe("resumeTargetFlags", () => {
     expect(resumeTargetFlags("last", {}, "high", d)).toEqual({ model: "m2", provider: "beta" })
   })
 
+  const throwing: [string, Partial<ResumeTargetDeps>][] = [
+    [
+      "the auth store",
+      {
+        discover: () => {
+          throw new Error("auth store is corrupt")
+        },
+      },
+    ],
+    [
+      "the model registry",
+      {
+        effortLevels: () => {
+          throw new Error("auth store is corrupt")
+        },
+      },
+    ],
+    [
+      "the provider registry",
+      {
+        savedTarget: () => ({ providerId: "beta", model: "m2" }),
+        discover: () => [],
+        needsStoredCredential: () => {
+          throw new Error("auth store is corrupt")
+        },
+      },
+    ],
+  ]
+  for (const [name, over] of throwing) {
+    it(`a throw from ${name} in a check: the usual target, with one notice, and no failure`, () => {
+      const notices: string[] = []
+      expect(resumeTargetFlags("last", {}, "high", deps({ ...over, notices }))).toEqual({})
+      expect(notices).toHaveLength(1)
+      expect(notices[0]).toContain("it could not be checked: auth store is corrupt")
+    })
+  }
+
+  it("the resume argument goes to the record reader with no change (a sid, `last`)", () => {
+    const seen: string[] = []
+    const d = deps({
+      savedTarget: (arg) => {
+        seen.push(arg)
+        return SAVED
+      },
+    })
+    resumeTargetFlags("last", {}, "high", d)
+    resumeTargetFlags("3333", {}, "high", d)
+    expect(seen).toEqual(["last", "3333"])
+  })
+
+  const forms: [string, string[], string][] = [
+    ["--resume <sid>", ["--resume", "abc-1"], "abc-1"],
+    ["--resume last", ["--resume", "last"], "last"],
+    ["--resume-same-sid <sid>", ["--resume-same-sid", "abc-2"], "abc-2"],
+    [
+      "--resume-same-sid with --resume (the first wins)",
+      ["--resume", "abc-1", "--resume-same-sid", "abc-2"],
+      "abc-2",
+    ],
+  ]
+  for (const [name, argv, want] of forms) {
+    it(`${name}: the parsed resume argument selects the record, and the saved target is used`, () => {
+      const seen: string[] = []
+      const d = deps({
+        savedTarget: (arg) => {
+          seen.push(arg)
+          return SAVED
+        },
+      })
+      const opts = parseCliOptions(argv, {}, {}, () => [])
+      const flags = {
+        model: opts.model,
+        provider: opts.provider,
+        cliCredentialName: opts.cliCredentialName,
+      }
+      expect(resumeTargetFlags(opts.effectiveResumeArg, flags, "high", d)).toEqual({
+        model: "m2",
+        provider: "beta",
+        cliCredentialName: "second",
+      })
+      expect(seen).toEqual([want])
+    })
+  }
+
+  it("a model flag with --resume-same-sid wins over the record", () => {
+    const opts = parseCliOptions(["--resume-same-sid", "abc-2", "--model", "x"], {}, {}, () => [])
+    const flags = {
+      model: opts.model,
+      provider: opts.provider,
+      cliCredentialName: opts.cliCredentialName,
+    }
+    expect(resumeTargetFlags(opts.effectiveResumeArg, flags, "high", deps())).toEqual({})
+  })
+
   it("a model with no effort levels accepts the effort of the run", () => {
     const d = deps({ effortLevels: () => [] })
     expect(resumeTargetFlags("last", {}, "high", d)).toMatchObject({ model: "m2" })
@@ -168,6 +263,32 @@ describe("readSavedTarget (real session files)", () => {
       discardedThinking: true,
     })
     expect(readSavedTarget(sid, dir)).toEqual(SAVED)
+  })
+
+  it("`last` gives the record of the newest session of the cwd", () => {
+    const open = (sid: string): SessionStore =>
+      SessionStore.open({
+        sid,
+        model: "m1",
+        cwd: dir,
+        systemHash: "s",
+        toolsHash: "t",
+        agentVersion: "0.0.0",
+        provider: "alpha",
+        dir: join(dir, "sessions"),
+      })
+    const older = open("55555555-5555-4555-8555-555555555555")
+    older.appendUser("hello")
+    older.appendTargetSwitch({ providerId: "alpha", model: "old", discardedThinking: true })
+    const newer = open("66666666-6666-4666-8666-666666666666")
+    newer.appendUser("hello")
+    newer.appendTargetSwitch({
+      providerId: "beta",
+      credentialName: "second",
+      model: "m2",
+      discardedThinking: true,
+    })
+    expect(readSavedTarget("last", dir)).toEqual(SAVED)
   })
 
   it("gives null for a session that does not exist", () => {
