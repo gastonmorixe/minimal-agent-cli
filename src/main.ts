@@ -78,8 +78,7 @@ import type { Message } from "@minimal-agent/core/sdk/messages"
 import { extractPromptFromArgs } from "./cli/extract-prompt.ts"
 import { resolveInitialModeId } from "./cli/non-interactive-defaults.ts"
 import { resolvePluginPromptsForBoot } from "./cli/plugin-prompts-resolution.ts"
-import { registerCompactHostCommand } from "./commands/compact.ts"
-import { registerContinueHostCommand } from "./commands/continue.ts"
+import { registerHostCommands } from "./commands/host-commands.ts"
 import { InteractiveSession } from "./interactive-session.ts"
 import { bareDisableIds } from "./oneshot/bare.ts"
 import { setupOneShot } from "./oneshot/oneshot-options.ts"
@@ -102,6 +101,7 @@ import {
 } from "./startup/entry-exit.ts"
 import { readEmbeddedPackageVersion } from "./startup/help.ts"
 import { withHostPorts } from "./startup/host-ports.ts"
+import { followLiveTarget } from "./startup/live-target.ts"
 import * as roots from "./startup/plugin-roots.ts"
 import { resolveStartupProviderState, startProviderWarmups } from "./startup/provider-boot.ts"
 import {
@@ -1138,14 +1138,14 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     model: selectedModel,
   })
   // Host slash commands that need a live agent (not plugin-declared).
-  // Must run after session construction so `/compact` and `/continue` appear in
+  // Must run after session construction so `/compact`, `/continue`, `/provider` appear in
   // listCommands / slash-menu and dispatch through CommandRegistry.
-  if (hasPlugins) {
-    registerCompactHostCommand(loader, agent)
-    registerContinueHostCommand(loader, agent)
-  }
-  // Point the ModelInfo provider at the agent's live model from here on.
+  if (hasPlugins) registerHostCommands(loader, agent)
+  // The live target: the env, `ctx.queryTarget`, and the `target.didSwitch` bus event.
+  followLiveTarget(agent.agentCore(), { loader: hasPlugins ? loader : null })
+  // Point the ModelInfo provider at the agent's live model and provider from here on.
   getLiveModelId = () => agent.getModel()
+  getLiveProviderId = () => agent.agentCore().getProviderId()
 
   // Ready banner : emitted ONCE here so it lands in scrollback right
   // under the startup header, BEFORE any resume replay. Previously the
