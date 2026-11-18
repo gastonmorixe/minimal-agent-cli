@@ -4,7 +4,15 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -267,6 +275,90 @@ describe("a worker ignores a line that is not from its lead", () => {
     expect(await h.reader.poll()).toBe(false)
     expect(target(h.core)).toEqual(A)
     expect(h.warnings[0]).toContain("no credentials")
+  })
+})
+
+describe("a file at the control path that is not a regular file", () => {
+  // Any tool can put a file there (`mkfifo`, `ln -s`, `mkdir`). It must not stop or move the worker.
+  const BAD_FILE =
+    "target control: ignored the control file (it could not be read as a regular file of this user)"
+
+  // The poll runs in a child process with a time limit: an open that blocks
+  // (no O_NONBLOCK) cannot be stopped from inside its own process.
+  it.skipIf(process.platform === "win32")(
+    "a FIFO: the poll returns, with one diagnostic and no switch",
+    () => {
+      expect(Bun.spawnSync(["mkfifo", path]).exitCode).toBe(0)
+      const script = `
+        import { createControlReader } from ${JSON.stringify(join(import.meta.dir, "target-control-worker.ts"))}
+        const warnings = []
+        let switches = 0
+        const reader = createControlReader(
+          { path: process.env.CONTROL_PATH, key: "a".repeat(64), lead: "L" },
+          {
+            core: { getTarget: () => ({ model: "m" }), switchTarget: () => void switches++ },
+            resolveAuth: async () => ({ type: "api-key", token: "t" }),
+            warn: (m) => warnings.push(m),
+          },
+        )
+        await reader.poll()
+        await reader.poll()
+        console.log(JSON.stringify({ switches, warnings }))
+      `
+      const run = Bun.spawnSync([process.execPath, "-e", script], {
+        env: { ...process.env, CONTROL_PATH: path },
+        timeout: 10_000,
+        stderr: "pipe",
+      })
+      // A blocked open ends here with a signal and no exit code.
+      expect({ exitCode: run.exitCode, stderr: run.stderr.toString() }).toEqual({
+        exitCode: 0,
+        stderr: "",
+      })
+      expect(JSON.parse(run.stdout.toString())).toEqual({ switches: 0, warnings: [BAD_FILE] })
+    },
+    20_000,
+  )
+
+  it("a symlink to a file with a correct line: not followed, one diagnostic, no switch", async () => {
+    const h = harness()
+    const real = join(dir, "real.jsonl")
+    writeFileSync(real, signed(A, B))
+    symlinkSync(real, path)
+    expect(await h.reader.poll()).toBe(false)
+    expect(await h.reader.poll()).toBe(false)
+    expect(target(h.core)).toEqual(A)
+    expect(h.warnings).toEqual([BAD_FILE])
+  })
+
+  it("a directory: one diagnostic and no switch, and a real file after it still works", async () => {
+    const h = harness()
+    mkdirSync(path)
+    expect(await h.reader.poll()).toBe(false)
+    expect(await h.reader.poll()).toBe(false)
+    expect(target(h.core)).toEqual(A)
+    expect(h.warnings).toEqual([BAD_FILE])
+    rmSync(path, { recursive: true })
+    writeFileSync(path, signed(A, B))
+    expect(await h.reader.poll()).toBe(true)
+    expect(target(h.core)).toEqual(B)
+  })
+
+  it("no file is not an error: no diagnostic", async () => {
+    const h = harness()
+    expect(await h.reader.poll()).toBe(false)
+    expect(h.warnings).toEqual([])
+  })
+
+  it("stop does not throw with a directory at the path", () => {
+    const h = harness()
+    const watch = watchTargetControl(
+      h.env,
+      { core: h.core, warn: () => {}, resolveAuth: async () => ({ type: "api-key", token: "t" }) },
+      10_000,
+    )
+    mkdirSync(path)
+    expect(() => watch.stop()).not.toThrow()
   })
 })
 
