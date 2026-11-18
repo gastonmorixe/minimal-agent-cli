@@ -140,3 +140,38 @@ describe("renderUsageOverlay", () => {
     expect(text).toContain("+3 more model")
   })
 })
+
+describe("renderUsageReport alignment", () => {
+  it("aligns bars and number columns across both sections, even with long labels", () => {
+    const row = (key: string, tokens: number, costUSD: number, est = 0) => ({
+      key,
+      totals: totals({ tokens, costUSD, turns: 10, estimatedTurns: est }),
+    })
+    const r = report({
+      totals: totals({ tokens: 100, turns: 10 }),
+      byProvider: [
+        row("anthropic", 41_300_000_000, 27_900),
+        row("generic-endpoint", 126_200_000, 0, 3),
+        row("wafer", 39_300_000, 7.6),
+      ],
+      byModel: [
+        row("og-muse-spark-1.3-contributor", 6_100_000_000, 368.47),
+        row("oz-claude-opus-5-5", 25_200_000_000, 14_800, 2),
+        row("cur-cursor-auto", 7_900_000_000, 0, 1),
+      ],
+    })
+    const lines = renderUsageReport(r, { cols: 111 }).map(stripAnsi)
+    const rows = lines.filter((l) => /[█░▏▎▍▌▋▊▉]/.test(l))
+    expect(rows).toHaveLength(6)
+    const barStart = (l: string) => l.search(/[█░▏▎▍▌▋▊▉]/)
+    const tokEnd = (l: string) => l.search(/[█░▏▎▍▌▋▊▉][^█░▏▎▍▌▋▊▉]*$/) // last bar cell
+    expect(new Set(rows.map(barStart)).size).toBe(1)
+    expect(new Set(rows.map(tokEnd)).size).toBe(1)
+    // cost column starts at the same offset whenever present
+    const costCols = rows.filter((l) => l.includes("$")).map((l) => l.indexOf("$"))
+    expect(new Set(costCols).size).toBe(1)
+    // the [~] marker lines up whether or not the row has a cost
+    const markCols = rows.filter((l) => l.includes("[~]")).map((l) => l.indexOf("[~]"))
+    expect(new Set(markCols).size).toBe(1)
+  })
+})
