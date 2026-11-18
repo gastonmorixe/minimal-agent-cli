@@ -16,7 +16,7 @@
  */
 
 import { afterEach, describe, expect, it } from "bun:test"
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 
@@ -164,6 +164,16 @@ function skipChainTest(present: boolean, env: FixtureEnv = process.env): boolean
   return !present && !textFixturesRequired(env)
 }
 
+const CLI_ROOT = resolve(import.meta.dir, "..")
+/** The workspace sibling core checkout. Not present in a standalone CLI checkout. */
+const SIBLING_CORE = resolve(CLI_ROOT, "../minimal-agent-core")
+const siblingCorePresent = (): boolean => existsSync(join(SIBLING_CORE, "package.json"))
+
+/** Same rule as {@link skipChainTest}, for the sibling core path check. */
+function skipCorePathCheck(present: boolean, env: FixtureEnv = process.env): boolean {
+  return !present && !textFixturesRequired(env)
+}
+
 describe("InteractiveSession tool-result chain (test E, spec v6.1 M0)", () => {
   it("a missing plugins checkout skips locally and fails under CI=1 or CI=true (M6)", () => {
     expect(skipChainTest(false, {})).toBe(true)
@@ -175,15 +185,40 @@ describe("InteractiveSession tool-result chain (test E, spec v6.1 M0)", () => {
     expect(skipChainTest(true, {})).toBe(false)
   })
 
-  it("the CLI resolves the local core package", () => {
-    const cliRoot = resolve(import.meta.dir, "..")
-    const coreRoot = realpathSync(resolve(cliRoot, "../minimal-agent-core"))
-    const resolved = realpathSync(
-      Bun.resolveSync("@minimal-agent/core/host-kit/plugin-loader", cliRoot),
-    )
-    expect(resolved.startsWith(`${coreRoot}/`)).toBe(true)
-    expect(dirname(resolved)).toBe(join(coreRoot, "src/host-public"))
+  it("the resolved core gives the tool-result chain and the sideband registry", async () => {
+    // Capability check: it does not need the sibling core checkout. Any core
+    // that the CLI resolves must give the loader fallback that test E uses.
+    const loader = await PluginLoader.load({ roots: { embedded: [] }, logger: () => {} })
+    expect(typeof loader.toolResultChain).toBe("function")
+    expect(typeof loader.sidebandRegistry).toBe("function")
+    expect(loader.toolResultChain()).toEqual([])
+    expect(typeof loader.sidebandRegistry().kind).toBe("function")
+    expect(loader.sidebandRegistry().kind(KIND)).toBeUndefined()
   })
+
+  it("a missing sibling core skips the path check locally and fails under CI (M6)", () => {
+    expect(skipCorePathCheck(false, {})).toBe(true)
+    expect(skipCorePathCheck(false, { CI: "false" })).toBe(true)
+    expect(skipCorePathCheck(false, { CI: "1" })).toBe(false)
+    expect(skipCorePathCheck(false, { CI: "true" })).toBe(false)
+    expect(skipCorePathCheck(true, {})).toBe(false)
+  })
+
+  it.skipIf(skipCorePathCheck(siblingCorePresent()))(
+    "the CLI resolves the local core package (sibling checkout)",
+    () => {
+      // Under CI with no sibling checkout, this test runs: fail with a clear reason.
+      if (!siblingCorePresent()) {
+        throw new Error(`the sibling core checkout ${SIBLING_CORE} is missing, and CI requires it`)
+      }
+      const coreRoot = realpathSync(SIBLING_CORE)
+      const resolved = realpathSync(
+        Bun.resolveSync("@minimal-agent/core/host-kit/plugin-loader", CLI_ROOT),
+      )
+      expect(resolved.startsWith(`${coreRoot}/`)).toBe(true)
+      expect(dirname(resolved)).toBe(join(coreRoot, "src/host-public"))
+    },
+  )
 
   it.skipIf(skipChainTest(textFixturesPresent()))(
     "runs every phase stage and keeps the sideband mark in live history",
