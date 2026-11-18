@@ -179,6 +179,14 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Fixed
 
+- 2026-11-18: `compile:dev` and `compile:release` failed at e2e check 9
+  with `SpawnAgent: no child request reached the mock model`, and wrote no
+  binary. The binary was correct. The mock model found the child request by
+  the words `leaf worker` in the sub-agent prompt, and the plugins changed
+  that prompt to `leaf sub-agent`. The mock then counted the child request
+  as a parent request. Now the mock finds the child by the task text that
+  the mock itself sends in `SubAgentsSpawnAgent`, at the start of the
+  request. It does not read the prompt text of the plugin.
 - 2026-11-18: **Tests that start the CLI in a temp home no longer download
   plugin binaries.** `tempHomeSpawnEnv()` now also sets
   `MINIMAL_AGENT_NO_BINARY_SETUP=1`. A run with the startup header (the REPL)

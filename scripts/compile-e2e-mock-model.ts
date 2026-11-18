@@ -5,10 +5,15 @@
  * the host needs no bun.
  *
  * Round 1 of the parent turn calls `BackgroundRun` (BG_COMMAND) and
- * `SubAgentsSpawnAgent`. A request with the leaf-worker prompt is the child
- * agent: it gets a plain answer. Round 2 of the parent waits until the
- * child has called the model, so neither the child nor the job is reaped
- * before it runs, then answers `DONE`. Every request is logged.
+ * `SubAgentsSpawnAgent` with CHILD_TASK. A request that opens with
+ * CHILD_TASK is the child agent: it gets a plain answer. Round 2 of the
+ * parent waits until the child has called the model, so neither the child
+ * nor the job is reaped before it runs, then answers `DONE`. Every request
+ * is logged.
+ *
+ * The mock finds the child by the task text that the mock itself sends. It
+ * does not read the sub-agent prompt of the plugin, so a change to that
+ * prompt cannot break this check.
  *
  * @module scripts/compile-e2e-mock-model
  */
@@ -19,6 +24,29 @@ const [portFile = "port", logFile = "log", bgCommand = "echo bg-hi"] = process.a
 const log = (s: string): void => appendFileSync(logFile, `${s}\n`)
 let childSeen = false
 let parentRound = 0
+
+/** The task that the parent gives to the child in round 1. */
+const CHILD_TASK = "Reply with CHILD-OK and nothing else."
+/** CHILD_TASK as it shows in JSON text. */
+const CHILD_TASK_JSON = JSON.stringify(CHILD_TASK).slice(1, -1)
+
+interface Message {
+  role?: string
+  content?: unknown
+}
+
+/**
+ * True for a request from the child agent: its opening carries CHILD_TASK.
+ * The opening is each message up to and including the first `user` message.
+ * The opening of the parent is its system prompt and the `-p` text. Later
+ * parent messages are not examined: the tool call of the parent has the task
+ * text, and a tool result or a notice can repeat it.
+ */
+const isChildRequest = (messages: Message[]): boolean => {
+  const firstUser = messages.findIndex((m) => m.role === "user")
+  const opening = firstUser === -1 ? messages : messages.slice(0, firstUser + 1)
+  return JSON.stringify(opening.map((m) => m.content ?? null)).includes(CHILD_TASK_JSON)
+}
 
 const sse = (chunks: unknown[]): string =>
   `${chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("")}data: [DONE]\n\n`
@@ -41,13 +69,12 @@ const server = Bun.serve({
   hostname: "127.0.0.1",
   async fetch(req) {
     const body = JSON.parse(await req.text()) as {
-      messages?: unknown[]
+      messages?: Message[]
       tools?: { function?: { name?: string } }[]
     }
-    const all = JSON.stringify(body.messages ?? [])
     const tools = (body.tools ?? []).map((t) => t.function?.name)
     let events: unknown[]
-    if (all.includes("leaf worker")) {
+    if (isChildRequest(body.messages ?? [])) {
       childSeen = true
       log("child-request")
       events = text("CHILD-OK")
@@ -62,12 +89,7 @@ const server = Bun.serve({
             role: "assistant",
             tool_calls: [
               call("call_bg", "BackgroundRun", { command: bgCommand }, 0),
-              call(
-                "call_sa",
-                "SubAgentsSpawnAgent",
-                { task: "Reply with CHILD-OK and nothing else." },
-                1,
-              ),
+              call("call_sa", "SubAgentsSpawnAgent", { task: CHILD_TASK }, 1),
             ],
           }),
           chunk({}, "tool_calls"),
