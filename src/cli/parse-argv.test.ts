@@ -305,3 +305,44 @@ describe("parseCliOptions — --input-format (R15)", () => {
     expect(() => parse(["--input-format", "xml"])).toThrow(CliFlagError)
   })
 })
+
+describe("parseCliOptions — prompt-cache flags (F1/F2)", () => {
+  test("defaults: anchor off, thinking history strip", () => {
+    const opts = parseCliOptions([], NO_CFG, NO_ENV, NOOP_FORMATTER)
+    expect(opts.cacheAnchor).toBe(false)
+    expect(opts.thinkingHistory).toBe("strip")
+  })
+
+  test("flags win over env and config", () => {
+    const opts = parseCliOptions(
+      ["--cache-anchor", "--thinking-history", "keep"],
+      { cacheAnchor: false, thinkingHistory: "strip" },
+      { MINIMAL_AGENT_CACHE_ANCHOR: "0", MINIMAL_AGENT_THINKING_HISTORY: "strip" },
+      NOOP_FORMATTER,
+    )
+    expect(opts.cacheAnchor).toBe(true)
+    expect(opts.thinkingHistory).toBe("keep")
+  })
+
+  test("env wins over config", () => {
+    const opts = parseCliOptions(
+      [],
+      { cacheAnchor: false, thinkingHistory: "strip" },
+      { MINIMAL_AGENT_CACHE_ANCHOR: "1", MINIMAL_AGENT_THINKING_HISTORY: "keep" },
+      NOOP_FORMATTER,
+    )
+    expect(opts.cacheAnchor).toBe(true)
+    expect(opts.thinkingHistory).toBe("keep")
+  })
+
+  test("config applies when no flag and no env", () => {
+    const opts = parseCliOptions(
+      [],
+      { cacheAnchor: true, thinkingHistory: "keep" },
+      NO_ENV,
+      NOOP_FORMATTER,
+    )
+    expect(opts.cacheAnchor).toBe(true)
+    expect(opts.thinkingHistory).toBe("keep")
+  })
+})
