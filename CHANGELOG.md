@@ -21,6 +21,16 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-18: **New flags `--cache-anchor` and `--thinking-history
+  strip|keep`, also for the REPL** (`d01f4ce`, Matthew). They set the
+  prompt-cache fix of core (`00b1ac1`): a second rolling cache marker and
+  append-only thinking for models that keep it. Both are OFF by default, so
+  requests are unchanged. A live A/B on Haiku 5.5 found keep + anchor at 40 to
+  44 percent of the cost, with 0 cache misses.
+- 2026-11-18: **A sanitizer for untrusted text that a plugin writes to the
+  scrollback** (`ac6b555`, `src/ui/sanitize-scrollback.ts`, Frank). It has no
+  caller yet.
+
 - 2026-11-18: the live tool preview and the session replay cut the body of a
   tool result with the stored `outcome` of the result (`bodyEnd`, or the core
   `viewPersistedOutcome`), not only with the annotation regex
