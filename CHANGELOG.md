@@ -209,6 +209,13 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Changed
 
+- 2026-11-18: Docs only. `AGENTS.md` no longer points to the umbrella
+  `bun run link:reset`, which is removed: inside the umbrella, an install in
+  this repo is the root workspace install, so that command put the local core
+  link back and did not test the pin. To test the committed pin and
+  `bun.lock`, use the umbrella `bun run pins:verify cli`. To update
+  `bun.lock` after a dependency change, use `bun run pins:lock cli`.
+
 - 2026-11-11: Plugin roots are now 3 tiers: project
   (`<cwd>/.agents/minimal-agent/plugins`), user (`~/.minimal-agent/plugins`),
   and embedded (`<cli>/plugins` plus the `../minimal-agent-plugins` checkout or
