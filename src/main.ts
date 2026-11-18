@@ -117,6 +117,7 @@ import {
   type ResumeState,
 } from "./startup/resume-load.ts"
 import { isHostModeRun, isInteractiveResumeRun, isReplRun } from "./startup/resume-mode.ts"
+import { resumeTargetFlags } from "./startup/resume-target.ts"
 import { runHostMode } from "./startup/run-host-mode.ts"
 import { runNonInteractivePrompt, selectStdioMode } from "./startup/run-non-interactive.ts"
 import { runStartupSubcommand } from "./startup/run-subcommand.ts"
@@ -496,6 +497,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       providerModel,
       effortLevels,
       cliCredentialName,
+      // A resume starts on the target that the session last used (flags win).
+      ...resumeTargetFlags(effectiveResumeArg, { model, provider, cliCredentialName }, effort),
     },
     userConfig,
     env: env,

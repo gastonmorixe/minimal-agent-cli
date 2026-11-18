@@ -21,6 +21,16 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-17: `--resume` starts on the target that the session last used
+  (`src/startup/resume-target.ts`). After a `/provider`, `/model` or
+  `/effort` in a session, a resume of it uses the provider, credential and
+  model of the newest `target_switch` record. Precedence: the `--provider`,
+  `--model` and `--credential-name` flags, then the record, then the env,
+  then the config. With one of those flags the record is not used. A record
+  is checked first: the provider must be installed, the model must be one of
+  its models, a named credential must be stored, and the effort of the run
+  must be a level of the model. If not, the session starts on the usual
+  target with one notice. The effort of the record is not restored.
 - 2026-11-17: A RUNNING sub-agent follows a target switch of its lead, in
   place (`src/startup/target-control-worker.ts`). A worker reads its control
   file path and key from its env at boot and removes them, so its own tools
