@@ -27,6 +27,7 @@ import type { ResolvedLiveAreaSlot } from "@minimal-agent/core/plugin-api/types/
 import type { CliUserConfig } from "../config/terminal-config.ts"
 import type { ReplAgentLike, runRepl } from "../repl.ts"
 import type { Spinner } from "../ui/spinner/index.ts"
+import { attachCacheBreakRows } from "../ui/status/cache-break-row.ts"
 import { attachLiveAreaRequestDump } from "../ui/status/debug-dump-live.ts"
 import type { StatusSpinnerTheme } from "../ui/status/line-renderer.ts"
 import type { ScrollbackDiagnosticSink } from "../ui/status/scrollback.ts"
@@ -271,6 +272,20 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
   // streaming response. Route it through `writeBlock`, which holds the block
   // until that row is complete.
   const restoreDiagnosticWriter = routeDiagnosticsThroughCompositor(scrollbackSink, compositor)
+  // One scrollback row for EVERY prompt-cache break, from the
+  // `cache.didBreak` bus event, not from the log severity (the scrollback
+  // sink drops info, so an expected TTL expiry was invisible). It also goes
+  // through `writeBlock`, never a direct stdout/stderr write. A break of
+  // another session (an in-process sub-agent) is labeled.
+  const sessionId = getSessionId()
+  const disposeCacheBreakRows = attachCacheBreakRows(
+    loader.bus(),
+    (text) => compositor.writeBlock(text),
+    {
+      columns: () => process.stdout.columns,
+      ...(sessionId ? { ownSessionId: sessionId } : {}),
+    },
+  )
 
   // `--debug`: paint the transport's request dump above the live area. No
   // other TUI sink renders Debug (the footer skips it, scrollback drops
@@ -304,6 +319,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     // Drain a dump still in flight (turn aborted mid-request) before the
     // compositor inside runReplLiveArea goes away.
     dumpHandle?.dispose()
+    disposeCacheBreakRows()
     restoreDiagnosticWriter()
     interceptor.uninstall()
     process.stdout.off("resize", onResize)

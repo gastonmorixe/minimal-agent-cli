@@ -10,7 +10,7 @@
  *
  * # Visual
  *
- *   ◇ cache rewrote 48,213 tok · ttl expired · idle 63 min > 5 min TTL · turn 5 · 16:49:36
+ *   ◇ cache rewrote 26,426 tok · ttl expired · idle 63 min \> 5 min TTL · turn 5 · 16:49:36
  *   ◆ cache rewrote 30,000 tok · tools changed · turn 7 · 2 in a row, 52,000 tok · 16:50:02
  *
  * Expected breaks (`actionable === false`) use a hollow sky `◇` and a dim
@@ -217,7 +217,7 @@ export function attachCacheBreakRows(
   write: (text: string) => void,
   opts: AttachCacheBreakRowsOptions = {},
 ): () => void {
-  let off: (() => void) | null = bus.on<unknown>(CACHE_DID_BREAK, (ctx) => {
+  let off: (() => void) | null = bus.on(CACHE_DID_BREAK, (ctx) => {
     const p = parseCacheBreakPayload(ctx.payload)
     if (p === null) return
     const now = opts.now?.()

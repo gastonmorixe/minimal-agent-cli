@@ -56,7 +56,6 @@ import {
   submittedAtEnabled,
 } from "./ui/scrollback-submitted-at.ts"
 import type { Spinner } from "./ui/spinner/index.ts"
-import { attachCacheBreakRows } from "./ui/status/cache-break-row.ts"
 import type { StatusSpinnerTheme } from "./ui/status/line-renderer.ts"
 import { c, faintThinkingChunk, formatAbortedEcho } from "./ui/style/ansi.ts"
 import { modeLabelFgOpen, modePromptPrefix } from "./ui/style/mode-prompt.ts"
@@ -789,7 +788,6 @@ export async function runReplLiveArea(
   let disposePromptInject: (() => void) | null = null
   let disposeCommandRun: (() => void) | null = null
   let disposeNotification: (() => void) | null = null
-  let disposeCacheBreakRows: (() => void) | null = null
   if (loader) {
     disposePromptInject = loader
       .bus()
@@ -835,25 +833,6 @@ export async function runReplLiveArea(
       const parsed = parseCommandLine(line)
       if (!parsed || !loader.hasCommand(parsed.name)) return
       void dispatchCommandAndApply(line, [])
-    })
-
-    // One scrollback row for EVERY prompt-cache break, driven by the
-    // `cache.didBreak` bus event, not by the diagnostic log severity (the
-    // scrollback sink drops info, so an expected TTL expiry was invisible).
-    // `writeBlock` holds the row until the open row of a streaming response
-    // is complete, so it lands on its own line (see
-    // `routeDiagnosticsThroughCompositor`). A compositor without it (a test
-    // fake) gets the row on the stream. Never a direct stdout/stderr write:
-    // the row always goes through the compositor, so it cannot tear the
-    // live area.
-    const writeRow = (text: string): void => {
-      if (compositor.writeBlock) compositor.writeBlock(text)
-      else compositor.writeStream(text)
-    }
-    disposeCacheBreakRows = attachCacheBreakRows(loader.bus(), writeRow, {
-      columns: liveCols,
-      // A break of another session (an in-process sub-agent) is labeled.
-      ...(opts.sessionId ? { ownSessionId: opts.sessionId } : {}),
     })
   }
 
@@ -1481,7 +1460,6 @@ export async function runReplLiveArea(
     disposePromptInject?.()
     disposeCommandRun?.()
     disposeNotification?.()
-    disposeCacheBreakRows?.()
     liveAreaScheduler?.stop()
     tuiDiagnosticSurface?.detach()
     statusRenderer?.stop()
