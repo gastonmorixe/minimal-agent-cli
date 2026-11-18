@@ -29,7 +29,9 @@ import type { ReplAgentLike, runRepl } from "../repl.ts"
 import type { Spinner } from "../ui/spinner/index.ts"
 import { attachLiveAreaRequestDump } from "../ui/status/debug-dump-live.ts"
 import type { StatusSpinnerTheme } from "../ui/status/line-renderer.ts"
+import type { ScrollbackDiagnosticSink } from "../ui/status/scrollback.ts"
 import { c } from "../ui/style/ansi.ts"
+import { routeDiagnosticsThroughCompositor } from "./diagnostic-sinks.ts"
 
 /** Inputs for {@link runLiveAreaRepl}. */
 export interface LiveAreaReplOptions {
@@ -57,6 +59,12 @@ export interface LiveAreaReplOptions {
   liveAreaSlots: readonly ResolvedLiveAreaSlot[]
   /** Unsent draft restored from a resumed session, or `null`. */
   pendingDraft: string | null
+  /**
+   * The Warning+ scrollback sink from startup, or `null` when this run has none.
+   * The REPL routes it through the compositor, so a `⚠ warn` block starts on a
+   * row of its own instead of joining the open row of a streaming response.
+   */
+  scrollbackSink: ScrollbackDiagnosticSink | null
 }
 
 /**
@@ -79,6 +87,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     loader,
     liveAreaSlots,
     pendingDraft,
+    scrollbackSink,
   } = opts
   const { Compositor } = await import("../ui/compositor.ts")
   const { EditorController } = await import("../editor-controller.ts")
@@ -257,6 +266,11 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
   // direct stderr.write goes through the compositor and respects the
   // live area.
   interceptor.install()
+  // The scrollback sink writes to stderr, which the interceptor now forwards as
+  // `writeStream`: appended at the stream cursor, i.e. onto the open row of a
+  // streaming response. Route it through `writeBlock`, which holds the block
+  // until that row is complete.
+  const restoreDiagnosticWriter = routeDiagnosticsThroughCompositor(scrollbackSink, compositor)
 
   // `--debug`: paint the transport's request dump above the live area. No
   // other TUI sink renders Debug (the footer skips it, scrollback drops
@@ -290,6 +304,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     // Drain a dump still in flight (turn aborted mid-request) before the
     // compositor inside runReplLiveArea goes away.
     dumpHandle?.dispose()
+    restoreDiagnosticWriter()
     interceptor.uninstall()
     process.stdout.off("resize", onResize)
   }

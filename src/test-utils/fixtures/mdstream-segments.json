@@ -1,0 +1,76 @@
+{
+  "_about": "Real mdstream output, captured through a pipe with COLUMNS set, one input chunk at a time. segments[i] is what mdstream wrote after chunks[i]; the last segment is what it wrote at end of input. Used by compositor-block.test.ts to cut the stream at every offset.",
+  "mdstream": "mdstream 0.3.9",
+  "scenarios": {
+    "plain": {
+      "columns": 60,
+      "chunks": ["Hello world, this is a para", "graph with no markup at all.", "\n\nAfter."],
+      "segments": [
+        "\nHello world, this is a para",
+        "graph with no markup at all.",
+        "\n\nAfter.",
+        "\n"
+      ]
+    },
+    "markup": {
+      "columns": 60,
+      "chunks": ["Hello **wor", "ld**, a para with `co", "de` here.", "\n\nAfter."],
+      "segments": [
+        "\nHello **wor",
+        "ld**, a para with `co",
+        "de` here.",
+        "\r\u001b[KHello \u001b[1mworld\u001b[22m, a para with \u001b[1m\u001b[38;2;180;140;255mcode\u001b[39m\u001b[22m here.\n\nAfter.",
+        "\n"
+      ]
+    },
+    "soft": {
+      "columns": 60,
+      "chunks": ["first **line**\n", "second **li", "ne**", "\n\nAfter."],
+      "segments": [
+        "\nfirst \u001b[1mline\u001b[22m\n",
+        "second **li",
+        "ne**",
+        "\r\u001b[Ksecond \u001b[1mline\u001b[22m\n\nAfter.",
+        "\n"
+      ]
+    },
+    "list": {
+      "columns": 60,
+      "chunks": ["- item **one**\n", "- item two", "\n- item **three**", "\n\nAfter."],
+      "segments": [
+        "\n  • item \u001b[1mone\u001b[22m\n",
+        "- item two",
+        "\r\u001b[K  • item two\n- item **three**",
+        "\r\u001b[K  • item \u001b[1mthree\u001b[22m\n\nAfter.",
+        "\n"
+      ]
+    },
+    "fence": {
+      "columns": 60,
+      "chunks": ["```js\n", "const a = 1\n", "const b = 2", "\n```\n\nAfter."],
+      "segments": [
+        "\n\u001b[2m──\u001b[0m \u001b[38;2;255;220;60m\u001b[1mjs\u001b[0m \u001b[2m──────────────────────────────────\u001b[0m\n",
+        "\u001b[2m  1  \u001b[0m\u001b[38;2;123;167;255mconst\u001b[38;2;232;238;250m \u001b[38;2;232;238;250ma\u001b[38;2;232;238;250m \u001b[38;2;138;216;208m=\u001b[38;2;232;238;250m \u001b[38;2;255;183;94m1\u001b[38;2;232;238;250m\u001b[0m\n",
+        "const b = 2",
+        "\r\u001b[K\u001b[2m  2  \u001b[0m\u001b[38;2;123;167;255mconst\u001b[38;2;232;238;250m \u001b[38;2;232;238;250mb\u001b[38;2;232;238;250m \u001b[38;2;138;216;208m=\u001b[38;2;232;238;250m \u001b[38;2;255;183;94m2\u001b[38;2;232;238;250m\u001b[0m\n\u001b[2m────────────────────────────────────────\u001b[0m\n\nAfter.",
+        "\n"
+      ]
+    },
+    "clip": {
+      "columns": 40,
+      "chunks": [
+        "This is a fairly long paragraph that will need clipping on a narrow ",
+        "terminal because it keeps going and going",
+        " and then ends **here**.",
+        "\n\nAfter."
+      ],
+      "segments": [
+        "\n\r\u001b[K\u001b[2m…\u001b[0mph that will need clipping on a narrow ",
+        "\r\u001b[K\u001b[2m…\u001b[0mrminal because it keeps going and going",
+        "\r\u001b[K\u001b[2m…\u001b[0mgoing and going and then ends **here**.",
+        "\r\u001b[KThis is a fairly long paragraph that will need clipping on a narrow terminal because it keeps going and going and then ends \u001b[1mhere\u001b[22m.\n\nAfter.",
+        "\n"
+      ]
+    }
+  }
+}

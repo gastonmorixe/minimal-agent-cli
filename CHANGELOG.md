@@ -6,7 +6,7 @@ status: living
 scope: cli
 working-dir: "."
 created-at: "2026-08-07T13:45:26-0400"
-updated-at: "2026-11-13T00:00:00-0500"
+updated-at: "2026-11-18T00:00:00-0500"
 format: "Keep a Changelog (pragmatic, date-stamped)"
 ---
 
@@ -135,6 +135,18 @@ terminal client is being moved out of `minimal-agent-core` into this repo
   `dist/minimal-agent`.
 
 ### Fixed
+
+- 2026-11-18: a `⚠ warn` or `✗ error` block no longer starts on the row of
+  the response that is streaming. Before, the diagnostic sink wrote to
+  stderr, the stdio interceptor turned that into `writeStream`, and the
+  block began where the last response row ended: `Hi again! What would
+  you like to work on? …  ⚠ warn  cache.anomaly · 08:08:25`. Now the sink
+  writes through the new `Compositor.writeBlock`. It holds the block
+  until the row ends (the next line feed of the response, or the end of
+  the turn) and then writes it on rows of its own. It does not end the
+  row itself: mdstream rewrites its open row at the line feed, so a line
+  feed in between left the raw text in scrollback twice. Print mode and
+  runs without the live area still write the sink to stderr.
 
 - 2026-11-18: `/provider` (and `/credential-name`) take a credential name
   that has spaces, such as `anthropic:Anthropic Plan (OAuth)`. Before, the

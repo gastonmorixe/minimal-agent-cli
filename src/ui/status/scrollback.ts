@@ -50,10 +50,16 @@
  *
  * # Routing
  *
- * Writes to `process.stderr`. In interactive mode the stdio
- * interceptor (`src/ui/stdio-interceptor.ts`) catches stderr and
- * routes it into the compositor's scrollback band above the live
- * area; in non-interactive mode it lands directly in the terminal.
+ * Writes to `process.stderr` by default. In non-interactive mode that
+ * lands directly in the terminal. In the live-area REPL the host
+ * rebinds the writer to `Compositor.writeBlock` (see
+ * `routeDiagnosticsThroughCompositor` in `startup/diagnostic-sinks.ts`).
+ * The stdio interceptor (`src/ui/stdio-interceptor.ts`) would also carry
+ * stderr into the compositor, but as `writeStream`, which appends at the
+ * stream cursor. While a response streams, that cursor is at the end of
+ * the last response row, so the block joined that row. `writeBlock` holds
+ * the block until that row is complete (the next line feed of the
+ * response, or the end of the turn) and then writes it on rows of its own.
  * Both surfaces preserve the warning in scroll history.
  *
  * @module ui/status/scrollback
@@ -95,8 +101,8 @@ export interface ScrollbackSinkOptions {
   /**
    * Sink for the rendered block (multi-line, includes trailing newline).
    * Default: `process.stderr.write` (bound). Tests pass a string-collector.
-   * Production may re-bind to the compositor's `writeStream` after the
-   * live area mounts via {@link ScrollbackDiagnosticSink.bindWriter}.
+   * The live-area REPL re-binds to the compositor's `writeBlock` through
+   * {@link ScrollbackDiagnosticSink.bindWriter}.
    */
   write?: (text: string) => void
 
@@ -206,13 +212,21 @@ export class ScrollbackDiagnosticSink {
   }
 
   /**
-   * Rebind the writer. Call after the compositor mounts so blocks land
-   * cleanly above the live area instead of through the stderr
-   * interceptor's buffer. Optional — the default stderr writer works
-   * for both interactive and non-interactive modes.
+   * Rebind the writer. The live-area REPL binds the compositor's
+   * `writeBlock`, so a block is written on rows of its own once the open row
+   * of a streamed response is complete, instead of joining that row.
+   * Optional: the default stderr writer works in non-interactive mode.
+   *
+   * @param write - Receives each rendered chunk (multi-line, trailing newline).
+   * @returns A function that puts the previous writer back. It does nothing
+   *   when another `bindWriter` call replaced this writer in the meantime.
    */
-  bindWriter(write: (text: string) => void): void {
+  bindWriter(write: (text: string) => void): () => void {
+    const previous = this.writeImpl
     this.writeImpl = write
+    return () => {
+      if (this.writeImpl === write) this.writeImpl = previous
+    }
   }
 
   /** Reset the dedup state. Tests and rare manual recoveries. */

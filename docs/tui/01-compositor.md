@@ -1,9 +1,10 @@
 ---
 title: Compositor internals
 created_at: "2026-05-27T10:14:30.725679000-0400"
-updated_at: "2026-11-13T17:43:59-0500"
+updated_at: "2026-11-18T10:54:02-0500"
 tags: [tui, compositor, ansi, redraw, sigwinch]
 taillog:
+ - "2026-11-18T10:54:02-0500 | writeBlock: a diagnostic block waits for the row to end, so it never joins a streamed row"
  - "2026-11-13T17:43:59-0500 | Viewport fit: the live area is clipped to the terminal rows (live-area-fit.ts)"
  - "2026-05-27T10:14:30.725679000-0400 | Initial: redraw cycle, state machine, separator logic, cols-drift recovery"
 ---
@@ -18,6 +19,7 @@ The compositor is the only thing that writes the live area. It exposes two write
 class Compositor {
   // write surfaces
   writeStream(chunk: string): void
+  writeBlock(text: string): void   // scrollback too: a block on rows of its own, waits for the row to end
   setLiveArea(lines: string[], cursor: { row: number; col: number } | null): void
 
   // also: flushStream, mount, unmount, withSuspendedLiveArea, notifyResize
@@ -87,6 +89,9 @@ This is what a `--tui-debug=hud` mode will want to dump. Field names match the s
 | `cursorRowInLive` | row 0..liveHeightValue-1 where the cursor sits inside the live area |
 | `streamCol` | visual column of the last partial stream line (so `eraseLiveSeq` knows how many cells to walk right on row 0) |
 | `streamAnsi` | `AnsiStreamBuffer` holding partial CSI/OSC tail so redraw bytes never split an escape |
+| `rowClosed` | is the stream at the start of a final row? True when nothing was written or the last visible byte was `\n`. A bare `\r` makes it false (it starts a rewrite). `writeBlock` reads it |
+| `pendingBlocks` | the blocks `writeBlock` holds until a row ends, in arrival order |
+| `cursorMoveSeen` | the stream moved the cursor with an escape other than SGR, EL, ED or OSC since the last `flushStream`. Then a row that ended with `\n` may still be rewritten, so no row is final until the stream ends |
 | `consecutiveNewlines` | tail `\n` run counter, capped so scrollback never accumulates 3+ blanks |
 | `lastLines` / `lastCursor` | the frame the owner asked for in the last `setLiveArea` call (not clipped) |
 | `drawnLines` / `drawnCursor` | the frame on screen now: `lastLines` after the viewport clip. `eraseLiveSeq` measures its walk-up from these |
@@ -105,12 +110,16 @@ streamAnsi.push(chunk)      <- AnsiStreamBuffer holds back any partial
                                 CSI/OSC tail; returns escape-safe prefix
    |
    v
-capBlankLines(safe)         <- walk left-to-right; count consecutive \n
-                                (ANSI = zero-width, CR = passthrough);
-                                drop any \n that would push the run past 3
+blocks waiting?             <- splice them in right after the first \n
+                                of the chunk (see `writeBlock` below)
    |
    v
-writeBufferedStream(capped) <- the atomic frame above
+paint(text)
+   capBlankLines(text)      <- walk left-to-right; count consecutive \n
+                                (ANSI = zero-width, CR = passthrough);
+                                drop any \n that would push the run past 3
+   scanChunk(capped)        <- rowClosed, cursorMoveSeen
+   writeBufferedStream()    <- the atomic frame above
 ```
 
 ### `capBlankLines` (the "no triple-blank" rule)
@@ -118,6 +127,31 @@ writeBufferedStream(capped) <- the atomic frame above
 The cap was bumped from `< 2` (1 blank max) to `< 3` (2 blanks max) so turn-end transitions can land 2 blank rows above a freshly-committed prompt. `EditorController.submit` emits 3 leading `\n`s and relies on this cap to absorb whatever the previous content left in the run.
 
 Why this matters: without the cap, every place that emits a trailing `\n` (formatter sink boundaries, model emitting whitespace-only text between tool calls, separators at boundaries) would compound. Three pieces each ending in `\n` would compose to `\n\n\n\n` = 3 visible blank rows.
+
+### `writeBlock` (a block that must not join a streamed row)
+
+`writeStream` appends at the stream cursor. While a response streams, that cursor is at the end of the last response row, because the newline comes when the row is complete. A self-contained block such as a `⚠ warn` diagnostic then joined that row:
+
+```
+Hi again! What would you like to work on? ...  ⚠ warn  cache.anomaly · 08:08:25
+```
+
+`writeBlock(text)` writes the block on rows of its own. It does not end the open row with a newline, because a markdown formatter may rewrite that row. mdstream echoes the raw partial line on the open row (`Hello **world**`) and, at the line feed, rewrites the same row: `\r`, `ESC[K`, the formatted line. A newline in between moves the cursor off the echo. The rewrite then lands on the new row, and the raw echo stays in scrollback as a duplicate of the line.
+
+So the block waits:
+
+| state | what `writeBlock` does |
+|---|---|
+| `rowClosed` and no `cursorMoveSeen` | paints the block now, with no blank row above it |
+| the row is open | queues the block in `pendingBlocks`. The next `writeStream` chunk with a `\n` gets the block spliced in right after its first `\n`, in the same paint |
+| `cursorMoveSeen` | the block waits for `flushStream` |
+| not a TTY, or not mounted | calls `writeStream`. No queue |
+
+`flushStream()` drains what waits. The REPL calls it when a turn's formatter has ended, and `unmount` calls it. Nothing rewrites the row any more at that point, so it ends an open row with `\n`, writes the blocks, and clears `cursorMoveSeen`. A block never leaks into the next turn.
+
+The diagnostic sink uses it through `routeDiagnosticsThroughCompositor` (`src/startup/diagnostic-sinks.ts`), which `src/startup/live-repl.ts` calls after the interceptor is installed. Print mode and runs without the live area still write the sink to stderr.
+
+Tests: `compositor-block.test.ts` (behaviors on a headless terminal) and `compositor-block.mdstream.test.ts` (real mdstream 0.3.9 output from `src/test-utils/fixtures/mdstream-segments.json`, cut at every offset, with a live area and without, plus two negative controls that must fail).
 
 ## `setLiveArea` path (editor / status updates)
 
