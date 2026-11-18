@@ -55,6 +55,7 @@ import {
   type ResolveTargetAuth,
   setHostTarget,
 } from "./host-targets.ts"
+import { followLiveTarget } from "./live-target.ts"
 import { turnBlockedError } from "./run-non-interactive.ts"
 import { announceSessionWillStart } from "./session-will-start.ts"
 
@@ -420,6 +421,8 @@ function buildHostRuntime(
         sessionId: input.sessionId,
       })
       liveAgentCore = session.agentCore()
+      // The same side effects as the TUI: the env and the `target.didSwitch` bus event.
+      followLiveTarget(liveAgentCore, { loader: input.loader })
       void input.hostLifecycle.sessionStart?.({
         sid: input.sessionId,
         cwd: process.cwd(),
