@@ -641,8 +641,20 @@ describe("runHostMode", () => {
 
 describe("runHostMode provider + credential targets", () => {
   const OTHER = "host-mode-other-prov"
+  // A target switch writes these (startup/live-target.ts). Put them back after each test.
+  const ENV_KEYS = [
+    "MINIMAL_AGENT_MODEL",
+    "MINIMAL_AGENT_PROVIDER",
+    "MINIMAL_AGENT_CREDENTIAL_NAME",
+    "MINIMAL_AGENT_EFFORT",
+  ] as const
+  const savedEnv = ENV_KEYS.map((key) => [key, process.env[key]] as const)
   afterEach(() => {
     clearModelRegistry()
+    for (const [key, value] of savedEnv) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
   })
 
   function registerOn(id: string, providerId: string): void {
@@ -728,6 +740,14 @@ describe("runHostMode provider + credential targets", () => {
     expect(out.info).toBe("model-x")
     expect(authCalls).toEqual([[OTHER, "model-x", "work"]])
     expect(seenAuth.at(-1)).toEqual(otherAuth)
+    // The live target reaches a plugin (`ctx.queryTarget`) and the env, as in the TUI.
+    expect(input.loader.targetSource?.()).toMatchObject({
+      providerId: OTHER,
+      credentialName: "work",
+      model: "model-x",
+    })
+    expect(process.env.MINIMAL_AGENT_PROVIDER).toBe(OTHER)
+    expect(process.env.MINIMAL_AGENT_CREDENTIAL_NAME).toBe("work")
   })
 
   it("setTarget leaves the target unchanged when auth or the credential check fails", async () => {
