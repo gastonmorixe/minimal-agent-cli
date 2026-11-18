@@ -50,6 +50,7 @@ import { TOOL_PRESENTATION } from "./plugins-ui/tool-presentation.ts"
 import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
 import { createPluginEventsPort, createStatusPort } from "./startup/host-ports.ts"
+import { credentialNamesFrom, defaultDiscoverTargets } from "./startup/host-targets.ts"
 import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 import { TERMINAL_TOOL_ENV, terminalColumns } from "./terminal/terminal-tool-env.ts"
 import { type StepLive, TurnRenderPump } from "./turn-render-pump.ts"
@@ -317,6 +318,8 @@ async function openInteractiveSession(
     model: deps.model,
     ...(deps.providerId !== undefined ? { providerId: deps.providerId } : {}),
     ...(deps.credentialName !== undefined ? { credentialName: deps.credentialName } : {}),
+    // switchTarget checks an explicit credential name against the store (/provider).
+    credentialNames: deps.credentialNames ?? credentialNamesFrom(defaultDiscoverTargets),
     ...(toEffort(deps.effort) !== undefined ? { effort: toEffort(deps.effort) } : {}),
     ...(deps.outputSchema !== undefined ? { outputSchema: deps.outputSchema } : {}),
     ...(deps.speed !== undefined ? { speed: deps.speed } : {}),
