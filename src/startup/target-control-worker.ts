@@ -31,6 +31,7 @@
 import { closeSync, constants, fstatSync, openSync, readSync, rmSync } from "node:fs"
 
 import type { AuthResult } from "@minimal-agent/core/host/auth"
+import { Severity } from "@minimal-agent/core/host/diagnostics"
 import { findModelForProvider } from "@minimal-agent/core/host/model-registry"
 import {
   type ControlReject,
@@ -46,6 +47,7 @@ import type { AgentCore } from "@minimal-agent/core/sdk/agent-core"
 import type { HookContextEntry } from "@minimal-agent/core/sdk/lifecycle"
 import { normalizeModelForAPI } from "@minimal-agent/core/sdk/transport-types"
 
+import { emitDiagnostic } from "../logging/emit-diagnostic.ts"
 import { errorText } from "./core-text.ts"
 import { defaultResolveTargetAuth } from "./host-targets.ts"
 import { followLiveTarget, type LiveTargetLoader } from "./live-target.ts"
@@ -354,6 +356,18 @@ export function watchTargetControl(
   }
 }
 
+/**
+ * The default loggers of {@link workerSessionWrapper}: the diagnostic bus.
+ *
+ * `main()` has attached the sinks before a worker session opens, so a Warning
+ * reaches the file log and, in `print` mode, the scrollback sink on stderr. An
+ * Info line (the worker followed its lead) goes to the file log only.
+ */
+export const busControlLoggers: Pick<ControlReaderDeps, "warn" | "info"> = {
+  warn: (message) => emitDiagnostic(Severity.Warning, "target-control.worker", message),
+  info: (message) => emitDiagnostic(Severity.Info, "target-control.worker", message),
+}
+
 /** The part of a session {@link workerSessionWrapper} uses. */
 interface WorkerSession {
   agentCore(): AgentCore
@@ -376,9 +390,9 @@ export function workerSessionWrapper(
   loader: LiveTargetLoader | null,
   deps: Pick<ControlReaderDeps, "resolveAuth" | "warn" | "info"> = {
     resolveAuth: defaultResolveTargetAuth,
-    warn: (message) => process.stderr.write(`${message}\n`),
-    info: (message) => process.stderr.write(`${message}\n`),
+    ...busControlLoggers,
   },
+  intervalMs: number = DEFAULT_CONTROL_POLL_MS,
 ): <S extends WorkerSession>(
   lines: readonly HookContextEntry[],
   opening: Promise<S>,
@@ -388,7 +402,7 @@ export function workerSessionWrapper(
     if (!control) return session
     const core = session.agentCore()
     const unfollow = followLiveTarget(core, { loader })
-    const watch = watchTargetControl(control, { ...deps, core })
+    const watch = watchTargetControl(control, { ...deps, core }, intervalMs)
     const end = (): void => {
       unfollow()
       watch.stop()

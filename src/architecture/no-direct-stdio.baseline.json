@@ -1,0 +1,284 @@
+{
+  "exempt": [
+    "**/*.test.ts",
+    "**/*tmux-driver.ts",
+    "**/*pty-driver.ts",
+    "**/*.e2e.ts",
+    "src/test-utils/**",
+    "src/architecture/**",
+    "src/ui/formatter/fake-mdstream-highlight-server.ts",
+    "scripts/**"
+  ],
+  "allow": {
+    "src/ask-user-host.ts": {
+      "count": 1,
+      "kind": "W/L",
+      "reason": "REPL output defaults to process.stdout/stderr; the editor controller also prints 'threw' diagnostics to stderr.",
+      "target": "required output port; the 'threw' lines to the diagnostic bus"
+    },
+    "src/commands/auth-status.ts": {
+      "count": 5,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the command output port; production passes none.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/commands/list-models-live.ts": {
+      "count": 1,
+      "kind": "L",
+      "reason": "A per-provider diagnostic line (live model list unavailable) written to stderr beside the data table.",
+      "target": "diagnostic bus (source models.live)"
+    },
+    "src/commands/login.ts": {
+      "count": 2,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the command output port; production passes none.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/commands/logout.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the command output port; production passes none.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/commands/update.ts": {
+      "count": 2,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the command output port; production passes none.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/commands/usage.ts": {
+      "count": 3,
+      "kind": "R",
+      "reason": "Interactive period switcher repaints with raw ANSI cursor control through an alias of process.stdout.",
+      "target": "use the injected opts.output; keep only the repaint here"
+    },
+    "src/editor-controller.ts": {
+      "count": 1,
+      "kind": "W/L",
+      "reason": "REPL output defaults to process.stdout/stderr; the editor controller also prints 'threw' diagnostics to stderr.",
+      "target": "required output port; the 'threw' lines to the diagnostic bus"
+    },
+    "src/index.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Bin entry: the one place that binds process.stderr as the stderr port of main().",
+      "target": "stay (final composition root)"
+    },
+    "src/infra/safe-stdout.ts": {
+      "count": 1,
+      "kind": "R",
+      "reason": "The EPIPE-safe stdout writer behind --dump.",
+      "target": "becomes the stdout adapter of the one OutputPort"
+    },
+    "src/input/input.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Legacy RawInput default output.",
+      "target": "required output port"
+    },
+    "src/logging/log-stderr.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default writer of the plain stderr mirror.",
+      "target": "required writer from diagnostic-sinks wiring"
+    },
+    "src/main.ts": {
+      "count": 8,
+      "kind": "W/L",
+      "reason": "Composition root. Also still holds direct console.error lines: the fatal handler, the formatter warning, the resume error and the spinner preset warning.",
+      "target": "inject io.stderr/io.stdout; the formatter and spinner warnings to the diagnostic bus"
+    },
+    "src/oneshot/oneshot-options.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Notes and warnings of one-shot options written to process.stderr by default; production passes none.",
+      "target": "required writer from the root; later the diagnostic bus"
+    },
+    "src/oneshot/or-input.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Notes and warnings of one-shot options written to process.stderr by default; production passes none.",
+      "target": "required writer from the root; later the diagnostic bus"
+    },
+    "src/repl.ts": {
+      "count": 2,
+      "kind": "W/L",
+      "reason": "REPL output defaults to process.stdout/stderr; the editor controller also prints 'threw' diagnostics to stderr.",
+      "target": "required output port; the 'threw' lines to the diagnostic bus"
+    },
+    "src/startup/auth-prompt.ts": {
+      "count": 2,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the port. Production passes nothing, so this default IS the production path.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/startup/dry-run.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the port. Production passes nothing, so this default IS the production path.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/startup/entry-args.ts": {
+      "count": 3,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the port. Production passes nothing, so this default IS the production path.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/startup/help.ts": {
+      "count": 2,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the port. Production passes nothing, so this default IS the production path.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/startup/live-repl.ts": {
+      "count": 4,
+      "kind": "W/L",
+      "reason": "Compositor output adapter fallback, probe streams, and the auto-ask debug logger that writes process.stderr.",
+      "target": "auto-ask logger to the diagnostic bus; adapter fallback stays"
+    },
+    "src/startup/provision-binaries.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the port. Production passes nothing, so this default IS the production path.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/startup/resume-continue.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Prints the error of a resumed turn that did not finish.",
+      "target": "write through the injected io.stderr"
+    },
+    "src/startup/run-host-mode.ts": {
+      "count": 14,
+      "kind": "R",
+      "reason": "Host-mode protocol server: stdout is the protocol, ctx.log feeds stderr.",
+      "target": "ctx.log to the diagnostic bus; the stdout guard stays"
+    },
+    "src/startup/run-non-interactive.ts": {
+      "count": 24,
+      "kind": "R",
+      "reason": "Protocol renderer for text, json and stream-json runs: owns stdout, the JSON stray-write guard and the fatal lines.",
+      "target": "bind the real streams once at the entry and pass them in; the guard stays here"
+    },
+    "src/startup/run-subcommand.ts": {
+      "count": 5,
+      "kind": "W",
+      "reason": "Error verdict lines of subcommands (usage errors) printed with console.error.",
+      "target": "write through the injected io.stderr"
+    },
+    "src/startup/session-store-boot.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the port. Production passes nothing, so this default IS the production path.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/startup/session-will-start.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the port. Production passes nothing, so this default IS the production path.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/startup/startup-plugin-rows-emit.ts": {
+      "count": 2,
+      "kind": "W",
+      "reason": "Prints the startup plugin rows with console.error (default writer).",
+      "target": "the injected StartupWriter"
+    },
+    "src/startup/stream-json-writer.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the port. Production passes nothing, so this default IS the production path.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/startup/update-dispatch.ts": {
+      "count": 2,
+      "kind": "W",
+      "reason": "Default hand-off of process.stdout/stderr as the port. Production passes nothing, so this default IS the production path.",
+      "target": "required port, bound once at the composition root"
+    },
+    "src/ui/chrome/first-run.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/chrome/goodbye-banner.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/command-list.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/command-output.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/command-table.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/compositor.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/formatter/formatter.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/secure-input.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/startup/progress-spinner.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/startup/tree.ts": {
+      "count": 15,
+      "kind": "R",
+      "reason": "Startup banner chrome with cursor rewrites; written before the compositor exists.",
+      "target": "an injected StartupWriter bound at main.ts boot; then the banner facts become one typed session.started event"
+    },
+    "src/ui/status/line-renderer.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default parameter that hands process.stdout/stderr on as the output port.",
+      "target": "required port wired at the composition root"
+    },
+    "src/ui/status/live-area-scheduler.ts": {
+      "count": 1,
+      "kind": "L",
+      "reason": "Hands process.stderr to every plugin slot as ctx.stderr.",
+      "target": "a bus-backed writable"
+    },
+    "src/ui/status/scrollback.ts": {
+      "count": 1,
+      "kind": "W",
+      "reason": "Default chip writer is process.stderr.write; bindWriter exists but no production caller.",
+      "target": "bind the writer at sink creation"
+    },
+    "src/ui/stdio-interceptor.ts": {
+      "count": 17,
+      "kind": "R",
+      "reason": "The lowest layer: patches process.stdout/stderr and console.* and owns the raw fd writes behind the compositor. Nothing else can sit below it.",
+      "target": "stay"
+    }
+  }
+}

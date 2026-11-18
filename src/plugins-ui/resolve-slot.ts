@@ -20,6 +20,7 @@ import type {
 } from "@minimal-agent/core/plugin-api/types/plugin"
 
 import { importPluginModule } from "./plugin-module.ts"
+import { drainSlotStderr, reportSlotStderr } from "./slot-stderr.ts"
 
 /**
  * Import the module `rel` of `pkg`. A disk package keeps the containment
@@ -169,10 +170,13 @@ export async function resolveLiveAreaSlot(
       const proc = Bun.spawn([exeAbs, ...cmd.slice(1)], {
         stdin: "pipe",
         stdout: "pipe",
-        stderr: "inherit",
+        // Piped, not inherited: a raw child write to fd 2 tears the live area.
+        stderr: "pipe",
         cwd: ctx.packageDir,
         env: ctx.env,
       })
+      // Drained from spawn time, so the child never blocks on a full pipe.
+      const stderr = drainSlotStderr(proc.stderr)
       const pid = proc.pid
       trackSlotPid(pid)
       void proc.exited.then(() => liveSlotPids.delete(pid))
@@ -192,6 +196,7 @@ export async function resolveLiveAreaSlot(
       } finally {
         clearTimeout(timer)
         abort?.removeEventListener("abort", kill)
+        await reportSlotStderr(stderr, { slot: slot.id, plugin: pluginId })
       }
     },
   }

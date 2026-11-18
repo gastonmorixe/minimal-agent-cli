@@ -87,6 +87,7 @@ import { toolPresentationMap } from "./plugins-ui/tool-presentation.ts"
 import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
 import { buildResumeHeader, replayToScrollback } from "./session-replay.ts"
+import { warnFormatterUnavailable, warnUnknownSpinnerPreset } from "./startup/boot-warnings.ts"
 import { failureText } from "./startup/core-text.ts"
 import { attachStartupDiagnosticSinks } from "./startup/diagnostic-sinks.ts"
 import { dryRunEnableIds, startDryRun } from "./startup/dry-run.ts"
@@ -540,7 +541,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       )
     } else {
       formatterCmd = undefined
-      console.error(`  ${c.boldYellow("warn")} ${formatterResolution.warn}`)
+      warnFormatterUnavailable(formatterResolution.warn)
     }
   } else {
     formatterCmd = undefined
@@ -1328,7 +1329,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // Resolve --spinner / MINIMAL_AGENT_SPINNER → instantiated spinner.
   // Unknown names log a warning and fall back to the default preset so a
   // typo never breaks the REPL.
-  const spinner = resolveSpinnerPreset(spinnerName, (line) => console.error(line))
+  const spinner = resolveSpinnerPreset(spinnerName, warnUnknownSpinnerPreset)
 
   try {
     // S50: no human is assumed. An unfinished resumed turn continues by

@@ -4,6 +4,10 @@
   "plugins": ["typescript", "oxc", "import"],
   "jsPlugins": [
     {
+      "name": "ma",
+      "specifier": "./node_modules/@minimal-agent/core/scripts/lint/no-direct-stdio.mjs"
+    },
+    {
       "name": "jsdoc-js",
       "specifier": "eslint-plugin-jsdoc"
     },
@@ -22,6 +26,9 @@
     "reportUnusedDisableDirectives": "warn"
   },
   "rules": {
+    // No module writes to the process stdout or stderr on its own. Product output goes
+    // through an injected writer, diagnostics through the diagnostic bus or the plugin logger.
+    "ma/no-direct-stdio": "error",
     "tsdoc/syntax": "error",
     "jsdoc-js/require-jsdoc": [
       "error",
@@ -51,6 +58,67 @@
     ]
   },
   "overrides": [
+    {
+      // ma/no-direct-stdio allowlist. Keep it equal to src/architecture/no-direct-stdio.baseline.json
+      // (a test checks that): `exempt` globs first (tests, dev tooling), then one
+      // entry per file that may still write directly. The count per file can only go down.
+      "files": [
+        "**/*.test.ts",
+        "**/*tmux-driver.ts",
+        "**/*pty-driver.ts",
+        "**/*.e2e.ts",
+        "src/test-utils/**",
+        "src/architecture/**",
+        "src/ui/formatter/fake-mdstream-highlight-server.ts",
+        "scripts/**",
+        "src/ask-user-host.ts",
+        "src/commands/auth-status.ts",
+        "src/commands/list-models-live.ts",
+        "src/commands/login.ts",
+        "src/commands/logout.ts",
+        "src/commands/update.ts",
+        "src/commands/usage.ts",
+        "src/editor-controller.ts",
+        "src/index.ts",
+        "src/infra/safe-stdout.ts",
+        "src/input/input.ts",
+        "src/logging/log-stderr.ts",
+        "src/main.ts",
+        "src/oneshot/oneshot-options.ts",
+        "src/oneshot/or-input.ts",
+        "src/repl.ts",
+        "src/startup/auth-prompt.ts",
+        "src/startup/dry-run.ts",
+        "src/startup/entry-args.ts",
+        "src/startup/help.ts",
+        "src/startup/live-repl.ts",
+        "src/startup/provision-binaries.ts",
+        "src/startup/resume-continue.ts",
+        "src/startup/run-host-mode.ts",
+        "src/startup/run-non-interactive.ts",
+        "src/startup/run-subcommand.ts",
+        "src/startup/session-store-boot.ts",
+        "src/startup/session-will-start.ts",
+        "src/startup/startup-plugin-rows-emit.ts",
+        "src/startup/stream-json-writer.ts",
+        "src/startup/update-dispatch.ts",
+        "src/ui/chrome/first-run.ts",
+        "src/ui/chrome/goodbye-banner.ts",
+        "src/ui/command-list.ts",
+        "src/ui/command-output.ts",
+        "src/ui/command-table.ts",
+        "src/ui/compositor.ts",
+        "src/ui/formatter/formatter.ts",
+        "src/ui/secure-input.ts",
+        "src/ui/startup/progress-spinner.ts",
+        "src/ui/startup/tree.ts",
+        "src/ui/status/line-renderer.ts",
+        "src/ui/status/live-area-scheduler.ts",
+        "src/ui/status/scrollback.ts",
+        "src/ui/stdio-interceptor.ts"
+      ],
+      "rules": { "ma/no-direct-stdio": "off" }
+    },
     {
       "files": ["**/*.test.ts"],
       "rules": {

@@ -12,6 +12,7 @@
  */
 
 import { EventEmitter } from "node:events"
+import { Severity } from "@minimal-agent/core/host/diagnostics"
 import type { Hooks } from "@minimal-agent/core/host-kit/hooks"
 import { truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import { type AbortBus, abortBus } from "./bus/abort-bus.ts"
@@ -56,6 +57,7 @@ import {
 import { VerticalNavigator } from "./editor/vertical-nav.ts"
 import { EditorBuffer } from "./input/editor-buffer.ts"
 import { type InputCaptureStack, inputCaptureStack } from "./input/input-capture-stack.ts"
+import { emitDiagnostic } from "./logging/emit-diagnostic.ts"
 import { formatArmedFooter } from "./ui/chrome/armed-footer.ts"
 import { computeCursorVisualPos, EditorRenderer } from "./ui/editor/renderer.ts"
 import { c } from "./ui/style/ansi.ts"
@@ -417,8 +419,11 @@ export class EditorController extends EventEmitter {
       // emitSync absorbs listener errors itself; an exception here means
       // the bus itself threw (e.g. shape mismatch). Best-effort log
       // and fall through to default handling.
-      process.stderr.write(
-        `[editor-controller] editor.key emit threw: ${e instanceof Error ? e.message : String(e)}\n`,
+      emitDiagnostic(
+        Severity.Warning,
+        "editor.handler-threw",
+        e instanceof Error ? e.message : String(e),
+        { handler: "editor.key" },
       )
       return false
     }
@@ -649,10 +654,11 @@ export class EditorController extends EventEmitter {
       // broadcast-async should never throw, but defend against bus
       // declaration mismatches and similar host-side failures so the
       // keystroke pump cannot be wedged by a misconfigured bus.
-      process.stderr.write(
-        `[editor-controller] editor.buffer.changed emit threw: ${
-          e instanceof Error ? e.message : String(e)
-        }\n`,
+      emitDiagnostic(
+        Severity.Warning,
+        "editor.handler-threw",
+        e instanceof Error ? e.message : String(e),
+        { handler: "editor.buffer.changed" },
       )
     }
   }
@@ -802,10 +808,13 @@ export class EditorController extends EventEmitter {
     try {
       r = this.queueKeyHandler(key, ctx)
     } catch (e) {
-      process.stderr.write(
-        `[editor-controller] queueKeyHandler threw on key "${key}": ${
-          e instanceof Error ? e.message : String(e)
-        }\n`,
+      // The pressed key is not reported: it can be a printable character the
+      // user is typing, and the bus feeds the durable file log.
+      emitDiagnostic(
+        Severity.Warning,
+        "editor.handler-threw",
+        e instanceof Error ? e.message : String(e),
+        { handler: "queueKeyHandler" },
       )
       return false
     }
