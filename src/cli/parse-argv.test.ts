@@ -307,10 +307,19 @@ describe("parseCliOptions — --input-format (R15)", () => {
 })
 
 describe("parseCliOptions — prompt-cache flags (F1/F2)", () => {
-  test("defaults: anchor off, thinking history strip", () => {
+  test("defaults: anchor ON, thinking history strip", () => {
     const opts = parseCliOptions([], NO_CFG, NO_ENV, NOOP_FORMATTER)
-    expect(opts.cacheAnchor).toBe(false)
+    expect(opts.cacheAnchor).toBe(true)
+    expect(opts.cacheFlags).toEqual({ cacheAnchor: true, thinkingHistory: "strip" })
     expect(opts.thinkingHistory).toBe("strip")
+  })
+
+  test("each off switch turns the default anchor off", () => {
+    const parse = (args: string[], cfg: typeof NO_CFG, env: typeof NO_ENV) =>
+      parseCliOptions(args, cfg, env, NOOP_FORMATTER).cacheAnchor
+    expect(parse(["--no-cache-anchor"], NO_CFG, NO_ENV)).toBe(false)
+    expect(parse([], NO_CFG, { MINIMAL_AGENT_CACHE_ANCHOR: "0" })).toBe(false)
+    expect(parse([], { cacheAnchor: false }, NO_ENV)).toBe(false)
   })
 
   test("flags win over env and config", () => {
@@ -351,11 +360,11 @@ describe("parseCliOptions — prompt-cache flags (F1/F2)", () => {
   test("config applies when no flag and no env", () => {
     const opts = parseCliOptions(
       [],
-      { cacheAnchor: true, thinkingHistory: "keep" },
+      { cacheAnchor: false, thinkingHistory: "keep" },
       NO_ENV,
       NOOP_FORMATTER,
     )
-    expect(opts.cacheAnchor).toBe(true)
+    expect(opts.cacheAnchor).toBe(false)
     expect(opts.thinkingHistory).toBe("keep")
   })
 })

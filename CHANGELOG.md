@@ -19,6 +19,16 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ## [Unreleased]
 
+### Changed
+
+- 2026-11-18: **The prompt-cache anchor marker is on by default.** With the
+  new core default, every run (`-p` and the REPL) sends the anchor marker on
+  the message before the latest assistant turn. Turn it off with
+  `--no-cache-anchor`, `MINIMAL_AGENT_CACHE_ANCHOR=0` or the config key
+  `"cacheAnchor": false`. A sub-agent inherits an explicit off from the lead
+  through the startup profile. `--thinking-history` is unchanged and stays
+  `strip` by default.
+
 ### Added
 
 - 2026-11-18: **New flags `--cache-anchor` and `--thinking-history
