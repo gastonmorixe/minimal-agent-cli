@@ -21,6 +21,17 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-17: A RUNNING sub-agent follows a target switch of its lead, in
+  place (`src/startup/target-control-worker.ts`). A worker reads its control
+  file path and key from its env at boot and removes them, so its own tools
+  never see the key. It polls the file each second, checks each line (mac,
+  lead session id, sequence number), and applies the follow rule: it
+  follows only when it uses the lead's old credential and provider, keeps
+  its own model when the new provider has it, and keeps its own effort when
+  the model has it. It resolves the auth from the store and switches its
+  own core. A line that fails a check gives one diagnostic and changes
+  nothing. The worker removes the file when it ends. Its own sub-agents
+  follow the same way.
 - 2026-11-17: Switch the credential, provider, model or effort at any time
   in the TUI, also during a turn or a quota wait, with no restart.
   - `/provider [credential] [model]` (alias `/credential-name`): the
