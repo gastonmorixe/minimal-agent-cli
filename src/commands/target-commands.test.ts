@@ -224,6 +224,85 @@ describe("/provider", () => {
     expect(h.core.getTarget().credentialName).toBe("personal")
   })
 
+  describe('a credential name with spaces (owner, 11-18: "/provider anthropic:Anthropic Plan (OAuth)")', () => {
+    const SPACED = [
+      entry("alpha", "Anthropic Plan (OAuth)"),
+      entry("alpha", "work"),
+      entry("beta", "Muse Code (OAuth)"),
+    ]
+
+    it("the full <provider>:<name> form works with no quotes", async () => {
+      registerProviders()
+      const h = harness(SPACED)
+      const result = await h.run("provider", "alpha:Anthropic Plan (OAuth)")
+      expect(message(result)).toBe("")
+      expect(h.core.getTarget().credentialName).toBe("Anthropic Plan (OAuth)")
+      expect(h.auths).toEqual(["alpha/shared/Anthropic Plan (OAuth)"])
+    })
+
+    it("a quoted name works, with double or single quotes", async () => {
+      registerProviders()
+      const h = harness(SPACED)
+      await h.run("provider", '"alpha:Anthropic Plan (OAuth)"')
+      expect(h.core.getTarget().credentialName).toBe("Anthropic Plan (OAuth)")
+      const h2 = harness(SPACED)
+      await h2.run("provider", "'Anthropic Plan (OAuth)'")
+      expect(h2.core.getTarget().credentialName).toBe("Anthropic Plan (OAuth)")
+    })
+
+    it("a bare name with spaces works when one row has it", async () => {
+      registerProviders()
+      const h = harness(SPACED)
+      await h.run("provider", "Anthropic Plan (OAuth)")
+      expect(h.core.getTarget().credentialName).toBe("Anthropic Plan (OAuth)")
+    })
+
+    it("a name with spaces, then a model: the model is the rest", async () => {
+      registerProviders()
+      const h = harness(SPACED)
+      await h.run("provider", "beta:Muse Code (OAuth) beta-plain")
+      expect(h.core.getTarget()).toMatchObject({
+        providerId: "beta",
+        credentialName: "Muse Code (OAuth)",
+        model: "beta-plain",
+      })
+      const h2 = harness(SPACED)
+      await h2.run("provider", '"beta:Muse Code (OAuth)" beta-plain')
+      expect(h2.core.getTarget()).toMatchObject({
+        credentialName: "Muse Code (OAuth)",
+        model: "beta-plain",
+      })
+    })
+
+    it("a name with no spaces and a model still works", async () => {
+      registerProviders()
+      const h = harness(SPACED)
+      await h.run("provider", "alpha:work alpha-only")
+      expect(h.core.getTarget()).toMatchObject({ credentialName: "work", model: "alpha-only" })
+    })
+
+    it("the list quotes a name with spaces, so a copy of the line is a working argument", async () => {
+      registerProviders()
+      const h = harness(SPACED)
+      const text = lines(await h.run("provider"))
+      expect(text).toContain('○ "alpha:Anthropic Plan (OAuth)"')
+      // The live row (the harness starts on alpha:work) has no space: no quotes.
+      expect(text).toContain("● alpha:work")
+      // The copied line works.
+      await h.run("provider", '"alpha:Anthropic Plan (OAuth)"')
+      expect(h.core.getTarget().credentialName).toBe("Anthropic Plan (OAuth)")
+    })
+
+    it("an unknown name with spaces is named in full in the error", async () => {
+      registerProviders()
+      const h = harness(SPACED)
+      const result = await h.run("provider", "alpha:Anthropic Plan (Nope)")
+      expect(message(result)).toContain('unknown credential "alpha:Anthropic Plan (Nope)"')
+      expect(message(result)).toContain('"alpha:Anthropic Plan (OAuth)"')
+      expect(h.core.getTarget().credentialName).toBe("work")
+    })
+  })
+
   it("an unknown credential is refused with the list", async () => {
     registerProviders()
     const h = harness(CREDS)
@@ -263,6 +342,13 @@ describe("/model", () => {
     expect(h.core.getTarget()).toMatchObject({ providerId: "alpha", model: "alpha-only" })
   })
 
+  it("accepts a quoted model id", async () => {
+    registerProviders()
+    const h = harness(CREDS)
+    await h.run("model", '"alpha-only"')
+    expect(h.core.getModel()).toBe("alpha-only")
+  })
+
   it("refuses a model of a different provider, and nothing changes", async () => {
     registerProviders()
     const h = harness(CREDS)
@@ -289,6 +375,13 @@ describe("/effort", () => {
     expect(h.core.getTarget().effort).toBe("low")
     await h.run("effort", "default")
     expect(h.core.getTarget().effort).toBeUndefined()
+  })
+
+  it("accepts a quoted level", async () => {
+    registerProviders()
+    const h = harness(CREDS)
+    await h.run("effort", "'low'")
+    expect(h.core.getEffort()).toBe("low")
   })
 
   it("refuses a level that the model does not have", async () => {

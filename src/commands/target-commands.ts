@@ -47,7 +47,7 @@ export interface TargetCommandDeps {
 }
 
 /** One provider + credential pair the session can switch to. */
-interface TargetRow {
+export interface TargetRow {
   readonly providerId: string
   readonly credentialName: string | undefined
   /** `<providerId>:<credentialName>`, or the provider id when the credential has no name. */
@@ -112,6 +112,56 @@ function changedLines(core: TargetCore, before: ReturnType<TargetCore["getTarget
 }
 
 /**
+ * Remove one pair of matching quotes (`"` or `'`) around `text`. A user can
+ * quote a credential name that has spaces, as in a shell.
+ */
+export function unquote(text: string): string {
+  const t = text.trim()
+  if (t.length >= 2 && (t[0] === '"' || t[0] === "'") && t.at(-1) === t[0]) {
+    return t.slice(1, -1).trim()
+  }
+  return t
+}
+
+/** The text of a credential in a list: quoted when it has a space, so a copy works as an argument. */
+const shown = (token: string): string => (/\s/.test(token) ? `"${token}"` : token)
+
+/**
+ * Split the argument of `/provider` into the credential and the model.
+ *
+ * A credential name can have spaces ("Anthropic Plan (OAuth)"), and a model
+ * id has none. So the credential is the LONGEST start of the argument that
+ * names a row; the rest is the model. A quoted credential (`"..."` or
+ * `'...'`) is the text in the quotes. With no row that matches, the whole
+ * argument is the credential, so the error names what the user typed.
+ */
+export function splitProviderArg(
+  rows: readonly TargetRow[],
+  argv: string,
+): { token: string; model: string | undefined } {
+  const text = argv.trim()
+  const quote = text[0] === '"' || text[0] === "'" ? text[0] : undefined
+  if (quote !== undefined) {
+    const end = text.indexOf(quote, 1)
+    if (end > 0) {
+      const rest = text.slice(end + 1).trim()
+      return { token: text.slice(1, end).trim(), model: rest ? unquote(rest) : undefined }
+    }
+  }
+  // Each place where a word ends, longest first.
+  const ends: number[] = []
+  for (const m of text.matchAll(/\S+/g)) ends.push((m.index ?? 0) + m[0].length)
+  for (let i = ends.length - 1; i >= 0; i--) {
+    const token = text.slice(0, ends[i])
+    if (typeof findRow(rows, token) !== "string") {
+      const rest = text.slice(ends[i]).trim()
+      return { token, model: rest ? unquote(rest) : undefined }
+    }
+  }
+  return { token: text, model: undefined }
+}
+
+/**
  * Find the row for `token`: the full `<provider>:<credential>` form, or a
  * bare credential name or provider id when exactly one row has it.
  */
@@ -121,9 +171,9 @@ function findRow(rows: readonly TargetRow[], token: string): TargetRow | string 
   const loose = rows.filter((r) => r.credentialName === token || r.providerId === token)
   if (loose.length === 1 && loose[0]) return loose[0]
   if (loose.length > 1) {
-    return `"${token}" names more than one credential. Use one of: ${loose.map((r) => r.token).join(", ")}`
+    return `"${token}" names more than one credential. Use one of: ${loose.map((r) => shown(r.token)).join(", ")}`
   }
-  return `unknown credential "${token}". Available: ${rows.map((r) => r.token).join(", ") || "(none)"}`
+  return `unknown credential "${token}". Available: ${rows.map((r) => shown(r.token)).join(", ") || "(none)"}`
 }
 
 /** `/provider [credential] [model]`: the credential gives the provider. */
@@ -131,15 +181,15 @@ async function runProvider(deps: TargetCommandDeps, argv: string): Promise<Comma
   const core = deps.core()
   const before = core.getTarget()
   const rows = targetRows(deps)
-  const [token, model] = argv.trim().split(/\s+/).filter(Boolean)
-  if (!token) {
+  if (!argv.trim()) {
     const live = tokenOf(before.providerId ?? "", before.credentialName)
     return notice([
       "Credentials (the credential gives the provider):",
-      ...rows.map((r) => `  ${r.token === live ? "●" : "○"} ${r.token}`),
+      ...rows.map((r) => `  ${r.token === live ? "●" : "○"} ${shown(r.token)}`),
       "Use: /provider <credential> [model]",
     ])
   }
+  const { token, model } = splitProviderArg(rows, argv)
   const row = findRow(rows, token)
   if (typeof row === "string") return failure(row)
 
@@ -151,7 +201,7 @@ async function runProvider(deps: TargetCommandDeps, argv: string): Promise<Comma
   if (next === undefined) {
     return failure(
       `"${before.model}" is not a model of ${describeTarget(row.providerId)}. ` +
-        `Use: /provider ${row.token} <model>. Models: ${offered.join(", ") || "(none)"}`,
+        `Use: /provider ${shown(row.token)} <model>. Models: ${offered.join(", ") || "(none)"}`,
     )
   }
   try {
@@ -170,7 +220,7 @@ async function runProvider(deps: TargetCommandDeps, argv: string): Promise<Comma
       { quiet: true },
     )
   } catch (e) {
-    return failure(`cannot switch to ${row.token}: ${errorText(e)}`)
+    return failure(`cannot switch to ${shown(row.token)}: ${errorText(e)}`)
   }
   return notice(changedLines(core, before))
 }
@@ -179,7 +229,7 @@ async function runProvider(deps: TargetCommandDeps, argv: string): Promise<Comma
 function runModel(deps: TargetCommandDeps, argv: string): CommandResult {
   const core = deps.core()
   const before = core.getTarget()
-  const model = argv.trim()
+  const model = unquote(argv)
   const offered = modelsOf(before.providerId)
   if (!model) {
     return notice([
@@ -200,7 +250,7 @@ function runModel(deps: TargetCommandDeps, argv: string): CommandResult {
 function runEffort(deps: TargetCommandDeps, argv: string): CommandResult {
   const core = deps.core()
   const before = core.getTarget()
-  const level = argv.trim()
+  const level = unquote(argv)
   const levels = effortLevelsOf(before.model, before.providerId)
   if (!level) {
     if (levels.length === 0) return notice([`"${before.model}" has no effort levels.`])

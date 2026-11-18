@@ -136,6 +136,15 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Fixed
 
+- 2026-11-18: `/provider` (and `/credential-name`) take a credential name
+  that has spaces, such as `anthropic:Anthropic Plan (OAuth)`. Before, the
+  argument was split on each space, so such a credential could not be
+  selected, also not in quotes. Now the credential is the longest start of
+  the argument that names a stored credential, and the rest is the model;
+  a quoted name (`"..."` or `'...'`) also works. The list from `/provider`
+  shows a name with spaces in quotes, so a copied line is a working
+  argument. `/model` and `/effort` accept a quoted value too.
+
 - 2026-11-13: a live area taller than the terminal no longer repeats in
   scrollback. The compositor now clips the frame to the terminal rows
   minus 2, drops footer rows first, and shows `… +N more rows`. Before,
