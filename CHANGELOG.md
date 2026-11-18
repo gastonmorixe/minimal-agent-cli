@@ -165,6 +165,13 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Fixed
 
+- 2026-11-18: **Tests that start the CLI in a temp home no longer download
+  plugin binaries.** `tempHomeSpawnEnv()` now also sets
+  `MINIMAL_AGENT_NO_BINARY_SETUP=1`. A run with the startup header (the REPL)
+  in a fresh home installed every plugin binary again: in
+  `plugin-ui-routes.test.ts` that download was 6.6 s of a 7 s test, and on a
+  busy machine the child hit its 30 s limit. The test now takes about 0.3 s.
+  Only test support changes.
 - 2026-11-18: a `⚠ warn` or `✗ error` block no longer starts on the row of
   the response that is streaming. Before, the diagnostic sink wrote to
   stderr, the stdio interceptor turned that into `writeStream`, and the
