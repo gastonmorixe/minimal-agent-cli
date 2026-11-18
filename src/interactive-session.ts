@@ -326,6 +326,8 @@ async function openInteractiveSession(
     ...(deps.serviceTier !== undefined ? { serviceTier: deps.serviceTier } : {}),
     ...(deps.thinkingDisplay !== undefined ? { thinkingDisplay: deps.thinkingDisplay } : {}),
     ...(deps.cacheTtl !== undefined ? { cacheTtl: deps.cacheTtl } : {}),
+    ...(deps.cacheAnchor !== undefined ? { cacheAnchor: deps.cacheAnchor } : {}),
+    ...(deps.thinkingHistory !== undefined ? { thinkingHistory: deps.thinkingHistory } : {}),
     ...(deps.sendFn !== undefined ? { sendFn: deps.sendFn } : {}),
     ...(deps.networkClient !== undefined ? { networkClient: deps.networkClient } : {}),
     toolRegistry,

@@ -307,6 +307,8 @@ describe("env", () => {
     // row today. M-8d decides whether they get their own row.
     const unlisted = new Set([
       "MINIMAL_AGENT_CACHE_TTL",
+      "MINIMAL_AGENT_CACHE_ANCHOR",
+      "MINIMAL_AGENT_THINKING_HISTORY",
       "MINIMAL_AGENT_SERVICE_TIER",
       "MINIMAL_AGENT_CREDENTIAL_NAME",
       "MINIMAL_AGENT_PLATFORM",

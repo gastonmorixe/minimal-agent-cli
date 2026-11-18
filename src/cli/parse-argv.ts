@@ -16,6 +16,11 @@
  */
 
 import {
+  resolveCacheAnchor,
+  resolveThinkingHistory,
+  type ThinkingHistoryMode,
+} from "@minimal-agent/core/host/cache-flags"
+import {
   type CacheTtl,
   type CacheTtlSource,
   resolveCacheTtl,
@@ -122,6 +127,10 @@ export interface CliOptions {
   readonly serviceTier: string | undefined
   readonly cacheTtl: CacheTtl
   readonly cacheTtlSource: CacheTtlSource
+  readonly cacheAnchor: boolean
+  readonly thinkingHistory: ThinkingHistoryMode
+  /** Both prompt-cache flags as one spreadable session-deps fragment. */
+  readonly cacheFlags: { cacheAnchor: boolean; thinkingHistory: ThinkingHistoryMode }
   readonly systemPromptOverrides: SystemPromptOverrides
   readonly formatterExplicitArg: string[] | undefined
   readonly formatterExtraArgs: string[]
@@ -401,6 +410,17 @@ export function parseCliOptions(
     env: env.MINIMAL_AGENT_CACHE_TTL,
     config: userConfig.cacheTtl,
   })
+  // F1/F2 prompt-cache flags: flag > env > config (the cacheTtl pattern).
+  const { enabled: cacheAnchor } = resolveCacheAnchor({
+    ...(args.includes("--cache-anchor") ? { cli: true } : {}),
+    env: env.MINIMAL_AGENT_CACHE_ANCHOR,
+    ...(userConfig.cacheAnchor !== undefined ? { config: userConfig.cacheAnchor } : {}),
+  })
+  const { mode: thinkingHistory } = resolveThinkingHistory({
+    cli: readFlagValue("--thinking-history"),
+    env: env.MINIMAL_AGENT_THINKING_HISTORY,
+    config: userConfig.thinkingHistory,
+  })
 
   const formatterExplicitArg: string[] | undefined = (() => {
     const raw = rawAfter(args, "--formatter")
@@ -493,6 +513,9 @@ export function parseCliOptions(
     serviceTier,
     cacheTtl,
     cacheTtlSource,
+    cacheAnchor,
+    thinkingHistory,
+    cacheFlags: { cacheAnchor, thinkingHistory },
     systemPromptOverrides,
     formatterExplicitArg,
     formatterExtraArgs,

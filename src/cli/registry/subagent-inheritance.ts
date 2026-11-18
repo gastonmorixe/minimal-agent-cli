@@ -55,6 +55,8 @@ export const SUBAGENT_INHERITANCE: Readonly<Record<string, SubagentInheritEntry>
   fast: UNREVIEWED,
   "thinking-display": DISPLAY,
   "cache-ttl": UNREVIEWED,
+  "cache-anchor": UNREVIEWED,
+  "thinking-history": UNREVIEWED,
   "service-tier": UNREVIEWED,
   temperature: UNREVIEWED,
   // Generic endpoint settings.

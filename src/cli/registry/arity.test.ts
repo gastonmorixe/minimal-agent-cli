@@ -233,6 +233,16 @@ const UPDATE_NO_VALUE: Readonly<Record<string, string>> = {
   "--rollback": "update: none",
 }
 
+/** Intended addition: the prompt-cache flags (F1 anchor, F2 thinking history). */
+const CACHE_FLAGS_WITH_VALUES: Readonly<Record<string, string>> = {
+  "--thinking-history": "global: required <strip|keep>",
+}
+
+/** The boolean half of the prompt-cache flags. */
+const CACHE_FLAGS_NO_VALUE: Readonly<Record<string, string>> = {
+  "--cache-anchor": "global: none",
+}
+
 /** Intended addition: the `-V` short form of `--version` (plan 2.1). */
 const VERSION_SHORT_TO_LONG: Readonly<Record<string, string>> = { "-V": "--version" }
 
@@ -259,6 +269,7 @@ describe("V-18: derived arity tables equal the old hand tables plus the pinned g
           ...Object.keys(PLUGIN_PROMPTS_WITH_VALUES),
           ...Object.keys(UPDATE_WITH_VALUES),
           ...Object.keys(SUBAGENT_INHERIT_WITH_VALUES),
+          ...Object.keys(CACHE_FLAGS_WITH_VALUES),
         ]),
       ),
     )
@@ -275,6 +286,7 @@ describe("V-18: derived arity tables equal the old hand tables plus the pinned g
           ...Object.keys(TRUST_HOOKS_NO_VALUE),
           ...Object.keys(VERSION_NO_VALUE),
           ...Object.keys(UPDATE_NO_VALUE),
+          ...Object.keys(CACHE_FLAGS_NO_VALUE),
         ]),
       ),
     )

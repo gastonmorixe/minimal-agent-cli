@@ -115,6 +115,39 @@ const MODEL_FLAGS: readonly FlagSpec[] = [
     global: true,
   },
   {
+    name: "cache-anchor",
+    type: "boolean",
+    value: "none",
+    env: "MINIMAL_AGENT_CACHE_ANCHOR",
+    summary: "Add a second rolling prompt-cache marker (the anchor)",
+    description: [
+      "Marks the message before the latest assistant message too.",
+      "Else the env value (1|0), then the config key cacheAnchor. Default off.",
+    ],
+    group: "model",
+    // Experimental until the F4 live gate: hidden from root help.
+    hidden: true,
+    global: true,
+  },
+  {
+    name: "thinking-history",
+    type: "string",
+    value: "required",
+    valueName: "strip|keep",
+    choices: ["strip", "keep"],
+    default: "strip",
+    env: "MINIMAL_AGENT_THINKING_HISTORY",
+    summary: "Older-turn thinking: strip (default) or keep (append-only)",
+    description: [
+      "keep applies only to keep-all Anthropic models on the Messages API.",
+      "Else the env value, then the config key thinkingHistory.",
+    ],
+    group: "model",
+    // Experimental until the F4 live gate: hidden from root help.
+    hidden: true,
+    global: true,
+  },
+  {
     name: "service-tier",
     type: "string",
     value: "required",
