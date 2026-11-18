@@ -6,7 +6,7 @@ status: living
 scope: cli
 working-dir: "."
 created-at: "2026-08-07T13:45:26-0400"
-updated-at: "2026-11-13T00:00:00-0500"
+updated-at: "2026-11-18T00:00:00-0500"
 format: "Keep a Changelog (pragmatic, date-stamped)"
 ---
 
@@ -21,6 +21,15 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-18: the live tool preview and the session replay cut the body of a
+  tool result with the stored `outcome` of the result (`bodyEnd`, or the core
+  `viewPersistedOutcome`), not only with the annotation regex
+  (`src/ui/tool-transcript/format.ts`, `tool-view.ts`, `src/session-replay.ts`,
+  `src/session-replay-derivers.ts`). The regex stays as the fallback for a
+  result with no or a bad `outcome`. The terminal text is the same for the same
+  content. One intended fix, display only: a body that itself holds the text
+  `\n\n[note:` (for example a log line) is no longer cut at that text. Model
+  bytes do not change.
 - 2026-11-17: the notice of a target switch names each value that changed
   (`src/startup/turn-notice-text.ts`, `src/ui/turn-notice.ts`), in the order
   credential, provider, model, effort: `[target] Changed credential to
