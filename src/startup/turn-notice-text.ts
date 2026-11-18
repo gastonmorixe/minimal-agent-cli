@@ -9,7 +9,42 @@
  * @module startup/turn-notice-text
  */
 
-import type { TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
+import type { NoticeTarget, TurnNotice } from "@minimal-agent/core/sdk/turn-notice"
+
+/** What the text says for a value of the target that is not set. */
+const UNSET: Readonly<Record<string, string>> = {
+  credential: "the provider default",
+  provider: "none",
+  effort: "the model default",
+}
+
+/**
+ * The values that a target switch changed, as text, in the order of the
+ * chain: credential, provider, model, effort. For example
+ * `credential to "second" (was "full"), model to "m2" (was "m1")`.
+ *
+ * `undefined` when the notice has no targets: an automatic model adoption,
+ * or a core that does not send them. The caller then names only the model.
+ */
+export function targetChangeText(notice: {
+  readonly fromTarget?: NoticeTarget
+  readonly toTarget?: NoticeTarget
+}): string | undefined {
+  const { fromTarget: from, toTarget: to } = notice
+  if (!from || !to) return undefined
+  const rows: [string, string | undefined, string | undefined][] = [
+    ["credential", from.credentialName, to.credentialName],
+    ["provider", from.providerId, to.providerId],
+    ["model", from.model, to.model],
+    ["effort", from.effort, to.effort],
+  ]
+  const text = (label: string, value: string | undefined): string =>
+    value === undefined ? (UNSET[label] ?? "none") : `"${value}"`
+  const changed = rows
+    .filter(([, a, b]) => a !== b)
+    .map(([label, a, b]) => `${label} to ${text(label, b)} (was ${text(label, a)})`)
+  return changed.length > 0 ? changed.join(", ") : undefined
+}
 
 /** One plain line for a notice. No ANSI, no trailing newline. */
 export function turnNoticePlainText(notice: TurnNotice): string {
@@ -43,6 +78,9 @@ export function turnNoticePlainText(notice: TurnNotice): string {
     case "ask_denied":
       return `[ask] No host can answer "${notice.title}" (${notice.code}) in this run; denied the ask and sent the request unchanged.`
     case "model_adopted": {
+      // A target switch: name each value that changed (the model can be the same).
+      const changed = targetChangeText(notice)
+      if (changed) return `[target] Changed ${changed}.`
       const effort = notice.effortReset ? ` (effort reset from "${notice.effortFrom}")` : ""
       return `[model] Adopted model "${notice.to}" (was "${notice.from}")${effort}.`
     }

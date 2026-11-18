@@ -130,6 +130,23 @@ describe("renderTurnNotice (TUI treatment per kind)", () => {
     expect(withReset).toContain('effort reset from "high"')
   })
 
+  it("a target switch names each changed value, and a credential-only switch has no model text", () => {
+    const from = { credentialName: "full", providerId: "alpha", model: "model-a", effort: "high" }
+    const line = renderTurnNotice({
+      kind: "model_adopted",
+      severity: "info",
+      from: "model-a",
+      to: "model-a",
+      effortReset: false,
+      effortFrom: null,
+      fromTarget: from,
+      toTarget: { ...from, credentialName: "second" },
+    })
+    expect(line).toContain('Changed credential to "second" (was "full")')
+    expect(line).not.toContain("Adopted model")
+    expect(line).not.toContain("model-a")
+  })
+
   it("renders a warn marker for model_adopt_failed", () => {
     const line = renderTurnNotice({
       kind: "model_adopt_failed",
