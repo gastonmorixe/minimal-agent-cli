@@ -110,11 +110,11 @@ import {
   signInStepLabel,
 } from "./startup/provider-presentation.ts"
 import { peekResumeCredentialPin } from "./startup/resolve-credential-name.ts"
-import { continueResumedTurn } from "./startup/resume-continue.ts"
 import {
   loadResumeState,
   type ResumedToolDisplay,
   type ResumeState,
+  unfinishedTurnHint,
 } from "./startup/resume-load.ts"
 import { isHostModeRun, isInteractiveResumeRun, isReplRun } from "./startup/resume-mode.ts"
 import { resumeTargetFlags } from "./startup/resume-target.ts"
@@ -1238,6 +1238,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         `  ${c.dim("──")} ${c.dim("unsent draft restored to input · press Enter to send, or edit")} ${c.dim("──")}\n\n`,
       )
     }
+    // An unfinished turn waits for the user (`/continue` or a new message).
+    if (roundCheckpoint !== null) stdoutSink.write(unfinishedTurnHint(roundCheckpoint))
   }
 
   // Non-interactive mode: send prompt, print response, exit. The output
@@ -1262,7 +1264,6 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         cwd: cwd,
         // Values for the stream-json session_started first line.
         streamInfo,
-        continueTurn: roundCheckpoint !== null,
         // Structured event-stream route for `--output-format json` / `stream-json`:
         // open a fully-wired Session (Tier-1 adapters, over createRuntime) whose
         // own complete event log run-non-interactive filters at its own
@@ -1331,11 +1332,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   const spinner = resolveSpinnerPreset(spinnerName, (line) => console.error(line))
 
   try {
-    // S50: no human is assumed. An unfinished resumed turn continues by
-    // itself before the prompt mounts.
-    if (roundCheckpoint !== null) {
-      await continueResumedTurn({ agent, formatterCmd, loader: hasPlugins ? loader : null, cwd })
-    }
+    // An unfinished resumed turn never continues by itself. The REPL waits
+    // for the user: `/continue` resumes it, a new message replaces it.
     if (noLiveArea) {
       await runRepl(agent, { formatterCmd, auth, spinner })
     } else {

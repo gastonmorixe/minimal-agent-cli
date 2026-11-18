@@ -66,12 +66,25 @@ export interface ResumeState {
   readonly toolDisplays: Map<string, ResumedToolDisplay>
   /**
    * Last round checkpoint of an unfinished turn (S50), or null when the
-   * last turn settled. When set, the resumed run continues that turn at
-   * round `round + 1` by itself. No human is assumed.
+   * last turn settled. The resumed run never continues that turn by
+   * itself: `/continue` in the REPL resumes it at round `round + 1`, and a
+   * new message starts a new turn instead.
    */
   readonly roundCheckpoint: RoundCheckpoint | null
   /** Text for the `resume` startup row. */
   readonly banner: string
+}
+
+/**
+ * The scrollback hint above the editor for a resumed session whose last
+ * turn is unfinished. Nothing runs until the user acts.
+ *
+ * @param checkpoint - the unfinished turn's last round checkpoint.
+ * @returns one dim line, with its trailing blank line.
+ */
+export function unfinishedTurnHint(checkpoint: RoundCheckpoint): string {
+  const text = `unfinished turn (stopped after round ${checkpoint.round}) · /continue to resume it, or send a message`
+  return `  ${c.dim("──")} ${c.dim(text)} ${c.dim("──")}\n\n`
 }
 
 /**
@@ -123,10 +136,7 @@ export function loadResumeState(resumeSid: string, env: NodeJS.ProcessEnv): Resu
   // only the banner knows why the editor is not empty.
   const draftNote = pendingDraft !== null ? ` ${c.dim("(unsent draft restored)")}` : ""
   const roundCheckpoint = lastTurnRoundCheckpoint(loaded.records)
-  const continueNote =
-    roundCheckpoint !== null
-      ? ` ${c.dim(`(unfinished turn continues at round ${roundCheckpoint.round + 1})`)}`
-      : ""
+  const continueNote = roundCheckpoint !== null ? ` ${c.dim("(unfinished turn)")}` : ""
   const banner = `resume ${c.cyan(resumeSid)} ${c.dim(`(${initialMessages.length} message(s))`)}${repairNote}${droppedNote}${draftNote}${continueNote}`
 
   return {
