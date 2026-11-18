@@ -7,6 +7,10 @@
 
 import { describe, expect, it } from "bun:test"
 import type { ToolViewOutcome } from "@minimal-agent/core/host-kit/tool-executor-adapter"
+import type {
+  CodeHighlighter,
+  CodeHighlightRequest,
+} from "../formatter/mdstream-code-highlighter.ts"
 import { formatToolPreview } from "./format.ts"
 import { createReplToolView } from "./tool-view.ts"
 
@@ -98,5 +102,80 @@ describe("REPL tool view: outcome.bodyEnd", () => {
   it("shows the same rows with and without `outcome.outcome`", async () => {
     const content = BODY + ANNOTATIONS["output-truncated"]
     expect(await run(content, true)).toEqual(await run(content, false))
+  })
+})
+
+describe("REPL tool view: Read highlight with `outcome.bodyEnd`", () => {
+  // A Read body is `cat -n` text: `<number>\t<code>`.
+  const CODE = [
+    "const a = 1",
+    "function f(x: number) {",
+    "  return x + a",
+    "}",
+    "export { f }",
+    "// end",
+  ]
+  const READ_BODY = CODE.map((line, i) => `${i + 1}\t${line}`).join("\n")
+  const FOOTER = "\n\n[truncated: 6 of 900 lines shown]"
+
+  // Deterministic fake: wraps each code line in one ANSI colour code and
+  // records the code text that it received.
+  const makeHighlighter = (calls: string[]): CodeHighlighter => ({
+    warmup: async () => true,
+    async highlight({ code }: CodeHighlightRequest) {
+      calls.push(code)
+      return code
+        .split("\n")
+        .map((line) => `\x1b[38;2;10;20;30m${line}\x1b[0m`)
+        .join("\n")
+    },
+    close: async () => {},
+  })
+
+  const run = async (content: string, outcomeCut: ToolViewOutcome["outcome"]) => {
+    const rows: string[] = []
+    const calls: string[] = []
+    const view = createReplToolView({
+      writeTranscript: (line) => rows.push(line),
+      presentation: new Map(),
+      codeHighlighter: makeHighlighter(calls),
+    })
+    const outcome: ToolViewOutcome = {
+      content,
+      isError: false,
+      aborted: false,
+      findings: [],
+      ...(outcomeCut ? { outcome: outcomeCut } : {}),
+    }
+    const tool = {
+      type: "tool_use" as const,
+      id: "r1",
+      name: "Read",
+      input: { file_path: "a.ts" },
+    }
+    await view.onToolEvent({ type: "outcome", tool, outcome })
+    return { rows, calls }
+  }
+
+  it("shows the same rows with and without `outcome.outcome`, and highlights the body only", async () => {
+    const content = READ_BODY + FOOTER
+    const bodyEnd = content.indexOf(FOOTER)
+    expect(bodyEnd).toBe(READ_BODY.length)
+
+    const withOutcome = await run(content, {
+      bodyEnd,
+      annotations: [{ kind: "output-truncated", start: bodyEnd, end: content.length }],
+    })
+    const without = await run(content, undefined)
+
+    expect(withOutcome.rows).toEqual(without.rows)
+    // The highlighter gets the code of the body only, never the footer.
+    const expectedCode = CODE.join("\n")
+    expect(withOutcome.calls).toEqual([expectedCode])
+    expect(without.calls).toEqual([expectedCode])
+    // The highlight ran (ANSI is in the rows) and the footer is not shown.
+    const text = withOutcome.rows.join("\n")
+    expect(text).toContain("\x1b[38;2;10;20;30m")
+    expect(text).not.toContain("[truncated:")
   })
 })
