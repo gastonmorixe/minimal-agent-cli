@@ -178,6 +178,8 @@ describe("wireStartupProfile", () => {
       systemPromptOverrides: {},
       bare: false,
       cliToolFilter: { kind: "deny-all" } as const,
+      cacheAnchor: true,
+      thinkingHistory: "keep" as const,
     },
   }
 
@@ -193,7 +195,14 @@ describe("wireStartupProfile", () => {
     )
     expect(out?.path).toBe(join(home, "sessions", "sid-w.profile.json"))
     expect(f.calls.profile).toEqual(out)
-    expect(JSON.parse(readFileSync(out!.path, "utf8")).plugins.disable).toEqual(["foo"])
+    const written = JSON.parse(readFileSync(out!.path, "utf8"))
+    expect(written.plugins.disable).toEqual(["foo"])
+    // M3: the lead prompt-cache flags are in the profile, and core parses them back.
+    expect(written.cacheAnchor).toBe(true)
+    expect(written.thinkingHistory).toBe("keep")
+    const back = readStartupProfileFile(out!.path)
+    expect(back.ok && back.value.cacheAnchor).toBe(true)
+    expect(back.ok && back.value.thinkingHistory).toBe("keep")
     expect(f.calls.policy?.()).toEqual({ activeModeId: null, modes: [], tools: { kind: "none" } })
   })
 
@@ -380,6 +389,36 @@ describe("child tier precedence", () => {
     const all = parseCliOptions([], {}, {}, noFormatter, {}, undefined)
     expect(all.cliToolFilter).toBeNull()
     expect(all.bare).toBe(false)
+  })
+
+  it("cache flags (M3): profile beats env and config, CLI beats profile", () => {
+    const lead = loaded({ ...PROFILE, cacheAnchor: true, thinkingHistory: "keep" })
+    const env = { MINIMAL_AGENT_CACHE_ANCHOR: "0", MINIMAL_AGENT_THINKING_HISTORY: "strip" }
+    const cfg = { cacheAnchor: false, thinkingHistory: "strip" as const }
+    const child = parseCliOptions([], cfg, env, noFormatter, {}, lead)
+    expect(child.cacheAnchor).toBe(true)
+    expect(child.thinkingHistory).toBe("keep")
+    const cli = parseCliOptions(
+      ["--no-cache-anchor", "--thinking-history", "strip"],
+      cfg,
+      env,
+      noFormatter,
+      {},
+      lead,
+    )
+    expect(cli.cacheAnchor).toBe(false)
+    expect(cli.thinkingHistory).toBe("strip")
+    // An older profile without the fields: env and config decide, as before.
+    const old = parseCliOptions(
+      [],
+      {},
+      { MINIMAL_AGENT_CACHE_ANCHOR: "1" },
+      noFormatter,
+      {},
+      loaded(),
+    )
+    expect(old.cacheAnchor).toBe(true)
+    expect(old.thinkingHistory).toBe("strip")
   })
 
   it("the entry point threads a valid profile into opts", () => {

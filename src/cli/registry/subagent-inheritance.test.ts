@@ -38,6 +38,9 @@ const STARTUP_PROFILE_FLAGS = [
   "enable-plugin",
   // bare
   "bare",
+  // cacheAnchor, thinkingHistory
+  "cache-anchor",
+  "thinking-history",
 ].sort()
 
 /** Flags the spawn plan clamps for the worker (SPEC R6, R7). */
