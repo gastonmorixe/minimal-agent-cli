@@ -31,6 +31,20 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- 2026-11-18: **The TUI writes one scrollback row for each prompt-cache
+  break** (`src/ui/status/cache-break-row.ts`). The row comes from the
+  `cache.didBreak` plugin bus event, not from the diagnostic severity, so an
+  expected cache expiry is shown too. Before, the scrollback sink dropped
+  info, and a 63 min idle turn that rewrote 26,426 tokens showed nothing.
+  For example:
+  `◇ cache rewrote 26,426 tok · ttl expired · idle 63 min > 5 min TTL · turn 5 · 16:49:36`.
+  A break that someone can act on is gold (`◆`); an expected one is dim
+  (`◇`). The row names the changed part, the request id of a likely server
+  miss, the run of breaks, and the session of a break that is not this
+  session (an in-process sub-agent). It goes through the compositor's
+  `writeBlock` and is never wider than the terminal. `ReplCompositor`
+  declares the optional `writeBlock`.
+
 - 2026-11-18: **New flags `--cache-anchor` and `--thinking-history
   strip|keep`, also for the REPL** (`d01f4ce`, Matthew). They set the
   prompt-cache fix of core (`00b1ac1`): a second rolling cache marker and

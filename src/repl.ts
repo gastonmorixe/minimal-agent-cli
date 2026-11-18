@@ -191,6 +191,12 @@ export interface ReplCompositor {
   mount(initialLiveHeight: number): void
   unmount(): void
   writeStream(chunk: string): void
+  /**
+   * Write a self-contained block on rows of its own, after the open stream
+   * row is complete (see `Compositor.writeBlock`). Optional: a test fake can
+   * leave it out, and the caller then uses {@link writeStream}.
+   */
+  writeBlock?(text: string): void
   flushStream?(): void
   withSuspendedLiveArea<T>(fn: () => T | Promise<T>): Promise<T>
 }
