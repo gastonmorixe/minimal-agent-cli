@@ -241,6 +241,7 @@ const CACHE_FLAGS_WITH_VALUES: Readonly<Record<string, string>> = {
 /** The boolean half of the prompt-cache flags. */
 const CACHE_FLAGS_NO_VALUE: Readonly<Record<string, string>> = {
   "--cache-anchor": "global: none",
+  "--no-cache-anchor": "global: none",
 }
 
 /** Intended addition: the `-V` short form of `--version` (plan 2.1). */

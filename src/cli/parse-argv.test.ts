@@ -324,6 +324,19 @@ describe("parseCliOptions — prompt-cache flags (F1/F2)", () => {
     expect(opts.thinkingHistory).toBe("keep")
   })
 
+  test("--no-cache-anchor turns the anchor off over env and config (L3)", () => {
+    const opts = parseCliOptions(
+      ["--no-cache-anchor"],
+      { cacheAnchor: true },
+      { MINIMAL_AGENT_CACHE_ANCHOR: "1" },
+      NOOP_FORMATTER,
+    )
+    expect(opts.cacheAnchor).toBe(false)
+    const last = (args: string[]) => parseCliOptions(args, NO_CFG, NO_ENV, NOOP_FORMATTER)
+    expect(last(["--no-cache-anchor", "--cache-anchor"]).cacheAnchor).toBe(true)
+    expect(last(["--cache-anchor", "--no-cache-anchor"]).cacheAnchor).toBe(false)
+  })
+
   test("env wins over config", () => {
     const opts = parseCliOptions(
       [],

@@ -118,6 +118,7 @@ const MODEL_FLAGS: readonly FlagSpec[] = [
     name: "cache-anchor",
     type: "boolean",
     value: "none",
+    negatable: true,
     env: "MINIMAL_AGENT_CACHE_ANCHOR",
     summary: "Add a second rolling prompt-cache marker (the anchor)",
     description: [

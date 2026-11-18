@@ -263,6 +263,18 @@ export function parseInputFormat(args: readonly string[]): InputFormat {
   throw new CliFlagError(`--input-format requires text or open-responses.${got}`)
 }
 
+/**
+ * The CLI tier of the anchor flag: `--cache-anchor` gives `true`,
+ * `--no-cache-anchor` gives `false`. With both, the last one wins. Neither
+ * gives `{}` (the env and config tiers decide).
+ */
+function cacheAnchorCli(args: readonly string[]): { cli?: boolean } {
+  const on = args.lastIndexOf("--cache-anchor")
+  const off = args.lastIndexOf("--no-cache-anchor")
+  if (on === -1 && off === -1) return {}
+  return { cli: on > off }
+}
+
 /** The raw token after `flag` (a leading dash is allowed). */
 function rawAfter(args: readonly string[], flag: string): string | undefined {
   const idx = args.indexOf(flag)
@@ -410,16 +422,22 @@ export function parseCliOptions(
     env: env.MINIMAL_AGENT_CACHE_TTL,
     config: userConfig.cacheTtl,
   })
-  // F1/F2 prompt-cache flags: flag > env > config (the cacheTtl pattern).
+  // F1/F2 prompt-cache flags: flag > env > config (the cacheTtl pattern). A
+  // lead `--startup-profile` value replaces the env and config tiers (M3).
   const { enabled: cacheAnchor } = resolveCacheAnchor({
-    ...(args.includes("--cache-anchor") ? { cli: true } : {}),
-    env: env.MINIMAL_AGENT_CACHE_ANCHOR,
-    ...(userConfig.cacheAnchor !== undefined ? { config: userConfig.cacheAnchor } : {}),
+    ...cacheAnchorCli(args),
+    ...(profile?.cacheAnchor !== undefined
+      ? { config: profile.cacheAnchor }
+      : {
+          env: env.MINIMAL_AGENT_CACHE_ANCHOR,
+          ...(userConfig.cacheAnchor !== undefined ? { config: userConfig.cacheAnchor } : {}),
+        }),
   })
   const { mode: thinkingHistory } = resolveThinkingHistory({
     cli: readFlagValue("--thinking-history"),
-    env: env.MINIMAL_AGENT_THINKING_HISTORY,
-    config: userConfig.thinkingHistory,
+    ...(profile?.thinkingHistory !== undefined
+      ? { config: profile.thinkingHistory }
+      : { env: env.MINIMAL_AGENT_THINKING_HISTORY, config: userConfig.thinkingHistory }),
   })
 
   const formatterExplicitArg: string[] | undefined = (() => {

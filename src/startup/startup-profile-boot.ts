@@ -57,6 +57,9 @@ export interface StartupProfileInput {
   }
   readonly bare: boolean
   readonly tools: ToolNamePolicy
+  /** Resolved prompt-cache flags (M3: workers inherit them). Absent: not written. */
+  readonly cacheAnchor?: boolean
+  readonly thinkingHistory?: "strip" | "keep"
 }
 
 /**
@@ -84,6 +87,8 @@ export function buildStartupProfile(input: StartupProfileInput): StartupProfile 
     },
     bare: input.bare,
     tools: toolsFromNamePolicy(input.tools),
+    ...(input.cacheAnchor !== undefined ? { cacheAnchor: input.cacheAnchor } : {}),
+    ...(input.thinkingHistory !== undefined ? { thinkingHistory: input.thinkingHistory } : {}),
   }
 }
 
@@ -215,7 +220,10 @@ export type StartupProfileLoader = Pick<PluginLoader, "setHostPolicySource" | "s
 /** The final boot values {@link wireStartupProfile} reads. */
 export interface StartupProfileBootValues {
   readonly env: Readonly<Record<string, string | undefined>>
-  readonly opts: Pick<CliOptions, "systemPromptOverrides" | "bare" | "cliToolFilter">
+  readonly opts: Pick<
+    CliOptions,
+    "systemPromptOverrides" | "bare" | "cliToolFilter" | "cacheAnchor" | "thinkingHistory"
+  >
   readonly noAgentsMd: boolean
   readonly pluginOverrides: StartupProfileInput["plugins"]
   readonly pluginPromptSuppression: PluginPromptSuppression
@@ -243,6 +251,8 @@ export function wireStartupProfile(
       plugins: v.pluginOverrides,
       bare: v.opts.bare,
       tools: v.opts.cliToolFilter,
+      cacheAnchor: v.opts.cacheAnchor,
+      thinkingHistory: v.opts.thinkingHistory,
     },
     warn,
   )

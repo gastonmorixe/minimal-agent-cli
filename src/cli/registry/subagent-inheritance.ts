@@ -55,8 +55,9 @@ export const SUBAGENT_INHERITANCE: Readonly<Record<string, SubagentInheritEntry>
   fast: UNREVIEWED,
   "thinking-display": DISPLAY,
   "cache-ttl": UNREVIEWED,
-  "cache-anchor": UNREVIEWED,
-  "thinking-history": UNREVIEWED,
+  // Prompt-cache flags: the worker gets the lead value through the profile.
+  "cache-anchor": INHERIT,
+  "thinking-history": INHERIT,
   "service-tier": UNREVIEWED,
   temperature: UNREVIEWED,
   // Generic endpoint settings.
