@@ -117,16 +117,13 @@ import {
   type ResumeState,
 } from "./startup/resume-load.ts"
 import { isHostModeRun, isInteractiveResumeRun, isReplRun } from "./startup/resume-mode.ts"
+import { resumeTargetFlags } from "./startup/resume-target.ts"
 import { runHostMode } from "./startup/run-host-mode.ts"
 import { runNonInteractivePrompt, selectStdioMode } from "./startup/run-non-interactive.ts"
 import { runStartupSubcommand } from "./startup/run-subcommand.ts"
 import { publishSessionEnv } from "./startup/session-env.ts"
 import { bootSessionStores, resumeTargetOf } from "./startup/session-store-boot.ts"
-import {
-  announceSessionWillStart,
-  sessionStartSource,
-  withSessionContext,
-} from "./startup/session-will-start.ts"
+import { announceSessionWillStart, sessionStartSource } from "./startup/session-will-start.ts"
 import { closeStartupTreeWithToolsAndPluginRows } from "./startup/startup-plugin-rows-emit.ts"
 import {
   resolveBootPluginOverrides,
@@ -140,6 +137,7 @@ import {
   validateStartupEffort,
 } from "./startup/startup-rows.ts"
 import type { StreamInfo } from "./startup/stream-json-writer.ts"
+import { takeControlEnv, workerSessionWrapper } from "./startup/target-control-worker.ts"
 import { cliHasPlugins, cliLoaderBase } from "./startup/text-contracts.ts"
 import { isColdStart, maybeShowFirstRunWelcome } from "./ui/chrome/first-run.ts"
 import { formatQuotaWindows } from "./ui/chrome/quota-summary.ts"
@@ -235,6 +233,8 @@ interface EntrypointIo {
 
 /** The body of {@link main}. See there for the flow. */
 async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Promise<number> {
+  // A sub-agent: take its target control key out of the env before any tool can read it.
+  const targetControl = takeControlEnv()
   const { env, cwd, exit } = io
   applyPreferredDnsResultOrder()
 
@@ -497,6 +497,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
       providerModel,
       effortLevels,
       cliCredentialName,
+      // A resume starts on the target that the session last used (flags win).
+      ...resumeTargetFlags(effectiveResumeArg, opts, effort),
     },
     userConfig,
     env: env,
@@ -1141,6 +1143,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // Must run after session construction so `/compact`, `/continue`, `/provider` appear in
   // listCommands / slash-menu and dispatch through CommandRegistry.
   if (hasPlugins) registerHostCommands(loader, agent)
+  // A sub-agent follows the target switches of its lead on the session it runs.
+  const openWorkerSession = workerSessionWrapper(targetControl, hasPlugins ? loader : null)
   // The live target: the env, `ctx.queryTarget`, and the `target.didSwitch` bus event.
   followLiveTarget(agent.agentCore(), { loader: hasPlugins ? loader : null })
   // Point the ModelInfo provider at the agent's live model and provider from here on.
@@ -1269,7 +1273,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         // The event-stream route runs on its own Session, so it gets the
         // session.willStart context too (the agent above never runs there).
         openEventStreamSession: () =>
-          withSessionContext(
+          openWorkerSession(
             sessionContext,
             openAgentCoreSession(
               // S23/S28: status rows and plugin-bus telemetry, like the REPL.
