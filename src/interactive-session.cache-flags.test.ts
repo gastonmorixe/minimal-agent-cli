@@ -50,11 +50,15 @@ async function markersPerRequest(cacheAnchor?: boolean): Promise<number[]> {
 }
 
 describe("InteractiveSession prompt-cache flags", () => {
-  it("default: one rolling marker per request", async () => {
-    expect(await markersPerRequest()).toEqual([1, 1, 1])
+  it("default (anchor ON): the third request (2 assistant turns) also carries the anchor", async () => {
+    expect(await markersPerRequest()).toEqual([1, 1, 2])
   })
 
-  it("cacheAnchor: the third request (2 assistant turns) also carries the anchor", async () => {
+  it("cacheAnchor: true gives the same requests as the default", async () => {
     expect(await markersPerRequest(true)).toEqual([1, 1, 2])
+  })
+
+  it("cacheAnchor: false: one rolling marker per request", async () => {
+    expect(await markersPerRequest(false)).toEqual([1, 1, 1])
   })
 })

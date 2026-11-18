@@ -123,7 +123,8 @@ const MODEL_FLAGS: readonly FlagSpec[] = [
     summary: "Add a second rolling prompt-cache marker (the anchor)",
     description: [
       "Marks the message before the latest assistant message too.",
-      "Else the env value (1|0), then the config key cacheAnchor. Default off.",
+      "Else the env value (1|0), then the config key cacheAnchor. Default on.",
+      "Use --no-cache-anchor, MINIMAL_AGENT_CACHE_ANCHOR=0 or cacheAnchor: false to turn it off.",
     ],
     group: "model",
     // Experimental until the F4 live gate: hidden from root help.

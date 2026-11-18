@@ -419,6 +419,52 @@ describe("child tier precedence", () => {
     )
     expect(old.cacheAnchor).toBe(true)
     expect(old.thinkingHistory).toBe("strip")
+    // The anchor is ON by default. An older profile with no env and no config gets it.
+    expect(parseCliOptions([], {}, {}, noFormatter, {}, loaded()).cacheAnchor).toBe(true)
+  })
+
+  it("a child inherits an explicit anchor off from the lead (default ON)", () => {
+    const home = tempDir()
+    const env = { MINIMAL_AGENT_HOME: home }
+    // Each off switch of the lead resolves to false and the profile keeps it.
+    const leads = [
+      parseCliOptions(["--no-cache-anchor"], {}, {}, noFormatter),
+      parseCliOptions([], {}, { MINIMAL_AGENT_CACHE_ANCHOR: "0" }, noFormatter),
+      parseCliOptions([], { cacheAnchor: false }, {}, noFormatter),
+    ]
+    leads.forEach((lead, i) => {
+      expect(lead.cacheAnchor).toBe(false)
+      const out = wireStartupProfile(
+        { setHostPolicySource: () => {}, setStartupProfile: () => {} } as never,
+        null,
+        () => {},
+        {
+          env,
+          opts: {
+            systemPromptOverrides: {},
+            bare: false,
+            cliToolFilter: null,
+            cacheAnchor: lead.cacheAnchor,
+            thinkingHistory: lead.thinkingHistory,
+          },
+          noAgentsMd: false,
+          pluginOverrides: { forceDisabled: new Set<string>(), forceEnabled: new Set<string>() },
+          pluginPromptSuppression: {
+            all: false,
+            suppress: new Set<string>(),
+            keep: new Set<string>(),
+          },
+        },
+        `sid-off-${i}`,
+      )
+      const back = readStartupProfileFile(out!.path)
+      expect(back.ok && back.value.cacheAnchor).toBe(false)
+      if (!back.ok) return
+      // The child has no env and no config: without the profile it would be ON.
+      const child = parseCliOptions([], {}, {}, noFormatter, {}, loaded(back.value))
+      expect(child.cacheAnchor).toBe(false)
+      expect(child.thinkingHistory).toBe("strip")
+    })
   })
 
   it("the entry point threads a valid profile into opts", () => {
