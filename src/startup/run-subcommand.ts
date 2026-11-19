@@ -18,6 +18,7 @@
 import { resolveAgentHome } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import type { CommandPlan } from "../cli/command-plan.ts"
 import type { PrintFormat } from "../cli/print-format.ts"
+import { builtinArity } from "../cli/registry/arity.ts"
 import {
   runAuthStatusCommand,
   runAuthStatusPlanCommand,
@@ -34,8 +35,12 @@ import { runListProvidersCommand } from "../commands/list-providers.ts"
 import { runListSpinnersCommand } from "../commands/list-spinners.ts"
 import { runLoginCommand } from "../commands/login.ts"
 import { runLogoutCommand } from "../commands/logout.ts"
-import { runSessionsCommand } from "../commands/sessions.ts"
+import { parseSessionsFlags, sessionsErrorLine } from "../commands/sessions.ts"
+import { runSessionsEntry } from "../commands/sessions-detail.ts"
 import { runUsageCommand } from "../commands/usage.ts"
+import { resolveSessionsWidth } from "../ui/chrome/sessions-command.ts"
+import { writeCommandRows } from "../ui/command-output.ts"
+import { resolveHelpColor } from "../ui/help/policy.ts"
 import { c } from "../ui/style/ansi.ts"
 import { failureText } from "./core-text.ts"
 import { computePluginRoots } from "./plugin-roots.ts"
@@ -92,9 +97,34 @@ export async function runStartupSubcommand(ctx: SubcommandContext): Promise<bool
       }
       return true
     }
-    case "sessions":
-      runSessionsCommand({ query: ctx.sessionsQuery })
+    case "sessions": {
+      // The command returns rows; this host layer writes them (plan item 30).
+      const parsed = parseSessionsFlags({
+        args,
+        query: ctx.sessionsQuery,
+        readFlagValue,
+        cwd: process.cwd(),
+        valueFlags: builtinArity().flagsWithValues,
+      })
+      const noColor = args.includes("--no-color")
+      if (!parsed.ok) {
+        // Color only when stderr is a TTY and color is allowed (review m5).
+        const errColor = resolveHelpColor(process.env, process.stderr.isTTY, noColor)
+        writeCommandRows([sessionsErrorLine(parsed.error, errColor)], process.stderr)
+        process.exitCode = 2
+        return true
+      }
+      const out = process.stdout
+      // `sessions <sid>` opens the detail view; else the list (item 29).
+      const { rows, exitCode } = runSessionsEntry({
+        flags: parsed.flags,
+        width: resolveSessionsWidth(out, process.env),
+        color: resolveHelpColor(process.env, out.isTTY, noColor),
+      })
+      writeCommandRows(rows, out)
+      if (exitCode !== undefined) process.exitCode = exitCode
       return true
+    }
     case "usage":
       await runUsageCommand({ period: ctx.usagePeriod })
       return true

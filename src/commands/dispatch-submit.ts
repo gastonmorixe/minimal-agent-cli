@@ -12,7 +12,11 @@
 
 import type { CommandDispatchOptions } from "@minimal-agent/core/host-kit/command-registry"
 import { parseCommandLine } from "@minimal-agent/core/host-kit/command-registry"
-import type { CommandResult } from "@minimal-agent/core/plugin-api/types/plugin"
+import type {
+  CommandResult,
+  PromptSource,
+  PromptSubmittedPayload,
+} from "@minimal-agent/core/plugin-api/types/plugin"
 import { errorText } from "../startup/core-text.ts"
 import { renderCommandNoticeBlock } from "../ui/command-notice.ts"
 
@@ -22,6 +26,33 @@ import {
   endQuietly,
   renderCompactNotice,
 } from "./compact-submit.ts"
+
+/** Queues a prompt; `source` (default `user`) is the origin of the text (SPEC §6.1). */
+export type EnqueuePrompt = (
+  text: string,
+  commitLines: string[],
+  submittedAt?: Date,
+  source?: PromptSource,
+) => void
+
+/**
+ * Build the `prompt.submitted` payload. Kept here so the live area stays
+ * under its `max-lines` budget. `source` names the origin of the text.
+ *
+ * @param text - The queued prompt text.
+ * @param sid - The session id, if the host has one.
+ * @param queuePos - Position of the prompt in the host queue.
+ * @param source - Origin of the text.
+ * @returns The payload for the plugin bus.
+ */
+export function promptSubmittedPayload(
+  text: string,
+  sid: string | null | undefined,
+  queuePos: number,
+  source: PromptSource,
+): PromptSubmittedPayload {
+  return { text, cwd: process.cwd(), sid: sid ?? null, exit: "submitted", queuePos, source }
+}
 
 /** Structural view of the command registry the submit path needs. */
 export interface DispatchSubmitHost {
@@ -39,8 +70,8 @@ export interface DispatchSubmitDeps {
   writeNoticeLines: (lines: string[]) => void
   /** Live terminal width, read at call time. */
   liveCols: () => number | undefined
-  /** Queues a prompt for the next model turn. */
-  enqueuePrompt: (text: string, commitLines: string[], submittedAt?: Date) => void
+  /** Queues a prompt for the next model turn; `source` tags `prompt.submitted`. */
+  enqueuePrompt: EnqueuePrompt
   /** Echoes the submitted command line into scrollback with its timestamp. */
   flushCommandLine: (text: string, commitLines: string[], submittedAt: Date) => void
   /** Formatter geometry + raw sink for `/compact` live output. */
@@ -82,7 +113,7 @@ export async function dispatchCommandAndApply(
     await endQuietly(compactStream)
   }
   if (!result) {
-    deps.enqueuePrompt(text, commitLines, submittedAt)
+    deps.enqueuePrompt(text, commitLines, submittedAt, "command")
     return
   }
   await applyCommandResult(deps, loader, text, result)
@@ -106,7 +137,13 @@ async function applyCommandResult(
     case "expand":
       // The typed `/cmd` line is already in scrollback; the expanded
       // prompt drives the turn with no extra commit lines.
-      deps.enqueuePrompt(result.prompt, [])
+      // The host `/continue` command expands to "": tag it `continue`.
+      deps.enqueuePrompt(
+        result.prompt,
+        [],
+        undefined,
+        parseCommandLine(text)?.name === "continue" ? "continue" : "expand",
+      )
       if (parseCommandLine(text)?.name === "history-edit") {
         loader.bus().emit("history.edit.expanded", { prompt: result.prompt })
       }

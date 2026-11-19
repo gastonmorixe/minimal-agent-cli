@@ -249,14 +249,46 @@ exports[`command help: providers logout COLUMNS=120, NO_COLOR=1 1`] = `
 exports[`command help: sessions COLUMNS=80, NO_COLOR=1 1`] = `
 "  minimal-agent sessions
     List saved sessions
+    Newest last, by day. Sub-agent sessions show under their lead session.
+    sessions <sid>: one session with its sub-agent tree and timeline. A prefix
+    that starts more than one id lists the matches.
+    A word of 4+ hex characters (dashes allowed, for example face or 2026-05)
+    that starts a session id is a sid, not a text query: one match opens the
+    detail, more list the matches. With no match it is a text query.
+    A text query matches the session id, cwd, and model. It matches the title
+    only when the index has a saved summary for the session (the list and the
+    detail view save one when they compute the summary).
+    A saved title (from ma-title-plugin or a user, in index-meta.jsonl) shows in
+    place of the first prompt, in the list and in the detail view. A dim ✦ marks
+    an AI title. A text query also matches the saved title. The title cost is
+    not in the session cost or in /usage.
+    sessions last: the same session as sessions resume last (the newest in this
+    directory, else the newest).
+    The detail view can save the computed summary of the session to the index,
+    as the list does.
+    --model <text>: only sessions whose model has this text (full model id).
+    --json: version 1; the raw catalog rows (full model ids, children), newest
+    last. Each row also has title (the shown title), titleSource (user, ai or
+    derived; only for a saved title) and prompt (the first prompt).
+    --backfill-lineage: find the lead of old sub-agent sessions (saved before
+    the index had a lead id) from the lead transcript or the parent pid, and
+    append lineage lines to index-meta.jsonl. It prints the counts. With
+    --dry-run it writes nothing. A session with 0 or 2+ possible leads is
+    skipped.
+    Resume one with: ma sessions resume <sid>.
     Aliases: --sessions, --session, --list-sessions.
 
   USAGE
-    minimal-agent sessions [list|query]
+    minimal-agent sessions [list|<query>] [--limit <n>] [--page <n>] [--all]
+    minimal-agent sessions [<query>] [--since <age>] [--cwd <dir>] [--json]
+    minimal-agent sessions <sid|last> [--json]
+    minimal-agent sessions --backfill-lineage [--dry-run] [--since <age>]
+      [--json]
     minimal-agent sessions <command> [args] [flags]
 
   ARGUMENTS
-    query  Fuzzy filter on date, session id, or cwd
+    sid    Session id, 4+ hex prefix, or last: show one session in detail
+    query  Else: text in the session id, cwd, model, or the title when known
 
   COMMANDS
     list               List saved sessions
@@ -264,28 +296,80 @@ exports[`command help: sessions COLUMNS=80, NO_COLOR=1 1`] = `
     resume <sid>       Resume a saved session
     resume-same <sid>  Resume in place, keeping the same session id
 
+  FLAGS
+    --limit <n>         Lead sessions per page (default: 30)
+    --page <n>          Page number (1 is the newest page) (default: 1)
+    --all               Also show hidden sessions (empty, backup, test, orphan
+                        sub-agent)
+    --since <age|date>  Only sessions started after this age (30m, 12h, 2d, 1w)
+                        or date
+    --cwd <dir>         Only sessions started in this directory (. is this
+                        directory)
+    --subagents <mode>  Show sub-agent sessions as a tree under the lead, flat,
+                        or not (one of: none, tree, flat; default: tree)
+    --backfill-lineage  Link old sub-agent sessions to their lead (with
+                        --dry-run: count only)
+
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
     -h, --help   Show help
     -d, --debug  Enable debug logging
 
   EXAMPLES
-    minimal-agent sessions auth       sessions that match auth
-    minimal-agent sessions dump last  dump the newest session
+    minimal-agent sessions              the 30 newest sessions
+    minimal-agent sessions auth         sessions that have auth in the id, cwd,
+                                        model, or known title
+    minimal-agent sessions --since 2d --cwd .
+                                        sessions of the last 2 days in this
+                                        directory
+    minimal-agent sessions --limit 10 --page 2
+                                        sessions 11 to 20, counted from the
+                                        newest
+    minimal-agent sessions e5fc350a     one session, its sub-agent tree and
+                                        timeline
+    minimal-agent sessions last         the resume last session, in detail
+    minimal-agent sessions --backfill-lineage --dry-run
+                                        count the old sub-agent sessions that
+                                        can be linked to a lead
+    minimal-agent sessions resume last  resume the newest session
+    minimal-agent sessions dump last    dump the newest session
 "
 `;
 
 exports[`command help: sessions COLUMNS=120, NO_COLOR=1 1`] = `
 "  minimal-agent sessions
     List saved sessions
+    Newest last, by day. Sub-agent sessions show under their lead session.
+    sessions <sid>: one session with its sub-agent tree and timeline. A prefix that starts more than one id lists the
+    matches.
+    A word of 4+ hex characters (dashes allowed, for example face or 2026-05) that starts a session id is a sid, not a
+    text query: one match opens the detail, more list the matches. With no match it is a text query.
+    A text query matches the session id, cwd, and model. It matches the title only when the index has a saved summary
+    for the session (the list and the detail view save one when they compute the summary).
+    A saved title (from ma-title-plugin or a user, in index-meta.jsonl) shows in place of the first prompt, in the list
+    and in the detail view. A dim ✦ marks an AI title. A text query also matches the saved title. The title cost is not
+    in the session cost or in /usage.
+    sessions last: the same session as sessions resume last (the newest in this directory, else the newest).
+    The detail view can save the computed summary of the session to the index, as the list does.
+    --model <text>: only sessions whose model has this text (full model id).
+    --json: version 1; the raw catalog rows (full model ids, children), newest last. Each row also has title (the shown
+    title), titleSource (user, ai or derived; only for a saved title) and prompt (the first prompt).
+    --backfill-lineage: find the lead of old sub-agent sessions (saved before the index had a lead id) from the lead
+    transcript or the parent pid, and append lineage lines to index-meta.jsonl. It prints the counts. With --dry-run it
+    writes nothing. A session with 0 or 2+ possible leads is skipped.
+    Resume one with: ma sessions resume <sid>.
     Aliases: --sessions, --session, --list-sessions.
 
   USAGE
-    minimal-agent sessions [list|query]
+    minimal-agent sessions [list|<query>] [--limit <n>] [--page <n>] [--all]
+    minimal-agent sessions [<query>] [--since <age>] [--cwd <dir>] [--json]
+    minimal-agent sessions <sid|last> [--json]
+    minimal-agent sessions --backfill-lineage [--dry-run] [--since <age>] [--json]
     minimal-agent sessions <command> [args] [flags]
 
   ARGUMENTS
-    query  Fuzzy filter on date, session id, or cwd
+    sid    Session id, 4+ hex prefix, or last: show one session in detail
+    query  Else: text in the session id, cwd, model, or the title when known
 
   COMMANDS
     list               List saved sessions
@@ -293,14 +377,31 @@ exports[`command help: sessions COLUMNS=120, NO_COLOR=1 1`] = `
     resume <sid>       Resume a saved session
     resume-same <sid>  Resume in place, keeping the same session id
 
+  FLAGS
+    --limit <n>         Lead sessions per page (default: 30)
+    --page <n>          Page number (1 is the newest page) (default: 1)
+    --all               Also show hidden sessions (empty, backup, test, orphan sub-agent)
+    --since <age|date>  Only sessions started after this age (30m, 12h, 2d, 1w) or date
+    --cwd <dir>         Only sessions started in this directory (. is this directory)
+    --subagents <mode>  Show sub-agent sessions as a tree under the lead, flat, or not (one of: none, tree, flat;
+                        default: tree)
+    --backfill-lineage  Link old sub-agent sessions to their lead (with --dry-run: count only)
+
   GLOBAL FLAGS
     See minimal-agent --help for all global flags.
     -h, --help   Show help
     -d, --debug  Enable debug logging
 
   EXAMPLES
-    minimal-agent sessions auth       sessions that match auth
-    minimal-agent sessions dump last  dump the newest session
+    minimal-agent sessions                               the 30 newest sessions
+    minimal-agent sessions auth                          sessions that have auth in the id, cwd, model, or known title
+    minimal-agent sessions --since 2d --cwd .            sessions of the last 2 days in this directory
+    minimal-agent sessions --limit 10 --page 2           sessions 11 to 20, counted from the newest
+    minimal-agent sessions e5fc350a                      one session, its sub-agent tree and timeline
+    minimal-agent sessions last                          the resume last session, in detail
+    minimal-agent sessions --backfill-lineage --dry-run  count the old sub-agent sessions that can be linked to a lead
+    minimal-agent sessions resume last                   resume the newest session
+    minimal-agent sessions dump last                     dump the newest session
 "
 `;
 

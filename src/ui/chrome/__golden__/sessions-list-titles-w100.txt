@@ -1,0 +1,10 @@
+
+  session       start     dur  prompt                                       tokens    cost  model
+  today ────────────────────────────────────────────────────────────────────────────────────────────
+  ○ 11111111    11:01      1m  My own name                                    1.2k   $0.12  opus-5.5
+  ○ 22222222    11:02      1m  ✦ Session title plugin spec                    1.2k   $0.12  opus-5.5
+  ○ 33333333    11:03      1m  Fix the flaky catalog test in session-cata…    1.2k   $0.12  opus-5.5
+  ○ 44444444    11:04      1m  ↻ ✦ Resumed AI title                           1.2k   $0.12  opus-5.5
+
+  4 of 4 sessions · sessions <sid>
+  resume: ma sessions resume <sid>  (or: ma sessions resume last)

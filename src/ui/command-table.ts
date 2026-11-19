@@ -7,62 +7,40 @@
  * @module ui/command-table
  */
 
-import { stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { displayWidth, stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { type CommandOutput, writeCommandRows } from "./command-output.ts"
+import type { CommandTableRow, CommandTableSpec } from "./command-table-types.ts"
+import { paintTableText, renderWidthTable } from "./command-table-width.ts"
+import { padEndDisplay, toCellText } from "./format/text.ts"
 import { resolveHelpColor } from "./help/policy.ts"
 import { c } from "./style/ansi.ts"
 
-export interface CommandTableColumn {
-  key: string
-  minWidth?: number
-  color?: "cyan" | "dim" | "bold" | "none"
-}
+export type {
+  CommandTableColor,
+  CommandTableColumn,
+  CommandTableRow,
+  CommandTableSection,
+  CommandTableSpan,
+  CommandTableSpec,
+} from "./command-table-types.ts"
 
-export interface CommandTableRow {
-  cells: Record<string, string | undefined>
-}
-
-export interface CommandTableSection {
-  title?: string
-  rows: CommandTableRow[]
-}
-
-export interface CommandTableSpec {
-  sections: CommandTableSection[]
-  columns: CommandTableColumn[]
-  indent?: number
-  empty?: string
-  summary?: string
-  /**
-   * Paint with SGR. `undefined` keeps the historical always-painted behavior
-   * for direct renderers; {@link writeCommandTable} resolves it from the
-   * stream TTY state, `NO_COLOR`, `TERM=dumb` and `--no-color`.
-   */
-  color?: boolean
-}
-
-function paint(text: string, color: CommandTableColumn["color"], on: boolean): string {
-  if (text.length === 0 || !on) return text
-  switch (color) {
-    case "cyan":
-      return c.cyan(text)
-    case "dim":
-      return c.dim(text)
-    case "bold":
-      return c.bold(text)
-    case "none":
-    case undefined:
-      return text
-    default: {
-      const _exhaustive: never = color
-      return _exhaustive
-    }
-  }
-}
-
-/** Render titled sections with left-aligned columns. */
+/**
+ * Render titled sections with aligned columns.
+ *
+ * Without `spec.width` this is the historical compact layout: left-aligned
+ * columns sized by their widest cell, one space between columns. With
+ * `spec.width` the table uses width mode (see `command-table-width.ts`):
+ * alignment, a flex column, drop priority, tree rows, section rulers, and
+ * no row wider than `spec.width`.
+ */
 export function renderCommandTable(spec: CommandTableSpec): string[] {
+  // Only a finite width selects width mode. `Infinity` or `NaN` (for example
+  // `process.stdout.columns` math on a non-TTY) has no edge to fit, so the
+  // table uses the compact layout and does not throw.
+  if (spec.width !== undefined && Number.isFinite(spec.width)) {
+    return renderWidthTable(spec, Math.max(1, Math.floor(spec.width)))
+  }
   const rows: string[] = [""]
   const on = spec.color ?? true
   const dim = (s: string): string => (on ? c.dim(s) : s)
@@ -76,29 +54,36 @@ export function renderCommandTable(spec: CommandTableSpec): string[] {
     return rows
   }
 
-  // Widths are measured on the plain text, so a pre-painted cell must not be
-  // counted with its escapes.
-  const plain = (row: CommandTableRow, key: string): string => stripAnsi(row.cells[key] ?? "")
+  // Widths are display widths of the plain text, so a pre-painted cell is
+  // not counted with its escapes and a CJK cell counts two cells a glyph.
+  // A tab or other control becomes one space: it has no display width, so
+  // it must not reach a padded cell.
+  const plain = (row: CommandTableRow, key: string): string => toCellText(row.cells[key] ?? "")
   const widths = new Map(
     spec.columns.map((column) => [
       column.key,
-      Math.max(column.minWidth ?? 0, ...visibleRows.map((row) => plain(row, column.key).length)),
+      Math.max(
+        column.minWidth ?? 0,
+        ...visibleRows.map((row) => displayWidth(plain(row, column.key))),
+      ),
     ]),
   )
 
   for (const section of spec.sections) {
     if (section.rows.length === 0) continue
-    if (section.title) rows.push(`${baseIndent}${on ? c.bold(section.title) : section.title}`)
+    if (section.title) {
+      rows.push(`${baseIndent}${on ? c.bold(section.title) : stripAnsi(section.title)}`)
+    }
 
     for (const row of section.rows) {
       const paintedCells = spec.columns.map((column) => {
         const value = plain(row, column.key)
-        return paint(value.padEnd(widths.get(column.key) ?? value.length), column.color, on)
+        return paintTableText(padEndDisplay(value, widths.get(column.key) ?? 0), column.color, on)
       })
       const lastIndex = paintedCells.length - 1
       if (lastIndex >= 0) {
         const lastColumn = spec.columns[lastIndex]
-        paintedCells[lastIndex] = paint(plain(row, lastColumn.key), lastColumn.color, on)
+        paintedCells[lastIndex] = paintTableText(plain(row, lastColumn.key), lastColumn.color, on)
       }
       const line = paintedCells.join(" ").trimEnd()
       rows.push(`${section.title ? rowIndent : baseIndent}${on ? line : stripAnsi(line)}`)

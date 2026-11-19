@@ -1,0 +1,12 @@
+
+  session         start     dur  prompt                                     tokens    cost  model
+  today ────────────────────────────────────────────────────────────────────────────────────────────
+  ○ 11111111      11:01      1m  lead task                                    1.2k          opus-4.7
+  ├ ○ 22222222    11:02      1m  A2 worker · child 1                          1.2k          opus-4.7
+  │ ├ ○ 33333333  11:03      1m  A3 worker · grandchild 1                     1.2k          opus-4.7
+  │ │ ╰ …                        +2 deeper · sessions 33333333
+  │ ╰ ○ 66666666  11:06      1m  A6 worker · grandchild 2                     1.2k          opus-4.7
+  ╰ ○ 77777777    11:07      1m  A7 worker · child 2                          1.2k          opus-4.7
+
+  1 of 1 sessions · sessions <sid>
+  resume: ma sessions resume <sid>  (or: ma sessions resume last)

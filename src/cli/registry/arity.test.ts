@@ -132,6 +132,12 @@ const OLD_LONG_ALIAS: Readonly<Record<string, string>> = {
 const GAINED_WITH_VALUES: Readonly<Record<string, string>> = {
   "--parallel":
     "auth-status refresh-all|plan|prune: required <n>. `--parallel 8 hello` gave prompt 8, now hello",
+  // sessions list flags (sessions.command.ts): required values.
+  "--cwd": "sessions: required <dir>",
+  "--limit": "sessions: required <n>",
+  "--page": "sessions: required <n>",
+  "--since": "sessions: required <age|date>",
+  "--subagents": "sessions: required <mode>",
 }
 
 /**
@@ -244,6 +250,11 @@ const CACHE_FLAGS_NO_VALUE: Readonly<Record<string, string>> = {
   "--no-cache-anchor": "global: none",
 }
 
+/** Intended addition: the `sessions --backfill-lineage` flag (lineage work stream). */
+const LINEAGE_NO_VALUE: Readonly<Record<string, string>> = {
+  "--backfill-lineage": "sessions: none",
+}
+
 /** Intended addition: the `-V` short form of `--version` (plan 2.1). */
 const VERSION_SHORT_TO_LONG: Readonly<Record<string, string>> = { "-V": "--version" }
 
@@ -288,6 +299,7 @@ describe("V-18: derived arity tables equal the old hand tables plus the pinned g
           ...Object.keys(VERSION_NO_VALUE),
           ...Object.keys(UPDATE_NO_VALUE),
           ...Object.keys(CACHE_FLAGS_NO_VALUE),
+          ...Object.keys(LINEAGE_NO_VALUE),
         ]),
       ),
     )

@@ -319,6 +319,7 @@ describe("command help model (M-9b, spec 8.5)", () => {
       "usage",
       "arguments",
       "commands",
+      "flags",
       "global-flags",
       "examples",
     ])
@@ -338,7 +339,10 @@ describe("command help model (M-9b, spec 8.5)", () => {
 
   test("usage: the spec override with the program prefix, plus a command line for children", () => {
     expect(section(cmd(["sessions"]), "usage")?.text).toEqual([
-      "minimal-agent sessions [list|query]",
+      "minimal-agent sessions [list|<query>] [--limit <n>] [--page <n>] [--all]",
+      "minimal-agent sessions [<query>] [--since <age>] [--cwd <dir>] [--json]",
+      "minimal-agent sessions <sid|last> [--json]",
+      "minimal-agent sessions --backfill-lineage [--dry-run] [--since <age>] [--json]",
       "minimal-agent sessions <command> [args] [flags]",
     ])
     expect(section(cmd(["provider"]), "usage")?.text).toEqual([
@@ -471,7 +475,14 @@ describe("command help model (M-9b, spec 8.5)", () => {
   test("examples and see also carry the program name", () => {
     const ex = section(cmd(["sessions"]), "examples")?.rows ?? []
     expect(ex.map((r) => r.term)).toEqual([
+      "minimal-agent sessions",
       "minimal-agent sessions auth",
+      "minimal-agent sessions --since 2d --cwd .",
+      "minimal-agent sessions --limit 10 --page 2",
+      "minimal-agent sessions e5fc350a",
+      "minimal-agent sessions last",
+      "minimal-agent sessions --backfill-lineage --dry-run",
+      "minimal-agent sessions resume last",
       "minimal-agent sessions dump last",
     ])
     expect(section(cmd(["models"]), "see-also")?.text).toEqual(["minimal-agent providers models"])
@@ -515,7 +526,9 @@ describe("renderModel", () => {
     expect(plain[1]).toBe("    List saved sessions")
     const usage = plain.indexOf("  USAGE")
     expect(plain[usage - 1]).toBe("")
-    expect(plain[usage + 1]).toBe("    minimal-agent sessions [list|query]")
+    expect(plain[usage + 1]).toBe(
+      "    minimal-agent sessions [list|<query>] [--limit <n>] [--page <n>] [--all]",
+    )
   })
 
   test("group titles at 4 and their rows at 6", () => {
