@@ -119,11 +119,13 @@ import {
 import { isHostModeRun, isInteractiveResumeRun, isReplRun } from "./startup/resume-mode.ts"
 import { resumeTargetFlags } from "./startup/resume-target.ts"
 import { runHostMode } from "./startup/run-host-mode.ts"
+import { cliRunMode } from "./startup/run-mode.ts"
 import { runNonInteractivePrompt, selectStdioMode } from "./startup/run-non-interactive.ts"
 import { runStartupSubcommand } from "./startup/run-subcommand.ts"
 import { publishSessionEnv } from "./startup/session-env.ts"
 import { bootSessionStores, resumeTargetOf } from "./startup/session-store-boot.ts"
 import { announceSessionWillStart, sessionStartSource } from "./startup/session-will-start.ts"
+import { cliShutdown } from "./startup/shutdown-signal.ts"
 import { closeStartupTreeWithToolsAndPluginRows } from "./startup/startup-plugin-rows-emit.ts"
 import {
   resolveBootPluginOverrides,
@@ -192,14 +194,10 @@ export interface MainOptions {
  * A thrown error prints the fatal-error text and gives code 1.
  */
 export async function main(options: MainOptions = {}): Promise<number> {
-  const baseExit = options.exit ?? ((code: number): never => process.exit(code))
+  // The exit and the end of main() abort the plugin side-call shutdown signal.
   // An injected exit (tests) throws. Let that throw pass through unchanged
   // instead of reporting it as a fatal error.
-  let exitRequested = false
-  const exit = (code: number): never => {
-    exitRequested = true
-    return baseExit(code)
-  }
+  const shutdown = cliShutdown(options.exit ?? ((code: number): never => process.exit(code)))
   const failure: StreamFailureState = {}
   try {
     return await runEntrypoint(
@@ -207,17 +205,19 @@ export async function main(options: MainOptions = {}): Promise<number> {
         argv: options.argv ?? process.argv.slice(2),
         env: options.env ?? process.env,
         cwd: options.cwd ?? process.cwd(),
-        exit,
+        exit: shutdown.exit,
+        shutdownSignal: shutdown.signal,
         ...(options.stderr ? { stderr: options.stderr } : {}),
       },
       failure,
     )
   } catch (err) {
-    if (exitRequested) throw err
+    if (shutdown.exitRequested()) throw err
     const wrote = writeStreamFailure(failure, err)
     console.error(formatFatalError(err))
-    return endFailedRun(wrote, exit)
+    return endFailedRun(wrote, shutdown.exit)
   } finally {
+    shutdown.end()
     await defaultNetworkClient.close()
   }
 }
@@ -228,6 +228,8 @@ interface EntrypointIo {
   readonly env: NodeJS.ProcessEnv
   readonly cwd: string
   readonly exit: (code: number) => never
+  /** Aborts at shutdown; the loader host gives it to plugin side calls. */
+  readonly shutdownSignal: AbortSignal
   readonly stderr?: EntrypointStderr
 }
 
@@ -714,6 +716,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     // Core reads no process stream (S44). The terminal host gives plugin
     // handlers its own streams (`ctx.stdin`, `ctx.stdout`, `ctx.stderr`).
     handlerStdio: { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr },
+    // `ctx.run` for event handlers (SPEC §3e), with the live provider.
+    runMode: cliRunMode({ args, commandPlan, opts, env, dryRun }, () => getLiveProviderId()).get,
+    // Plugin side calls (title calls) abort when the CLI ends.
+    hostOptions: { shutdownSignal: io.shutdownSignal },
   }).then(dryRun.checked)
   // Expose the loader's event bus to deep emit-points (notably
   // `client.ts`, which broadcasts `quota.headersReceived` after every
@@ -1166,14 +1172,12 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // `extractPrompt()` call still runs to drive the actual non-interactive
   // branch.
   const promptSource = extractPromptFromArgs(args)
-  // `isHostModeRun` is defensive depth here, not load-bearing: the
+  // `replRoute` (isReplRun: no prompt and not host mode) is the same test.
+  // Its `isHostModeRun` part is defensive depth here, not load-bearing: the
   // `--host-mode` branch above already returns before this point. Kept so
   // the two predicates can never disagree if that early return ever moves
   // (see resume-mode.ts's isHostModeRun doc).
-  const willEnterRepl = promptSource.kind === "none" && !isHostModeRun(commandPlan.command)
-  if (willEnterRepl) {
-    process.stdout.write(buildReadyBanner())
-  }
+  if (replRoute) process.stdout.write(buildReadyBanner())
 
   // Replay prior conversation to scrollback when resuming. We write
   // straight to stdout BEFORE the live-area compositor mounts, so the

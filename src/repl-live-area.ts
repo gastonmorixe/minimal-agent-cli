@@ -29,7 +29,11 @@ import {
   endQuietly,
   startCompactFallback,
 } from "./commands/compact-submit.ts"
-import { dispatchCommandAndApply as dispatchCommandSubmit } from "./commands/dispatch-submit.ts"
+import {
+  dispatchCommandAndApply as dispatchCommandSubmit,
+  type EnqueuePrompt,
+  promptSubmittedPayload,
+} from "./commands/dispatch-submit.ts"
 import { formatRestoredMessages } from "./editor/queue-restore.ts"
 import type { QueueKeyHandler } from "./editor/types.ts"
 import type {
@@ -660,7 +664,7 @@ export async function runReplLiveArea(
   })
 
   /** The normal "queue this text as a user prompt" path. */
-  const enqueuePrompt = (text: string, commitLines: string[], submittedAt?: Date): void => {
+  const enqueuePrompt: EnqueuePrompt = (text, commitLines, submittedAt, source = "user") => {
     queue.push({ text, commitLines, submittedAt: (submittedAt ?? new Date()).toISOString() })
     // Persist BEFORE any other side effect so a crash between push and
     // the next instruction still recovers the submit on next resume.
@@ -672,15 +676,9 @@ export async function runReplLiveArea(
     // deferred, never blocks this onSubmit path. We emit AFTER the
     // queue push so subscribers observe the same queue ordering the
     // agent will process.
-    if (loader) {
-      loader.bus().emit("prompt.submitted", {
-        text,
-        cwd: process.cwd(),
-        sid: opts.sessionId ?? null,
-        exit: "submitted",
-        queuePos: queue.length - 1,
-      })
-    }
+    // `source` (SPEC §6.1) tells plugins typed text from synthetic text.
+    const payload = promptSubmittedPayload(text, opts.sessionId, queue.length - 1, source)
+    loader?.bus().emit("prompt.submitted", payload)
   }
 
   /**
@@ -745,7 +743,7 @@ export async function runReplLiveArea(
         const submittedAtIso = (submittedAt ?? new Date()).toISOString()
         flushQueueItemToScrollback({ text, commitLines, submittedAt: submittedAtIso })
         agent.noteSessionResumed()
-        enqueuePrompt("", [], submittedAt)
+        enqueuePrompt("", [], submittedAt, "continue")
         return
       }
     }
@@ -763,7 +761,7 @@ export async function runReplLiveArea(
         return
       }
     }
-    enqueuePrompt(text, commitLines, submittedAt)
+    enqueuePrompt(text, commitLines, submittedAt, "user")
   }
   const onCancel = (reason?: string): void => {
     cancelled = true
@@ -1437,7 +1435,7 @@ export async function runReplLiveArea(
             recovered = true
             // Re-queue as a user submit so the live-area path reuses the
             // normal turn pipeline (abort bus, formatters, scrollback).
-            enqueuePrompt(recovery.retryText, [])
+            enqueuePrompt(recovery.retryText, [], undefined, "recovery")
           }
         }
         if (!recovered && agent.rollbackPendingTurn) agent.rollbackPendingTurn()

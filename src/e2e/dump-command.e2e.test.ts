@@ -154,7 +154,7 @@ describe("dump command architecture", () => {
     }
   })
 
-  it("`sessions <query>` fuzzy-filters by sid / cwd, shows a size column", async () => {
+  it("`sessions <query>` filters by sid / cwd substring, new list columns", async () => {
     // Set up two sessions in distinct cwds so the filter has a real
     // discrimination to make.
     const home = mkdtempSync(join(tmpdir(), "ma-sessions-filter-e2e-"))
@@ -202,16 +202,18 @@ describe("dump command architecture", () => {
 
       expect(code).toBe(0)
       expect(stderr.trim()).toBe("")
-      // Header has a `size` column.
-      expect(stdout).toContain("size")
-      // Alpha matches; Beta doesn't.
-      expect(stdout).toContain("aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-      expect(stdout).not.toContain("bbbb2222-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
-      // Footer reports the filtered count and the query.
-      expect(stdout).toContain("1 of 2 session(s) matching")
-      expect(stdout).toContain('"alpha"')
-      // Size column rendered (non-empty session file).
-      expect(stdout).toMatch(/\d+\s+B/)
+      // Header has the new columns (the old `size` column was removed on
+      // purpose, see CHANGELOG 2026-11-19 "New `sessions` list").
+      expect(stdout).toMatch(/session\s+start\s+dur\s+prompt\s+tokens\s+cost\s+model/)
+      expect(stdout).not.toMatch(/\bsize\b/)
+      // Alpha matches (cwd substring); Beta doesn't. The list shows the sid8.
+      expect(stdout).toContain("aaaa1111")
+      expect(stdout).toContain("alpha prompt")
+      expect(stdout).not.toContain("bbbb2222")
+      expect(stdout).not.toContain("beta prompt")
+      // Footer gives the shown and the filtered total ("about" when some rows
+      // have no summary line yet).
+      expect(stdout).toMatch(/1 of (about )?1 sessions/)
     } finally {
       rmSync(home, { recursive: true, force: true })
     }

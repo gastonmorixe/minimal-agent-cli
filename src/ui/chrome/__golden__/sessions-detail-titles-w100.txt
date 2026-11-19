@@ -1,0 +1,18 @@
+
+  92d3247e  ✦ Flaky checkout e2e fix
+            "fix flaky checkout e2e test"
+            title: ai · claude-haiku-5-5 · 812 in / 9 out · $0.0001 (not in session cost)
+  zeta-model-2 · ~/mycorp/arcana/code · today 11:00 · 9m02s · 63 turns · 10.7M tok · $6.12 · ○ done
+
+  ○ lead                92d3247e  ▕▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▏  9m02s   10.7M
+  ├─ ○ A1 worker        ae810003  ▕    ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬                    ▏  3m40s    4.5M
+  │   ✦ Cart retry patch
+  ├─ ○ A2 reviewer      424216d4  ▕                     ▬▬▬▬▬▬▬▬▬▬         ▏  2m10s    2.7M
+  │   review the diff for races
+  │  ╰─ · B1 explorer   aa11bb22  ▕                      ▬▬▬▬▬▬            ▏  1m20s     90k
+  │      read the cart module
+  ╰─ ✗ A3 integrator    c0b5ea11  ▕                                ▬▬▬▬    ▏    48s    351k
+      run suite and commit
+
+  failed: A3 integrator c0b5ea11 → ma sessions dump c0b5ea11
+  resume: ma sessions resume 92d3247e

@@ -21,6 +21,30 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Changed
 
+- 2026-11-19: **`ma sessions` shows the saved session title.** A title
+  that a user or the title plugin saved in `index-meta.jsonl` replaces the
+  first prompt in the list and in the detail header (order: user, ai,
+  derived, then the first prompt). A dim `✦` marks an AI title. The detail
+  view also shows the first prompt and a `title: <source> · <model> · <in>
+  in / <out> out · $<cost> (not in session cost)` line. `--json` rows (and
+  children) get `title` (the shown title), `titleSource` (only for a saved
+  title) and `prompt` (the first prompt); `version` stays 1. The query also
+  matches the saved title. Plugins get a run-mode fact (`ctx.run`: `repl`,
+  `one-shot`, `stream-json`, `host`, `subagent`, with `interactive`,
+  `providerId`, `dryRun`; `src/startup/run-mode.ts`) and a shutdown signal
+  for side calls (`src/startup/shutdown-signal.ts`). Each
+  `prompt.submitted` event has `source`: `user` (typed), `command`,
+  `expand`, `recovery` or `continue`.
+
+- 2026-11-19: **`ma sessions --backfill-lineage [--dry-run]`.** Links old
+  sub-agent sessions (saved before the index had a lead id) to their lead,
+  from the lead transcript or the attach parent pid, and prints the counts
+  (candidates, linked by transcript, linked by ppid, ambiguous, unknown).
+  `--dry-run` writes nothing. Inferred children show like recorded ones;
+  `--json` rows have `lineageSource` (`recorded`, `transcript`, `ppid`) and
+  `forkOf`. A forked or resumed session shows a dim `↻` before its prompt in
+  the list, and `resumed from <sid8>` in the detail header.
+
 - 2026-11-19: **The `--debug` request dump renders core's typed
   `llm.requestWillSend` event.** Core no longer formats the dump and no longer
   reads `DEBUG` / `VERBOSE` for it; it publishes a redacted request snapshot on
@@ -49,6 +73,42 @@ terminal client is being moved out of `minimal-agent-core` into this repo
   `strip` by default.
 
 ### Added
+
+- 2026-11-19: **New `sessions` list and detail view**
+  (`src/commands/sessions.ts`, `src/commands/sessions-detail.ts`,
+  `src/ui/chrome/sessions-command.ts`, `src/ui/chrome/sessions-detail.ts`).
+  The list reads the core session catalog: the newest 30 lead sessions,
+  newest last, grouped by day, with start, duration, first prompt, tokens,
+  cost, model and a status glyph. Sub-agent sessions show under their lead
+  as a tree (`├` / `╰`, depth 1 and 2; deeper levels collapse into
+  `… +N deeper · sessions <sid8>`). Empty sub-agent sessions are hidden in
+  the list and in the detail view unless `--all`. The footer gives the shown
+  and total counts (`about M` / `≥K hidden` when the catalog cannot know
+  without a file read), and `no sessions · N hidden · --all` when all rows
+  are hidden.
+  - New flags: `--limit <n>` (default 30), `--page <n>`, `--all`,
+    `--since <age|date>`, `--cwd <dir>`, `--subagents none|tree|flat`. The
+    global `--model <text>` and `--json` apply too.
+  - `sessions <sid>` (4+ hex characters, dashes allowed) opens the detail
+    view: the header, the full sub-agent tree at all depths and a timeline.
+    A prefix that starts more than one sid lists the matches and exits 1. A
+    full sid wins over longer sids. `sessions last` opens the newest session
+    with the same rule as `sessions resume last` (current directory first).
+    The detail view may append lazy summary lines to the index, as the
+    catalog does for the list.
+  - `--json` is version 1: list `{version, order: "newest-last", total,
+    hiddenCount, unknownCount, page, limit, rows}` with the raw catalog rows
+    (full model ids, recursive `children`); detail
+    `{version, kind: "session", row}`; ambiguous prefix
+    `{version, kind: "ambiguous", prefix, sids}`.
+  - Breaking: the positional query no longer is a fuzzy filter on the date.
+    It is a case-insensitive substring of the session id, cwd or model, and
+    of the title only when the title is known (the index has a saved summary
+    line for the session; the list and the detail view save one when they
+    compute the summary). On an old store most sessions have no summary line
+    yet, so a title word often gives no hit. Use `--since` for dates. A hex token of 4+ characters that starts a
+    sid is a sid, not a query (for example `sessions 2026-05` can match a sid
+    prefix).
 
 - 2026-11-18: **The TUI writes one scrollback row for each prompt-cache
   break** (`src/ui/status/cache-break-row.ts`). The row comes from the

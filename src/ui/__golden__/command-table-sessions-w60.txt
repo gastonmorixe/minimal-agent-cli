@@ -1,0 +1,14 @@
+
+  session       start     dur  prompt                 tokens
+  Wed Nov 18 ───────────────────────────────────────────────
+  ○ 2a323bc1    22:10      4m  how do I create a ne…    4.3k
+  today ────────────────────────────────────────────────────
+  ○ 9b3a53c4    08:33     21m  split session-store …    1.2M
+  ○ 92d3247e    08:49   9m02s  fix flaky checkout e…   10.7M
+  ├ ○ ae810003  08:50   3m40s  worker · patch retry…    4.5M
+  ├ ○ 424216d4  08:54   2m10s  reviewer · review th…    2.7M
+  ╰ ✗ c0b5ea11  08:57     48s  integrator · run sui…    351k
+  ● 472eb43e    08:55     35m  review how the sessi…    275k
+  ╰ ○ 9b45eae3  08:56   1m14s  explorer · read sess…  102.9k
+
+  4 of 17,427 sessions · 1,449 empty/test hidden · --all · …

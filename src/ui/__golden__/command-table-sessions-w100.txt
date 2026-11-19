@@ -1,0 +1,14 @@
+
+  session       start     dur  prompt                                     tokens    cost  model
+  Wed Nov 18 ───────────────────────────────────────────────────────────────────────────────────────
+  ○ 2a323bc1    22:10      4m  how do I create a new user on mac using …    4.3k   $0.02  opus-4-7
+  today ────────────────────────────────────────────────────────────────────────────────────────────
+  ○ 9b3a53c4    08:33     21m  split session-store into smaller modules…    1.2M   $1.90  opus-5-5
+  ○ 92d3247e    08:49   9m02s  fix flaky checkout e2e test 日本語 wide …   10.7M   $6.12  opus-5-5
+  ├ ○ ae810003  08:50   3m40s  worker · patch retry logic in cart.ts an…    4.5M          sonnet-5-5
+  ├ ○ 424216d4  08:54   2m10s  reviewer · review the diff for races         2.7M          opus-5-5
+  ╰ ✗ c0b5ea11  08:57     48s  integrator · run suite and commit            351k          haiku-5-5
+  ● 472eb43e    08:55     35m  review how the sessions command works        275k   $0.41  sonnet-5-5
+  ╰ ○ 9b45eae3  08:56   1m14s  explorer · read session store + index      102.9k          sonnet-5-5
+
+  4 of 17,427 sessions · 1,449 empty/test hidden · --all · --limit N · sessions <sid>
