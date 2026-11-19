@@ -11,6 +11,15 @@ import {
   Severity,
 } from "@minimal-agent/core/host/diagnostics"
 import {
+  createRequestInspector,
+  processRequestInspector,
+  REQUEST_WILL_SEND,
+  type RequestDiagnostics,
+  type RequestInspector,
+  type RequestSnapshot,
+  type RequestWillSendEvent,
+} from "@minimal-agent/core/host/request-inspector"
+import {
   GLOBAL_STATUS_BUS,
   type StatusActivity,
   StatusBus,
@@ -98,5 +107,17 @@ describe("core dependency", () => {
       ...CORE_PUBLIC_CONTRACT.status,
     ]
     expect(names).toHaveLength(12)
+  })
+
+  test("exports the request inspector group", () => {
+    expect(REQUEST_WILL_SEND).toBe("llm.requestWillSend")
+    expect(createRequestInspector).toBeFunction()
+    expect(processRequestInspector).toBeFunction()
+    expect(processRequestInspector()).toBe(processRequestInspector())
+    // Type-level checks: these fail typecheck if core drops the names.
+    type Types = [RequestDiagnostics, RequestInspector, RequestSnapshot, RequestWillSendEvent]
+    const count: Types["length"] = 4
+    expect(count).toBe(4)
+    expect(CORE_PUBLIC_CONTRACT.requestInspector).toHaveLength(7)
   })
 })

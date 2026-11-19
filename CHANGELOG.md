@@ -6,7 +6,7 @@ status: living
 scope: cli
 working-dir: "."
 created-at: "2026-08-07T13:45:26-0400"
-updated-at: "2026-11-18T00:00:00-0500"
+updated-at: "2026-11-19T00:00:00-0500"
 format: "Keep a Changelog (pragmatic, date-stamped)"
 ---
 
@@ -20,6 +20,25 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 ## [Unreleased]
 
 ### Changed
+
+- 2026-11-19: **The `--debug` request dump renders core's typed
+  `llm.requestWillSend` event.** Core no longer formats the dump and no longer
+  reads `DEBUG` / `VERBOSE` for it; it publishes a redacted request snapshot on
+  `@minimal-agent/core/host/request-inspector`, and builds it only when a host
+  subscribes (zero cost without `--debug`). The CLI subscribes only with
+  `--debug`. The REPL block (`src/ui/status/debug-dump*.ts`) renders from a
+  typed view (`src/logging/request-dump-model.ts`) instead of parsing text
+  rows; its output is byte-identical (goldens in
+  `src/ui/status/__golden__/debug-dump/`). The plain rows
+  (`src/logging/request-dump-text.ts`) still go to the session log file and,
+  in print and protocol mode, to the stderr mirror, with the same text and
+  `row` / `last` / `kind` data, through the session diagnostics of the
+  request. `--verbose` still shows full text with line gutters. A request
+  with an explicit empty `tools` or `system` list no longer prints a
+  `[0 tool(s)]` / `[0 block(s)]` section. The gate is `--debug` or
+  `DEBUG=1`, one rule for the log rows and the REPL block
+  (`src/cli/debug-gate.ts`). `DEBUG` must be `1`; other values no longer
+  enable the request dump (the old core gate took any non-empty `DEBUG`).
 
 - 2026-11-18: **The prompt-cache anchor marker is on by default.** With the
   new core default, every run (`-p` and the REPL) sends the anchor marker on

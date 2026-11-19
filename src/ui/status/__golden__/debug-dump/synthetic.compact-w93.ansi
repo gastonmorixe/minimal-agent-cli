@@ -1,0 +1,31 @@
+
+[1m[36m--- POST claude-opus-4-8 ---[39m[22m
+  [2mmodel:[22m claude-opus-4-8
+  [2mstream:[22m true
+  [2mmax_tokens:[22m 32000
+  [2mrequest_type:[22m conversation
+  [2mthinking:[22m {"type":"adaptive","display":"summarized"}
+  [2moutput_config:[22m {"effort":"high","format":{"type":"json_schema","schema":{"type":...(+53ch)
+  [2mspeed:[22m fast
+  [1mBody:[22m
+    [33mtools[39m: [2m[6 tool(s)][22m
+      [35mSkill[39m: [2mDiscover, inspect and load an Agent Skill.[22m
+      [35mBash[39m: [2mExecutes a given bash command. ⏎ Output: capped. Run it with care. Run...(+122ch)[22m
+      [35mRead[39m: [2mRead a file. ⏎ Returns its text.[22m
+      [35mMystery[39m: [2mx[22m
+      [35mWide[39m: [2m日本語のテキストです。表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅...(+18ch)[22m
+      [35mCtl[39m: [2mRun a comm[31mand now[22m
+    [33msystem[39m: [2m[3 block(s)][22m
+      [35mblock 0[39m: [2mYou are minimal agent.[22m
+      [35mblock 1[39m [1m[92m[cached][39m[22m: [2m<ma::sys::tool name="Skill"> ⏎ Name the skill you activate...(+148ch)[22m
+      [35mblock 2[39m [1m[92m[cached][39m[22m: [2m# Instructions ⏎ - Be concise. ⏎ Prefer dedicated tools ov...(+150ch)[22m
+    [33mmessages[39m: [2m[9 message(s)][22m
+      [1m#1[22m [32muser[39m: [2mfix this: ⏎ indented line[22m
+      [1m#2[22m [32massistant[39m: [2mthinking(24ch) ⟶ "Sure." ⟶ tool_use(Bash#a1b2c3){command,description}[22m
+      [1m#3[22m [32muser[39m: [2mtool_result(a1b2c3) "README.md\nsrc"[22m
+      [1m#4[22m [32massistant[39m: [2mtool_use(Read#d4e5f6){file_path}[22m
+      [1m#5[22m [32muser[39m: [2mtool_result!(d4e5f6) "ENOENT: no such file or directory, open '/x'"[22m
+      [1m#6[22m [32muser[39m: [2m"line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nl...(+1926ch)[22m
+      [1m#7[22m [32muser[39m: [2mimage(base64 image/png) ⟶ "what is this? note: a colon. xxxxxxxxxxx...(+124ch)[22m
+      [1m#8[22m [32massistant[39m: [2ma control [2J byte and a C1  byte in 日本語のテキストです。表示...(+40ch)[22m
+      [1m#9[22m [32muser[39m [1m[92m[← cached prefix ends here][39m[22m: [2m"hi there"[22m

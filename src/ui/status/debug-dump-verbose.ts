@@ -24,14 +24,13 @@ import {
   displayWidth,
   truncateDisplayWidth,
 } from "@minimal-agent/core/plugin-api/utils/term-width"
+import type {
+  DumpElided,
+  DumpLine,
+  DumpPart,
+  DumpSectionName,
+} from "../../logging/request-dump-model.ts"
 import { c } from "../style/ansi.ts"
-import {
-  CACHE_BLOCK_MARK,
-  CACHE_MSG_MARK,
-  type DumpElided,
-  type DumpLine,
-  type DumpPart,
-} from "./debug-dump-contract.ts"
 import {
   blockRef,
   type DumpOriginSource,
@@ -40,12 +39,20 @@ import {
   toolRef,
 } from "./debug-dump-origins.ts"
 
+/**
+ * Cache label drawn after a `messages` part name. A display constant: the
+ * renderer draws it from `DumpPart.cached`, and never parses it.
+ */
+export const CACHE_MSG_LABEL = "[← cached prefix ends here]"
+/** Cache label drawn after a `system` part name (display only, like {@link CACHE_MSG_LABEL}). */
+export const CACHE_BLOCK_LABEL = "[cached]"
+
 /** Options for {@link renderVerboseSection}. */
 export interface VerboseRenderOptions {
   /**
-   * Explicit verbose switch. `false` forces the compact row form even when a
-   * section carries typed parts. Omitted keeps the historical behavior: typed
-   * parts render verbosely.
+   * The verbose switch. `true` renders real lines with a gutter (build the
+   * view with `dumpView(req, { lines: true })`). Omitted or `false`: the
+   * compact row form.
    */
   readonly enabled?: boolean
   /** Origin data for the reference lines. Omitted: refs show "origin not recorded". */
@@ -297,12 +304,10 @@ function elidedLines(
   return out
 }
 
-/** Split `name [mark]` into a styled name and a bright-green mark. */
-function styledLabel(label: string, mark: string, style: (s: string) => string): string {
-  const clean = stripControls(label)
-  const has = clean.endsWith(mark)
-  const name = has ? clean.slice(0, clean.length - mark.length).trimEnd() : clean
-  return has ? `${style(name)} ${c.bold(c.brightGreen(mark))}` : style(name)
+/** A styled part name, plus the bright-green cache label when the part is a breakpoint. */
+function styledName(part: DumpPart, markLabel: string, style: (s: string) => string): string {
+  const name = style(stripControls(part.name))
+  return part.cached ? `${name} ${c.bold(c.brightGreen(markLabel))}` : name
 }
 
 /** One message part: `#N role`, then each block's ref and lines. */
@@ -312,9 +317,7 @@ function renderMessage(
   toolNames: Map<string, string>,
   wrapWidth: number | undefined,
 ): string[] {
-  const out = [
-    `${PART_INDENT}${c.bold(`#${n}`)} ${styledLabel(part.label, CACHE_MSG_MARK, c.green)}`,
-  ]
+  const out = [`${PART_INDENT}${c.bold(`#${n}`)} ${styledName(part, CACHE_MSG_LABEL, c.green)}`]
   const digits = digitsOf(part.lines)
   const used = new Set<DumpLine>()
   for (const b of part.blocks) {
@@ -339,7 +342,7 @@ function renderMessage(
 
 /** One system block part: its refs, each placed before its line. */
 function renderSystem(part: DumpPart, opts: VerboseRenderOptions): string[] {
-  const out = [`${PART_INDENT}${styledLabel(part.label, CACHE_BLOCK_MARK, c.magenta)}`]
+  const out = [`${PART_INDENT}${styledName(part, CACHE_BLOCK_LABEL, c.magenta)}`]
   const text = part.lines.map((l) => l.text).join("\n")
   const refs = systemRefs(text, opts.origins)
   const digits = digitsOf(part.lines)
@@ -358,7 +361,7 @@ function renderSystem(part: DumpPart, opts: VerboseRenderOptions): string[] {
 function renderTool(part: DumpPart, opts: VerboseRenderOptions): string[] {
   // Stripped once, then used for both the header and the owner lookup: a
   // control byte must not change which plugin the name resolves to either.
-  const label = stripControls(part.label)
+  const label = stripControls(part.name)
   const digits = digitsOf(part.lines)
   return [
     `${PART_INDENT}${c.magenta(label)}`,
@@ -368,31 +371,45 @@ function renderTool(part: DumpPart, opts: VerboseRenderOptions): string[] {
   ]
 }
 
+/** One part of a section, by section. */
+function renderPart(
+  section: DumpSectionName,
+  part: DumpPart,
+  n: number,
+  toolNames: Map<string, string>,
+  opts: VerboseRenderOptions,
+): string[] {
+  switch (section) {
+    case "messages":
+      return renderMessage(part, n, toolNames, opts.wrapWidth)
+    case "system":
+      return renderSystem(part, opts)
+    case "tools":
+      return renderTool(part, opts)
+    default: {
+      const _exhaustive: never = section
+      return _exhaustive
+    }
+  }
+}
+
 /**
  * Render the parts of one body section in verbose form.
  *
- * @param section - Section name (`messages`, `system`, `tools`, or other).
- * @param parts - Parts collected from the typed rows.
+ * @param section - Section name.
+ * @param parts - Parts of the section, from `dumpView(req, { lines: true })`.
  * @param opts - Origin data and wrap width.
  * @returns Styled lines, without the section header.
  */
 export function renderVerboseSection(
-  section: string,
+  section: DumpSectionName,
   parts: readonly DumpPart[],
   opts: VerboseRenderOptions = {},
 ): string[] {
   const out: string[] = []
   const toolNames = new Map<string, string>()
   parts.forEach((part, i) => {
-    if (section === "messages") out.push(...renderMessage(part, i + 1, toolNames, opts.wrapWidth))
-    else if (section === "system") out.push(...renderSystem(part, opts))
-    else if (section === "tools") out.push(...renderTool(part, opts))
-    else {
-      out.push(`${PART_INDENT}${stripControls(part.label)}`)
-      const digits = digitsOf(part.lines)
-      out.push(...gutterLines(part.lines, digits, opts.wrapWidth))
-      out.push(...elidedLines(part.elided ?? [], digits, opts.wrapWidth))
-    }
+    out.push(...renderPart(section, part, i + 1, toolNames, opts))
   })
   return out
 }

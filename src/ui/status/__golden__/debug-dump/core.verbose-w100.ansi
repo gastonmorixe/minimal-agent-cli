@@ -1,0 +1,43 @@
+
+[1m[36m--- POST test-model-1 ---[39m[22m
+  [2mmodel:[22m test-model-1
+  [2mstream:[22m true
+  [2mmax_tokens:[22m 8192
+  [2mrequest_type:[22m conversation
+  [1mBody:[22m
+    [33mtools[39m: [2m[2 tool(s)][22m
+      [35mRead[39m
+         [2m↳[22m core[2m · [22m[33mbuilt-in[39m
+         [2m1[22m[2m │ [22mRead a file.
+         [2m2[22m[2m │ [22m  Returns its text.
+      [35mEcho[39m
+         [2m↳[22m [36mma-skills-plugin[39m[2m · [22m[2mplugins/ma-skills-plugin[22m
+         [2m1[22m[2m │ [22mEcho the input back.
+    [33msystem[39m: [2m[2 block(s)][22m
+      [35mblock 0[39m
+         [2m↳[22m core[2m · [22m[33midentity[39m[2m · [22m[2moverridden[22m
+         [2m1[22m[2m │ [22mYou are a test agent.
+      [35mblock 1[39m [1m[92m[cached][39m[22m
+         [2m↳[22m core[2m · [22m[33msessionContext[39m
+         [2m↳[22m [36mma-env-info-plugin[39m[2m · [22m[35m<ma::sys::context name="environment">[39m[2m · [22m[2mplugins/ma-env-info-plugin[22m
+         [2m1[22m[2m │ [22m<ma::sys::context name="environment">
+         [2m2[22m[2m │ [22mHost snapshot:
+         [2m3[22m[2m │ [22m    cwd=/work/repo
+         [2m4[22m[2m │ [22m    shell=fish
+         [2m5[22m[2m │[22m
+         [2m6[22m[2m │ [22mEnd of snapshot.
+         [2m7[22m[2m │ [22m</ma::sys::context>
+    [33mmessages[39m: [2m[3 message(s)][22m
+      [1m#1[22m [32muser[39m
+         [2m↳[22m [33mtext[39m
+         [2m1[22m[2m │ [22mfix this:
+         [2m2[22m[2m │ [22m    indented line
+      [1m#2[22m [32massistant[39m
+         [2m↳[22m [33mtool_use[39m[2m · [22m[35mRead[39m[2m · [22m[2m#toolu_e2e_a1b2c3[22m
+         [2m1[22m[2m │ [22m{
+         [2m2[22m[2m │ [22m  "file_path": "README.md"
+         [2m3[22m[2m │ [22m}
+      [1m#3[22m [32muser[39m [1m[92m[← cached prefix ends here][39m[22m
+         [2m↳[22m [33mtool_result[39m[2m · [22mfrom tool_use [35mRead[39m [2m#toolu_e2e_a1b2c3[22m
+         [2m1[22m[2m │ [22mREADME.md
+         [2m2[22m[2m │ [22msrc

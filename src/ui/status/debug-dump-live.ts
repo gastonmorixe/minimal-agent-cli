@@ -1,13 +1,30 @@
 /**
- * Live-area `--debug` wiring: subscribe to the transport's request-dump
- * diagnostics and paint them as colored blocks above the prompt.
+ * Live-area `--debug` wiring: subscribe to core's typed `llm.requestWillSend`
+ * channel (the request inspector) and paint each request as one colored
+ * block above the prompt.
+ *
+ * # Zero cost
+ *
+ * Core builds the request snapshot only when the channel has a subscriber.
+ * The REPL attaches this renderer only with `--debug` (see
+ * `startup/live-repl.ts`), so a run without it costs one `Set.size` read
+ * per request.
+ *
+ * # No double render
+ *
+ * With `--debug` the plain-text log sink (`logging/request-dump-log.ts`)
+ * also re-emits each request as `transport.request-dump` Debug diagnostics,
+ * for the file log. No TUI diagnostic sink draws them: the scrollback sink
+ * drops anything above Warning, the footer surface ignores Debug, and the
+ * stderr mirror is off in interactive mode. This renderer reads the typed
+ * event, never those rows, so each request is painted once.
  *
  * # Why a separate module
  *
  * `runReplLiveArea` owns the editor and the compositor but is already at the
  * project's file-size budget, and this wiring attaches only when `--debug` is
  * on. Keeping it here also makes it testable without building the whole TTY
- * stack: the sink takes a bus and a writer, nothing else.
+ * stack: the sink takes a channel and a writer, nothing else.
  *
  * # Why the compositor writer
  *
@@ -21,24 +38,19 @@
  */
 
 import {
-  type DiagnosticBus,
-  getDiagnosticBus,
-  Severity,
-} from "@minimal-agent/core/host/diagnostics"
+  processRequestInspector,
+  type RequestInspector,
+} from "@minimal-agent/core/host/request-inspector"
 import { describeSystemBlock } from "@minimal-agent/core/host/system-block-origins"
-import { diagnosticText } from "../../logging/diagnostic-text.ts"
-import {
-  type DumpBlock,
-  isRequestDumpRow,
-  RequestDumpCollector,
-  renderDumpBlock,
-} from "./debug-dump.ts"
+import { type DebugGateEnv, isVerboseEnv } from "../../cli/debug-gate.ts"
+import { dumpView } from "../../logging/request-dump-model.ts"
+import { renderDumpBlock } from "./debug-dump.ts"
 import type { DumpOriginSource, SystemSlotSpan } from "./debug-dump-origins.ts"
 
 /** What the sink needs to paint. */
 export interface RequestDumpRenderOptions {
-  /** The bus the transport emits `transport.request-dump` on. */
-  readonly bus: DiagnosticBus
+  /** The `llm.requestWillSend` channel to subscribe to. */
+  readonly inspector: RequestInspector
   /** Write one finished block above the live area (typically `compositor.writeStream`). */
   readonly write: (text: string) => void
   /**
@@ -52,7 +64,7 @@ export interface RequestDumpRenderOptions {
    * never clipped, only wrapped.
    */
   readonly wrapWidth?: () => number | undefined
-  /** Explicit verbose gate, read at paint time. False forces the compact form. */
+  /** Verbose gate, read at paint time. Omitted or false: the compact form. */
   readonly verbose?: () => boolean
   /** Origin data for the `--verbose` reference lines. */
   readonly origins?: DumpOriginSource
@@ -69,9 +81,11 @@ function terminalColumns(): number | undefined {
 /**
  * Line width for the live dump: the terminal width, or undefined under
  * `--verbose` (which promises untruncated debug output) or with no width.
+ *
+ * @param env - The environment for the `VERBOSE` gate. Default: `process.env`.
  */
-export function liveDumpWidth(): number | undefined {
-  if (process.env.VERBOSE) return undefined
+export function liveDumpWidth(env: DebugGateEnv = process.env): number | undefined {
+  if (isVerboseEnv(env)) return undefined
   return terminalColumns()
 }
 
@@ -86,12 +100,13 @@ export function liveDumpWrapWidth(): number | undefined {
 /**
  * True when `--verbose` is on, so the dump renders real lines with a gutter.
  *
- * Read at paint time, like the widths. This is the explicit verbose decision:
- * without it the renderer would infer verbose mode from the presence of typed
- * `kind` rows, which core controls, not the user.
+ * Read at paint time, like the widths. The verbose form is a CLI decision:
+ * core sends the same snapshot either way.
+ *
+ * @param env - The environment. Default: `process.env`.
  */
-export function liveDumpVerbose(): boolean {
-  return (process.env.VERBOSE ?? "") !== ""
+export function liveDumpVerbose(env: DebugGateEnv = process.env): boolean {
+  return isVerboseEnv(env)
 }
 
 /** The loader capability that gives the afterInstructions text (memoized in core). */
@@ -101,8 +116,8 @@ interface PromptBlocksSource {
 
 /** Options for {@link attachLiveAreaRequestDump}. */
 export interface LiveAreaDumpOptions {
-  /** Bus to read. Defaults to the process bus. */
-  readonly bus?: DiagnosticBus
+  /** Channel to subscribe to. Defaults to the process channel. */
+  readonly inspector?: RequestInspector
   /** Origin data, typically the plugin loader. */
   readonly origins?: DumpOriginSource & PromptBlocksSource
   /**
@@ -112,8 +127,10 @@ export interface LiveAreaDumpOptions {
   readonly describeSystemBlock?: (text: string) => readonly SystemSlotSpan[] | undefined
   /** Wrap width for verbose lines. Defaults to {@link liveDumpWrapWidth}. */
   readonly wrapWidth?: () => number | undefined
-  /** Verbose gate. Defaults to {@link liveDumpVerbose}. */
+  /** Verbose gate. Defaults to {@link liveDumpVerbose} on `env`. */
   readonly verbose?: () => boolean
+  /** The environment for the `VERBOSE` gate, read at paint time. Default: `process.env`. */
+  readonly env?: DebugGateEnv
 }
 
 /**
@@ -171,7 +188,7 @@ function withOriginExtras(opts: LiveAreaDumpOptions): DumpOriginSource | undefin
 
 /** Live wiring handle. Call {@link RequestDumpRenderHandle.dispose} on teardown. */
 export interface RequestDumpRenderHandle {
-  /** Unsubscribe and drain anything still buffered. */
+  /** Unsubscribe. Idempotent. Nothing is buffered: one request is one event. */
   dispose(): void
 }
 
@@ -189,69 +206,67 @@ export interface DumpStreamWriter {
  * wiring should not push it over.
  *
  * @param compositor - The live-area compositor.
- * @param opts - Bus, origin data (the plugin loader), slot describer, wrap width.
- * @returns Handle whose `dispose()` unsubscribes and flushes the tail.
+ * @param opts - Channel, origin data (the plugin loader), slot describer, wrap width.
+ * @returns Handle whose `dispose()` unsubscribes.
  */
 export function attachLiveAreaRequestDump(
   compositor: DumpStreamWriter,
   opts: LiveAreaDumpOptions = {},
 ): RequestDumpRenderHandle {
+  const env = opts.env ?? process.env
   const origins = withOriginExtras({
     ...opts,
     describeSystemBlock: opts.describeSystemBlock ?? describeSystemBlock,
   })
   return attachRequestDumpRenderer({
-    bus: opts.bus ?? getDiagnosticBus(),
+    inspector: opts.inspector ?? processRequestInspector(),
     write: (text) => compositor.writeStream(text),
-    width: liveDumpWidth,
+    width: () => liveDumpWidth(env),
     wrapWidth: opts.wrapWidth ?? liveDumpWrapWidth,
-    verbose: opts.verbose ?? liveDumpVerbose,
+    verbose: opts.verbose ?? (() => liveDumpVerbose(env)),
     ...(origins === undefined ? {} : { origins }),
   })
 }
 
 /**
- * Attach the renderer. Debug rows are collected per request and painted as
- * one colored block when the transport marks its final row.
+ * Attach the live-area renderer only when the user asked for it.
  *
- * A Debug row on this source without the row index is outside the structured
- * contract; it is written verbatim so a producer that skips the contract still
- * surfaces instead of vanishing.
+ * Without `--debug` this subscribes to nothing, so core sees no subscriber on
+ * the request channel and builds no snapshot (zero cost).
  *
- * @param opts - Bus + writer.
- * @returns Handle whose `dispose()` unsubscribes and flushes the tail.
+ * @param compositor - The live-area compositor.
+ * @param debug - The parsed `opts.debug` (`--debug` or `DEBUG=1`, the rule of
+ *   `cli/debug-gate.ts`).
+ * @param opts - See {@link attachLiveAreaRequestDump}.
+ * @returns The handle, or `null` when the dump is off.
+ */
+export function attachLiveAreaRequestDumpIfWanted(
+  compositor: DumpStreamWriter,
+  debug: boolean,
+  opts: LiveAreaDumpOptions = {},
+): RequestDumpRenderHandle | null {
+  return debug ? attachLiveAreaRequestDump(compositor, opts) : null
+}
+
+/**
+ * Attach the renderer. Each `llm.requestWillSend` event is painted as one
+ * colored block, synchronously, inside the event call (the snapshot is valid
+ * only during that call, and the view copies what it needs).
+ *
+ * @param opts - Channel + writer.
+ * @returns Handle whose `dispose()` unsubscribes.
  */
 export function attachRequestDumpRenderer(opts: RequestDumpRenderOptions): RequestDumpRenderHandle {
-  const collector = new RequestDumpCollector()
-  const { write } = opts
-  const paint = (block: DumpBlock): void => {
+  const off = opts.inspector.subscribe((event) => {
+    const enabled = opts.verbose?.() ?? false
+    const view = dumpView(event.request, { lines: enabled })
     const wrapWidth = opts.wrapWidth?.()
     const verbose = {
-      ...(opts.verbose === undefined ? {} : { enabled: opts.verbose() }),
+      enabled,
       ...(opts.origins === undefined ? {} : { origins: opts.origins }),
       ...(wrapWidth === undefined ? {} : { wrapWidth }),
     }
-    write(`${renderDumpBlock(block, opts.width?.(), verbose).join("\n")}\n`)
-  }
-
-  const off = opts.bus.on(
-    (e) => e.source === "transport.request-dump" && e.severity === Severity.Debug,
-    (e) => {
-      if (!isRequestDumpRow(e.source, e.structuredData)) {
-        write(`${diagnosticText(e)}\n`)
-        return
-      }
-      // A dump row's message is its literal text, and "" is a blank line, so no diagnosticText fallback.
-      const completed = collector.push(e.message, e.structuredData)
-      if (completed !== null) paint(completed)
-    },
-  )
-
-  return {
-    dispose: () => {
-      off()
-      const tail = collector.flush()
-      if (tail !== null) paint(tail)
-    },
-  }
+    opts.write(`${renderDumpBlock(view, opts.width?.(), verbose).join("\n")}\n`)
+  })
+  return { dispose: off }
 }

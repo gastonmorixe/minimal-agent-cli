@@ -24,11 +24,12 @@ import { AutoAskController } from "@minimal-agent/core/host-kit/auto-ask"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import type { ResolvedLiveAreaSlot } from "@minimal-agent/core/plugin-api/types/plugin"
+import { isDebugRequested } from "../cli/debug-gate.ts"
 import type { CliUserConfig } from "../config/terminal-config.ts"
 import type { ReplAgentLike, runRepl } from "../repl.ts"
 import type { Spinner } from "../ui/spinner/index.ts"
 import { attachCacheBreakRows } from "../ui/status/cache-break-row.ts"
-import { attachLiveAreaRequestDump } from "../ui/status/debug-dump-live.ts"
+import { attachLiveAreaRequestDumpIfWanted } from "../ui/status/debug-dump-live.ts"
 import type { StatusSpinnerTheme } from "../ui/status/line-renderer.ts"
 import type { ScrollbackDiagnosticSink } from "../ui/status/scrollback.ts"
 import { c } from "../ui/style/ansi.ts"
@@ -287,14 +288,20 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     },
   )
 
-  // `--debug`: paint the transport's request dump above the live area. No
-  // other TUI sink renders Debug (the footer skips it, scrollback drops
-  // anything above Warning, and the stderr mirror is off in interactive mode
-  // because a raw fd 2 write tears the live area). Pre-split, the transport
-  // printed the dump itself and the interceptor turned it into scrollback;
-  // this restores that through the compositor.
-  const wantsDump = args.includes("--debug") || process.env.DEBUG === "1"
-  const dumpHandle = wantsDump ? attachLiveAreaRequestDump(compositor, { origins: loader }) : null
+  // `--debug`: paint each outgoing request above the live area. The TUI
+  // subscribes to core's typed `llm.requestWillSend` channel only here, so
+  // without `--debug` there is no subscriber and core builds no snapshot
+  // (zero cost). The plain-text `transport.request-dump` rows that the log
+  // sink re-emits go to the file log only: the footer skips Debug, scrollback
+  // drops anything above Warning, and the stderr mirror is off in interactive
+  // mode (a raw fd 2 write tears the live area). So each request paints once.
+  // The gate is the shared `--debug` / `DEBUG=1` rule (`cli/debug-gate.ts`),
+  // the same rule that makes `opts.debug` for the startup sinks.
+  const dumpHandle = attachLiveAreaRequestDumpIfWanted(
+    compositor,
+    isDebugRequested(args, process.env),
+    { origins: loader },
+  )
 
   try {
     await repl(agent, {
@@ -316,8 +323,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
       liveAreaSlots,
     })
   } finally {
-    // Drain a dump still in flight (turn aborted mid-request) before the
-    // compositor inside runReplLiveArea goes away.
+    // Unsubscribe before the compositor inside runReplLiveArea goes away.
     dumpHandle?.dispose()
     disposeCacheBreakRows()
     restoreDiagnosticWriter()
