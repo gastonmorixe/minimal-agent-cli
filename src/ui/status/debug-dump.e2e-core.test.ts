@@ -2,9 +2,10 @@
  * Core-to-CLI proof of the `--debug --verbose` request dump.
  *
  * A real `AgentCore` runs one tool turn over the real canonical transport
- * (core test provider, fake network client). The core producer
- * (`debugRequestOptions`) emits the dump rows on the process diagnostic bus.
- * The CLI collector and `renderDumpBlock` paint them. No row is hand-made.
+ * (core test provider, fake network client). Core publishes each request on
+ * the process `llm.requestWillSend` channel; the CLI builds a `DumpView` with
+ * `dumpView` and `renderDumpBlock` paints it. `DEBUG` and `VERBOSE` stay
+ * UNSET: the typed channel needs no env var, only a subscriber.
  *
  * The second request of the turn has 3 messages (user text, assistant
  * `tool_use`, user `tool_result`), 2 system blocks (identity, a multi-line
@@ -21,17 +22,18 @@ import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 
 import type { AuthResult } from "@minimal-agent/core/host/auth"
-import { getDiagnosticBus, Severity } from "@minimal-agent/core/host/diagnostics"
 import { clearModelRegistry, clearProviderRegistry } from "@minimal-agent/core/host/model-registry"
 import { NetworkClient, NetworkResponse } from "@minimal-agent/core/host/network"
 import { clearProviderPlugins } from "@minimal-agent/core/host/provider-plugin"
+import { processRequestInspector } from "@minimal-agent/core/host/request-inspector"
 import { AgentCore } from "@minimal-agent/core/sdk/agent-core"
 import {
   registerTestProvider,
   sseBodyFromEvents,
 } from "@minimal-agent/core/testing/provider-fixture"
 
-import { type DumpBlock, RequestDumpCollector, renderDumpBlock } from "./debug-dump.ts"
+import { type DumpView, dumpView } from "../../logging/request-dump-model.ts"
+import { renderDumpBlock } from "./debug-dump.ts"
 import { attachLiveAreaRequestDump } from "./debug-dump-live.ts"
 
 type CanonicalEvents = Parameters<typeof sseBodyFromEvents>[0]
@@ -144,21 +146,19 @@ function buildCore(): AgentCore {
 /** Strip SGR escapes. */
 const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
 
-/** Run one turn with DEBUG on and collect every finished dump block from the bus. */
-async function runTurn(verbose: boolean): Promise<DumpBlock[]> {
+/**
+ * Run one turn with `DEBUG` and `VERBOSE` UNSET and collect one view per
+ * request from the process channel.
+ */
+async function runTurn(verbose: boolean): Promise<DumpView[]> {
   const saved = { DEBUG: process.env.DEBUG, VERBOSE: process.env.VERBOSE }
-  process.env.DEBUG = "1"
-  if (verbose) process.env.VERBOSE = "1"
-  else delete process.env.VERBOSE
-  const collector = new RequestDumpCollector()
-  const blocks: DumpBlock[] = []
-  const off = getDiagnosticBus().on(
-    (e) => e.source === "transport.request-dump" && e.severity === Severity.Debug,
-    (e) => {
-      const done = collector.push(e.message, e.structuredData)
-      if (done !== null) blocks.push(done)
-    },
-  )
+  delete process.env.DEBUG
+  delete process.env.VERBOSE
+  const views: DumpView[] = []
+  // The snapshot is valid only during the call: build the view inside it.
+  const off = processRequestInspector().subscribe((e) => {
+    views.push(dumpView(e.request, { lines: verbose }))
+  })
   try {
     const gen = buildCore().run(USER_TEXT)
     while (!(await gen.next()).done) {
@@ -171,7 +171,7 @@ async function runTurn(verbose: boolean): Promise<DumpBlock[]> {
       else process.env[k] = v
     }
   }
-  return blocks
+  return views
 }
 
 /** The gutter number of a verbose line, or undefined. */
@@ -199,9 +199,9 @@ describe("request dump: real core producer to CLI renderer", () => {
     const painted: string[] = []
     const live = attachLiveAreaRequestDump(
       { writeStream: (t) => painted.push(t) },
-      { origins: { loadedPackages: () => [] }, wrapWidth: () => WIDTH },
+      { origins: { loadedPackages: () => [] }, wrapWidth: () => WIDTH, verbose: () => true },
     )
-    let blocks: DumpBlock[]
+    let blocks: DumpView[]
     try {
       blocks = await runTurn(true)
     } finally {
@@ -257,8 +257,9 @@ describe("request dump: real core producer to CLI renderer", () => {
     // The default core `describeSystemBlock` gave the session-context slot.
     expect(out).toContain("↳ core · sessionContext")
 
-    // The collector path gives the same text as the live path.
-    const direct = renderDumpBlock(blocks[1] as DumpBlock, undefined, {
+    // The direct path renders the same request.
+    const direct = renderDumpBlock(blocks[1] as DumpView, undefined, {
+      enabled: true,
       origins: { loadedPackages: () => [] },
       wrapWidth: WIDTH,
     })
@@ -271,7 +272,7 @@ describe("request dump: real core producer to CLI renderer", () => {
   it("non-verbose: no gutter, #N, every line fits the width", async () => {
     const blocks = await runTurn(false)
     expect(blocks).toHaveLength(2)
-    const lines = renderDumpBlock(blocks[1] as DumpBlock, WIDTH).map(strip)
+    const lines = renderDumpBlock(blocks[1] as DumpView, WIDTH).map(strip)
     const out = lines.join("\n")
 
     expect(lines.some((l) => gutter(l) !== undefined)).toBe(false)

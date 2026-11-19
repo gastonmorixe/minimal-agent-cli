@@ -26,8 +26,8 @@
  *    Add new units sparingly: every new code is a small cognitive tax
  *    on users skimming the transcript.
  *
- * Core keeps its own private copy of the same idiom for the debug request
- * dump. Keep the two in step.
+ * The `--debug` request dump (`logging/request-dump-model.ts`) uses the
+ * same idiom for its 80-character previews. Core has no copy.
  *
  * @module ui/style/truncate-hint
  */

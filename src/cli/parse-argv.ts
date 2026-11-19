@@ -32,6 +32,7 @@ import type { StartupProfile } from "@minimal-agent/core/plugin-api/types/startu
 import type { ToolNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
 
 import type { CliUserConfig } from "../config/terminal-config.ts"
+import { isDebugRequested } from "./debug-gate.ts"
 import { resolveHeaderFormat, resolveShowHeader } from "./non-interactive-defaults.ts"
 import { type OutputFormat, resolveOutputFormat } from "./output-format.ts"
 import { type PrintFormat, parsePrintFormat } from "./print-format.ts"
@@ -362,7 +363,7 @@ export function parseCliOptions(
     jsonFlag: wantJsonOutput,
   })
   const wantDiagnostics = args.includes("--diagnostics")
-  const debug = args.includes("--debug") || env.DEBUG === "1"
+  const debug = isDebugRequested(args, env)
   // A file path or inline JSON (R7). Inline JSON starts with `{`, so the
   // `valueAfter` rule (no leading `-`) still holds.
   const outputSchemaPath = valueAfter(args, "--output-schema")

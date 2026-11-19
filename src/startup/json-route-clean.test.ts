@@ -256,6 +256,7 @@ describe("S38: sink plan by stdio mode", () => {
     expect(planDiagnosticSinks({ showHeader: false, env, mode: "protocol" })).toEqual({
       scrollback: false,
       stderrMirror: false,
+      requestDumpLog: false,
     })
   })
 
@@ -270,7 +271,7 @@ describe("S38: sink plan by stdio mode", () => {
   it("the REPL keeps the scrollback sink and gets no raw mirror from --debug", () => {
     expect(
       planDiagnosticSinks({ showHeader: true, env, mode: "interactive", debug: true }),
-    ).toEqual({ scrollback: true, stderrMirror: false })
+    ).toEqual({ scrollback: true, stderrMirror: false, requestDumpLog: true })
   })
 
   it("MINIMAL_AGENT_LOG_STDERR=1 still adds the mirror in every mode", () => {

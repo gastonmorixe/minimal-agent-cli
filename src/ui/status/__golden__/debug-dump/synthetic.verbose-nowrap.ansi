@@ -1,0 +1,292 @@
+
+[1m[36m--- POST claude-opus-4-8 ---[39m[22m
+  [2mmodel:[22m claude-opus-4-8
+  [2mstream:[22m true
+  [2mmax_tokens:[22m 32000
+  [2mrequest_type:[22m conversation
+  [2mthinking:[22m {"type":"adaptive","display":"summarized"}
+  [2moutput_config:[22m {"effort":"high","format":{"type":"json_schema","schema":{"type":"object","properties":{"answer":{"type":"string"}}}}}
+  [2mspeed:[22m fast
+  [1mBody:[22m
+    [33mtools[39m: [2m[6 tool(s)][22m
+      [35mSkill[39m
+         [2m↳[22m [36mma-skills-plugin[39m[2m · [22m[2mplugins/ma-skills-plugin[22m
+         [2m1[22m[2m │ [22mDiscover, inspect and load an Agent Skill.
+      [35mBash[39m
+         [2m↳[22m core[2m · [22m[33mbuilt-in[39m
+         [2m1[22m[2m │ [22mExecutes a given bash command.
+         [2m2[22m[2m │ [22mOutput: capped. Run it with care. Run it with care. Run it with care. Run it with care. Run it with care. Run it with care. Run it with care. Run it with care. 
+      [35mRead[39m
+         [2m↳[22m core[2m · [22m[33mbuilt-in[39m
+         [2m1[22m[2m │ [22mRead a file.
+         [2m2[22m[2m │ [22m  Returns its text.
+      [35mMystery[39m
+         [2m↳[22m [2morigin not recorded[22m
+         [2m1[22m[2m │ [22mx
+      [35mWide[39m
+         [2m↳[22m [2morigin not recorded[22m
+         [2m1[22m[2m │ [22m日本語のテキストです。表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅
+      [35mCtl[39m
+         [2m↳[22m [2morigin not recorded[22m
+         [2m1[22m[2m │ [22mRun a comm[31mand now
+    [33msystem[39m: [2m[3 block(s)][22m
+      [35mblock 0[39m
+         [2m↳[22m [2morigin not recorded[22m
+         [2m1[22m[2m │ [22mYou are minimal agent.
+      [35mblock 1[39m [1m[92m[cached][39m[22m
+         [2m↳[22m core[2m · [22m[33msessionContext[39m
+         [2m↳[22m [36mma-skills-plugin[39m[2m · [22m[35m<ma::sys::tool name="Skill">[39m[2m · [22m[2mplugins/ma-skills-plugin[22m
+         [2m1[22m[2m │ [22m<ma::sys::tool name="Skill">
+         [2m2[22m[2m │ [22mName the skill you activated in your reply.
+         [2m3[22m[2m │ [22m</ma::sys::tool>
+         [2m4[22m[2m │[22m
+         [2m↳[22m [36mma-env-info-plugin[39m[2m · [22m[35m<ma::sys::context name="environment">[39m[2m · [22m[2mplugins/ma-env-info-plugin[22m
+         [2m5[22m[2m │ [22m<ma::sys::context name="environment">
+         [2m6[22m[2m │ [22mHost snapshot at session start.
+         [2m7[22m[2m │ [22m    cwd=/work/repo
+         [2m8[22m[2m │ [22m</ma::sys::context>
+      [35mblock 2[39m [1m[92m[cached][39m[22m
+         [2m↳[22m [2morigin not recorded[22m
+         [2m1[22m[2m │ [22m# Instructions
+         [2m2[22m[2m │ [22m- Be concise.
+         [2m3[22m[2m │ [22mPrefer dedicated tools over shell commands. Prefer dedicated tools over shell commands. Prefer dedicated tools over shell commands. Prefer dedicated tools over shell commands. 
+    [33mmessages[39m: [2m[9 message(s)][22m
+      [1m#1[22m [32muser[39m
+         [2m↳[22m [33mtext[39m
+         [2m1[22m[2m │ [22mfix this:
+         [2m2[22m[2m │ [22m    indented line
+      [1m#2[22m [32massistant[39m
+         [2m↳[22m [33mthinking[39m
+         [2m1[22m[2m │ [22mlet me look at the files
+         [2m↳[22m [33mtext[39m
+         [2m2[22m[2m │ [22mSure.
+         [2m↳[22m [33mtool_use[39m[2m · [22m[35mBash[39m[2m · [22m[2m#toolu_01ABCDEFa1b2c3[22m
+         [2m3[22m[2m │ [22m{
+         [2m4[22m[2m │ [22m  "command": "ls -la",
+         [2m5[22m[2m │ [22m  "description": "list"
+         [2m6[22m[2m │ [22m}
+      [1m#3[22m [32muser[39m
+         [2m↳[22m [33mtool_result[39m[2m · [22mfrom tool_use [35mBash[39m [2m#toolu_01ABCDEFa1b2c3[22m
+         [2m1[22m[2m │ [22mREADME.md
+         [2m2[22m[2m │ [22msrc
+      [1m#4[22m [32massistant[39m
+         [2m↳[22m [33mtool_use[39m[2m · [22m[35mRead[39m[2m · [22m[2m#toolu_02GHIJKLd4e5f6[22m
+         [2m1[22m[2m │ [22m{
+         [2m2[22m[2m │ [22m  "file_path": "/x"
+         [2m3[22m[2m │ [22m}
+      [1m#5[22m [32muser[39m
+         [2m↳[22m [33mtool_result[39m[2m · [22mfrom tool_use [35mRead[39m [2m#toolu_02GHIJKLd4e5f6[22m[2m · [22m[31merror[39m
+         [2m1[22m[2m │ [22mENOENT: no such file or directory, open '/x'
+      [1m#6[22m [32muser[39m
+         [2m↳[22m [33mtext[39m
+         [2m  1[22m[2m │ [22mline 1
+         [2m  2[22m[2m │ [22mline 2
+         [2m  3[22m[2m │ [22mline 3
+         [2m  4[22m[2m │ [22mline 4
+         [2m  5[22m[2m │ [22mline 5
+         [2m  6[22m[2m │ [22mline 6
+         [2m  7[22m[2m │ [22mline 7
+         [2m  8[22m[2m │ [22mline 8
+         [2m  9[22m[2m │ [22mline 9
+         [2m 10[22m[2m │ [22mline 10
+         [2m 11[22m[2m │ [22mline 11
+         [2m 12[22m[2m │ [22mline 12
+         [2m 13[22m[2m │ [22mline 13
+         [2m 14[22m[2m │ [22mline 14
+         [2m 15[22m[2m │ [22mline 15
+         [2m 16[22m[2m │ [22mline 16
+         [2m 17[22m[2m │ [22mline 17
+         [2m 18[22m[2m │ [22mline 18
+         [2m 19[22m[2m │ [22mline 19
+         [2m 20[22m[2m │ [22mline 20
+         [2m 21[22m[2m │ [22mline 21
+         [2m 22[22m[2m │ [22mline 22
+         [2m 23[22m[2m │ [22mline 23
+         [2m 24[22m[2m │ [22mline 24
+         [2m 25[22m[2m │ [22mline 25
+         [2m 26[22m[2m │ [22mline 26
+         [2m 27[22m[2m │ [22mline 27
+         [2m 28[22m[2m │ [22mline 28
+         [2m 29[22m[2m │ [22mline 29
+         [2m 30[22m[2m │ [22mline 30
+         [2m 31[22m[2m │ [22mline 31
+         [2m 32[22m[2m │ [22mline 32
+         [2m 33[22m[2m │ [22mline 33
+         [2m 34[22m[2m │ [22mline 34
+         [2m 35[22m[2m │ [22mline 35
+         [2m 36[22m[2m │ [22mline 36
+         [2m 37[22m[2m │ [22mline 37
+         [2m 38[22m[2m │ [22mline 38
+         [2m 39[22m[2m │ [22mline 39
+         [2m 40[22m[2m │ [22mline 40
+         [2m 41[22m[2m │ [22mline 41
+         [2m 42[22m[2m │ [22mline 42
+         [2m 43[22m[2m │ [22mline 43
+         [2m 44[22m[2m │ [22mline 44
+         [2m 45[22m[2m │ [22mline 45
+         [2m 46[22m[2m │ [22mline 46
+         [2m 47[22m[2m │ [22mline 47
+         [2m 48[22m[2m │ [22mline 48
+         [2m 49[22m[2m │ [22mline 49
+         [2m 50[22m[2m │ [22mline 50
+         [2m 51[22m[2m │ [22mline 51
+         [2m 52[22m[2m │ [22mline 52
+         [2m 53[22m[2m │ [22mline 53
+         [2m 54[22m[2m │ [22mline 54
+         [2m 55[22m[2m │ [22mline 55
+         [2m 56[22m[2m │ [22mline 56
+         [2m 57[22m[2m │ [22mline 57
+         [2m 58[22m[2m │ [22mline 58
+         [2m 59[22m[2m │ [22mline 59
+         [2m 60[22m[2m │ [22mline 60
+         [2m 61[22m[2m │ [22mline 61
+         [2m 62[22m[2m │ [22mline 62
+         [2m 63[22m[2m │ [22mline 63
+         [2m 64[22m[2m │ [22mline 64
+         [2m 65[22m[2m │ [22mline 65
+         [2m 66[22m[2m │ [22mline 66
+         [2m 67[22m[2m │ [22mline 67
+         [2m 68[22m[2m │ [22mline 68
+         [2m 69[22m[2m │ [22mline 69
+         [2m 70[22m[2m │ [22mline 70
+         [2m 71[22m[2m │ [22mline 71
+         [2m 72[22m[2m │ [22mline 72
+         [2m 73[22m[2m │ [22mline 73
+         [2m 74[22m[2m │ [22mline 74
+         [2m 75[22m[2m │ [22mline 75
+         [2m 76[22m[2m │ [22mline 76
+         [2m 77[22m[2m │ [22mline 77
+         [2m 78[22m[2m │ [22mline 78
+         [2m 79[22m[2m │ [22mline 79
+         [2m 80[22m[2m │ [22mline 80
+         [2m 81[22m[2m │ [22mline 81
+         [2m 82[22m[2m │ [22mline 82
+         [2m 83[22m[2m │ [22mline 83
+         [2m 84[22m[2m │ [22mline 84
+         [2m 85[22m[2m │ [22mline 85
+         [2m 86[22m[2m │ [22mline 86
+         [2m 87[22m[2m │ [22mline 87
+         [2m 88[22m[2m │ [22mline 88
+         [2m 89[22m[2m │ [22mline 89
+         [2m 90[22m[2m │ [22mline 90
+         [2m 91[22m[2m │ [22mline 91
+         [2m 92[22m[2m │ [22mline 92
+         [2m 93[22m[2m │ [22mline 93
+         [2m 94[22m[2m │ [22mline 94
+         [2m 95[22m[2m │ [22mline 95
+         [2m 96[22m[2m │ [22mline 96
+         [2m 97[22m[2m │ [22mline 97
+         [2m 98[22m[2m │ [22mline 98
+         [2m 99[22m[2m │ [22mline 99
+         [2m100[22m[2m │ [22mline 100
+         [2m101[22m[2m │ [22mline 101
+         [2m102[22m[2m │ [22mline 102
+         [2m103[22m[2m │ [22mline 103
+         [2m104[22m[2m │ [22mline 104
+         [2m105[22m[2m │ [22mline 105
+         [2m106[22m[2m │ [22mline 106
+         [2m107[22m[2m │ [22mline 107
+         [2m108[22m[2m │ [22mline 108
+         [2m109[22m[2m │ [22mline 109
+         [2m110[22m[2m │ [22mline 110
+         [2m111[22m[2m │ [22mline 111
+         [2m112[22m[2m │ [22mline 112
+         [2m113[22m[2m │ [22mline 113
+         [2m114[22m[2m │ [22mline 114
+         [2m115[22m[2m │ [22mline 115
+         [2m116[22m[2m │ [22mline 116
+         [2m117[22m[2m │ [22mline 117
+         [2m118[22m[2m │ [22mline 118
+         [2m119[22m[2m │ [22mline 119
+         [2m120[22m[2m │ [22mline 120
+         [2m121[22m[2m │ [22mline 121
+         [2m122[22m[2m │ [22mline 122
+         [2m123[22m[2m │ [22mline 123
+         [2m124[22m[2m │ [22mline 124
+         [2m125[22m[2m │ [22mline 125
+         [2m126[22m[2m │ [22mline 126
+         [2m127[22m[2m │ [22mline 127
+         [2m128[22m[2m │ [22mline 128
+         [2m129[22m[2m │ [22mline 129
+         [2m130[22m[2m │ [22mline 130
+         [2m131[22m[2m │ [22mline 131
+         [2m132[22m[2m │ [22mline 132
+         [2m133[22m[2m │ [22mline 133
+         [2m134[22m[2m │ [22mline 134
+         [2m135[22m[2m │ [22mline 135
+         [2m136[22m[2m │ [22mline 136
+         [2m137[22m[2m │ [22mline 137
+         [2m138[22m[2m │ [22mline 138
+         [2m139[22m[2m │ [22mline 139
+         [2m140[22m[2m │ [22mline 140
+         [2m141[22m[2m │ [22mline 141
+         [2m142[22m[2m │ [22mline 142
+         [2m143[22m[2m │ [22mline 143
+         [2m144[22m[2m │ [22mline 144
+         [2m145[22m[2m │ [22mline 145
+         [2m146[22m[2m │ [22mline 146
+         [2m147[22m[2m │ [22mline 147
+         [2m148[22m[2m │ [22mline 148
+         [2m149[22m[2m │ [22mline 149
+         [2m150[22m[2m │ [22mline 150
+         [2m151[22m[2m │ [22mline 151
+         [2m152[22m[2m │ [22mline 152
+         [2m153[22m[2m │ [22mline 153
+         [2m154[22m[2m │ [22mline 154
+         [2m155[22m[2m │ [22mline 155
+         [2m156[22m[2m │ [22mline 156
+         [2m157[22m[2m │ [22mline 157
+         [2m158[22m[2m │ [22mline 158
+         [2m159[22m[2m │ [22mline 159
+         [2m160[22m[2m │ [22mline 160
+         [2m161[22m[2m │ [22mline 161
+         [2m162[22m[2m │ [22mline 162
+         [2m163[22m[2m │ [22mline 163
+         [2m164[22m[2m │ [22mline 164
+         [2m165[22m[2m │ [22mline 165
+         [2m166[22m[2m │ [22mline 166
+         [2m167[22m[2m │ [22mline 167
+         [2m168[22m[2m │ [22mline 168
+         [2m169[22m[2m │ [22mline 169
+         [2m170[22m[2m │ [22mline 170
+         [2m171[22m[2m │ [22mline 171
+         [2m172[22m[2m │ [22mline 172
+         [2m173[22m[2m │ [22mline 173
+         [2m174[22m[2m │ [22mline 174
+         [2m175[22m[2m │ [22mline 175
+         [2m176[22m[2m │ [22mline 176
+         [2m177[22m[2m │ [22mline 177
+         [2m178[22m[2m │ [22mline 178
+         [2m179[22m[2m │ [22mline 179
+         [2m180[22m[2m │ [22mline 180
+         [2m181[22m[2m │ [22mline 181
+         [2m182[22m[2m │ [22mline 182
+         [2m183[22m[2m │ [22mline 183
+         [2m184[22m[2m │ [22mline 184
+         [2m185[22m[2m │ [22mline 185
+         [2m186[22m[2m │ [22mline 186
+         [2m187[22m[2m │ [22mline 187
+         [2m188[22m[2m │ [22mline 188
+         [2m189[22m[2m │ [22mline 189
+         [2m190[22m[2m │ [22mline 190
+         [2m191[22m[2m │ [22mline 191
+         [2m192[22m[2m │ [22mline 192
+         [2m193[22m[2m │ [22mline 193
+         [2m194[22m[2m │ [22mline 194
+         [2m195[22m[2m │ [22mline 195
+         [2m196[22m[2m │ [22mline 196
+         [2m197[22m[2m │ [22mline 197
+         [2m198[22m[2m │ [22mline 198
+         [2m199[22m[2m │ [22mline 199
+         [2m200[22m[2m │ [22mline 200
+         [2m  ⋯[22m[2m │ [22m[2m10 more lines[22m
+      [1m#7[22m [32muser[39m
+         [2m↳[22m [33mimage[39m
+         [2m↳[22m [33mtext[39m
+         [2m1[22m[2m │ [22mwhat is this? note: a colon. xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🎉 then more text after the emoji, 漢字漢字漢字漢字漢字漢字漢字漢字漢字漢字
+      [1m#8[22m [32massistant[39m
+         [2m↳[22m [33mtext[39m
+         [2m1[22m[2m │ [22ma control [2J byte and a C1  byte in 日本語のテキストです。表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅表示幅
+      [1m#9[22m [32muser[39m [1m[92m[← cached prefix ends here][39m[22m
+         [2m↳[22m [33mtext[39m
+         [2m1[22m[2m │ [22mhi there

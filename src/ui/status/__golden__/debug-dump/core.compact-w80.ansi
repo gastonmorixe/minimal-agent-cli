@@ -1,0 +1,17 @@
+
+[1m[36m--- POST test-model-1 ---[39m[22m
+  [2mmodel:[22m test-model-1
+  [2mstream:[22m true
+  [2mmax_tokens:[22m 8192
+  [2mrequest_type:[22m conversation
+  [1mBody:[22m
+    [33mtools[39m: [2m[2 tool(s)][22m
+      [35mRead[39m: [2mRead a file. ⏎ Returns its text.[22m
+      [35mEcho[39m: [2mEcho the input back.[22m
+    [33msystem[39m: [2m[2 block(s)][22m
+      [35mblock 0[39m: [2mYou are a test agent.[22m
+      [35mblock 1[39m [1m[92m[cached][39m[22m: [2m<ma::sys::context name="environment"> ⏎ Host ...(+80ch)[22m
+    [33mmessages[39m: [2m[3 message(s)][22m
+      [1m#1[22m [32muser[39m: [2m"fix this:\n indented line"[22m
+      [1m#2[22m [32massistant[39m: [2mtool_use(Read#a1b2c3){file_path}[22m
+      [1m#3[22m [32muser[39m [1m[92m[← cached prefix ends here][39m[22m: [2mtool_result(a1b2c3) "README.md\nsrc"[22m

@@ -19,6 +19,7 @@ export const CORE_PUBLIC_CONTRACT = {
     "./host/diagnostics",
     "./host/status-bus",
     "./host/system-block-origins",
+    "./host/request-inspector",
     "./plugin-api",
   ],
   events: ["AgentEvent", "EventSink"],
@@ -58,6 +59,18 @@ export const CORE_PUBLIC_CONTRACT = {
     "StatusDirection",
     "StatusHandle",
     "StatusSnapshot",
+  ],
+  // The typed `llm.requestWillSend` channel. The CLI subscribes only with
+  // `--debug`, and formats the request dump itself (see src/logging/).
+  // Subpath: ./host/request-inspector.
+  requestInspector: [
+    "REQUEST_WILL_SEND",
+    "RequestDiagnostics",
+    "RequestInspector",
+    "RequestSnapshot",
+    "RequestWillSendEvent",
+    "createRequestInspector",
+    "processRequestInspector",
   ],
 } as const
 

@@ -460,10 +460,21 @@ Use `--debug` when you want readable request and response summaries:
 bun run src/index.ts --debug "what model are you"
 ```
 
-The engine writes nothing to the terminal itself. The summaries are
-Debug-severity diagnostics: they land in the session log file
-(`~/.minimal-agent/logs/ma-session-<sid>.log`). Add `MINIMAL_AGENT_LOG_STDERR=1`
-to mirror them to stderr as well.
+The engine writes nothing to the terminal itself and formats no debug text.
+Before each request, core publishes a typed `llm.requestWillSend` event
+(`@minimal-agent/core/host/request-inspector`). Core builds the event only
+when a host subscribes, so a run without `--debug` costs nothing. With
+`--debug`, the CLI subscribes and renders the event:
+
+- The REPL paints a colored request block above the prompt.
+- Every mode writes the plain-text dump as Debug-severity
+  `transport.request-dump` rows to the session log file
+  (`~/.minimal-agent/logs/ma-session-<sid>.log`).
+- In print and protocol mode, `--debug` also mirrors the rows to stderr.
+  `MINIMAL_AGENT_LOG_STDERR=1` mirrors them in every mode.
+
+Add `--verbose` to show the full text of each part, with line gutters,
+instead of the 80-character previews.
 
 Use network debug capture when you want raw request and response files:
 

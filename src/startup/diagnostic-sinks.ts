@@ -21,11 +21,22 @@
  * human chrome reaches stderr there. `--debug` (or
  * `MINIMAL_AGENT_LOG_STDERR=1`) attaches the plain stderr mirror instead.
  *
+ * `--debug` also subscribes the plain-text request dump to core's typed
+ * `llm.requestWillSend` channel, in every mode (see
+ * `logging/request-dump-log.ts`). Its rows reach the file log, the stderr
+ * mirror and the session event log. Without `--debug` nothing subscribes, so
+ * core builds no request event (zero cost).
+ *
  * @module host/startup/diagnostic-sinks
  */
 
-import { getDiagnosticBus } from "@minimal-agent/core/host/diagnostics"
+import { type DiagnosticBus, getDiagnosticBus } from "@minimal-agent/core/host/diagnostics"
+import {
+  processRequestInspector,
+  type RequestInspector,
+} from "@minimal-agent/core/host/request-inspector"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
+import { isVerboseEnv } from "../cli/debug-gate.ts"
 import type { StdioMode } from "../cli/output-format.ts"
 import { registerA1DiagnosticText } from "../logging/diagnostic-text-a1.ts"
 import { registerManifestDiagnosticText } from "../logging/diagnostic-text-manifest.ts"
@@ -36,12 +47,21 @@ import type { ScrollbackDiagnosticSink } from "../ui/status/scrollback.ts"
 export interface DiagnosticSinkOptions {
   /** Whether the startup banner will be drawn (arms scrollback buffering). */
   readonly showHeader: boolean
-  /** The process environment (only `MINIMAL_AGENT_LOG_STDERR` is read). */
+  /** The process environment (`MINIMAL_AGENT_LOG_STDERR`, and `VERBOSE` for the dump). */
   readonly env: Record<string, string | undefined>
   /** How this run uses stdio. Default `interactive` (the old wiring). */
   readonly mode?: StdioMode
-  /** `--debug` is set: mirror diagnostics to stderr outside the TUI. */
+  /**
+   * `--debug` is set: mirror diagnostics to stderr outside the TUI, and
+   * write the plain-text request dump (all modes). `VERBOSE` in `env`
+   * makes the dump verbose. The caller passes the parsed `opts.debug`
+   * (`--debug` or `DEBUG=1`, see `cli/debug-gate.ts`).
+   */
   readonly debug?: boolean
+  /** The bus the sinks attach to. Default: the process bus. Tests inject one. */
+  readonly bus?: DiagnosticBus
+  /** The request channel of the dump. Default: the process channel. Tests inject one. */
+  readonly requestInspector?: RequestInspector
 }
 
 /** Which optional sinks attach. The file and global logs always attach. */
@@ -50,6 +70,8 @@ export interface DiagnosticSinkPlan {
   readonly scrollback: boolean
   /** The plain one-line stderr mirror of every diagnostic. */
   readonly stderrMirror: boolean
+  /** The plain-text request dump subscriber (`--debug`, every mode). */
+  readonly requestDumpLog: boolean
 }
 
 /**
@@ -59,6 +81,9 @@ export interface DiagnosticSinkPlan {
  * in `protocol` and `print` mode. The REPL keeps its TUI surfaces, so
  * `--debug` adds no raw mirror there (a raw fd 2 write would tear the live
  * area). `MINIMAL_AGENT_LOG_STDERR=1` adds the mirror in every mode, as before.
+ * `--debug` adds the request dump subscriber in every mode (the REPL too: its
+ * rows go to the session file log, as before). `MINIMAL_AGENT_LOG_STDERR=1`
+ * alone adds no dump.
  */
 export function planDiagnosticSinks(opts: DiagnosticSinkOptions): DiagnosticSinkPlan {
   const mode = opts.mode ?? "interactive"
@@ -66,7 +91,29 @@ export function planDiagnosticSinks(opts: DiagnosticSinkOptions): DiagnosticSink
   return {
     scrollback: mode !== "protocol",
     stderrMirror: opts.env.MINIMAL_AGENT_LOG_STDERR === "1" || debugMirror,
+    requestDumpLog: opts.debug === true,
   }
+}
+
+/**
+ * Subscribe the plain-text request dump when the plan asks for it.
+ *
+ * @param opts - The sink options (`debug` gates it; `env.VERBOSE` is read at
+ *   each request).
+ * @param inspector - The request channel. Default: `opts.requestInspector`,
+ *   else the process channel.
+ * @returns The unsubscribe, or `null` when nothing subscribed.
+ */
+export async function attachRequestDumpSink(
+  opts: DiagnosticSinkOptions,
+  inspector: RequestInspector = opts.requestInspector ?? processRequestInspector(),
+): Promise<(() => void) | null> {
+  if (!planDiagnosticSinks(opts).requestDumpLog) return null
+  const { attachRequestDumpLog } = await import("../logging/request-dump-log.ts")
+  return attachRequestDumpLog({
+    inspector,
+    verbose: () => isVerboseEnv(opts.env),
+  })
 }
 
 /**
@@ -84,7 +131,7 @@ export async function attachStartupDiagnosticSinks(
   registerA1DiagnosticText()
   registerManifestDiagnosticText()
   registerPromptDiagnosticText()
-  const bus = getDiagnosticBus()
+  const bus = opts.bus ?? getDiagnosticBus()
   const plan = planDiagnosticSinks(opts)
 
   const { FileLogSink } = await import("@minimal-agent/core/host/log-file")
@@ -96,6 +143,10 @@ export async function attachStartupDiagnosticSinks(
   // stamped into every line. Best-effort; never throws into boot.
   const { GlobalLogSink } = await import("@minimal-agent/core/host/log-global")
   new GlobalLogSink({ sessionId: getSessionId() }).attach(bus)
+
+  // `--debug` only: the plain-text request dump. The process lives as long
+  // as the subscription, so nothing unsubscribes it.
+  await attachRequestDumpSink(opts)
 
   if (plan.stderrMirror) {
     // No interceptor yet — write straight to fd 2. The live-area bootstrap

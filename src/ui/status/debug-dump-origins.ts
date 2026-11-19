@@ -14,7 +14,7 @@
  */
 
 import { BUILTIN_TOOL_NAMES } from "@minimal-agent/core/host/tool-catalog"
-import type { DumpBlockRef } from "./debug-dump-contract.ts"
+import type { DumpBlockRef } from "../../logging/request-dump-model.ts"
 
 /** A core system prompt slot (mirror of core `SystemSlotId`). */
 export type SystemSlotId =

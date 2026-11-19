@@ -1,0 +1,31 @@
+
+[1m[36m--- POST claude-opus-4-8 ---[39m[22m
+  [2mmodel:[22m claude-opus-4-8
+  [2mstream:[22m true
+  [2mmax_tokens:[22m 32000
+  [2mrequest_type:[22m conversation
+  [2mthinking:[22m {"type":"adaptive"...(+24ch)
+  [2moutput_config:[22m {"effort":"h...(+106ch)
+  [2mspeed:[22m fast
+  [1mBody:[22m
+    [33mtools[39m: [2m[6 tool(s)][22m
+      [35mSkill[39m: [2mDiscover, inspect...(+25ch)[22m
+      [35mBash[39m: [2mExecutes a given ...(+175ch)[22m
+      [35mRead[39m: [2mRead a file. ⏎ Ret...(+14ch)[22m
+      [35mMystery[39m: [2mx[22m
+      [35mWide[39m: [2m日本語のテキストで...(+44ch)[22m
+      [35mCtl[39m: [2mRun a comm[31mand now[22m
+    [33msystem[39m: [2m[3 block(s)][22m
+      [35mblock 0[39m: [2mYou are minimal agent.[22m
+      [35mblock 1[39m [1m[92m[cached][39m[22m: [2m<ma::...(+201ch)[22m
+      [35mblock 2[39m [1m[92m[cached][39m[22m: [2m# Ins...(+203ch)[22m
+    [33mmessages[39m: [2m[9 message(s)][22m
+      [1m#1[22m [32muser[39m: [2mfix this: ⏎ indented line[22m
+      [1m#2[22m [32massistant[39m: [2mthinking(2...(+59ch)[22m
+      [1m#3[22m [32muser[39m: [2mtool_result(a1b...(+21ch)[22m
+      [1m#4[22m [32massistant[39m: [2mtool_use(R...(+22ch)[22m
+      [1m#5[22m [32muser[39m: [2mtool_result!(d4...(+52ch)[22m
+      [1m#6[22m [32muser[39m: [2m"line 1\nline...(+1979ch)[22m
+      [1m#7[22m [32muser[39m: [2mimage(base64 i...(+177ch)[22m
+      [1m#8[22m [32massistant[39m: [2ma control ...(+80ch)[22m
+      [1m#9[22m [32muser[39m [1m[92m[← cached prefix ends h...[0m
