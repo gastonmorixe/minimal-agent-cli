@@ -6,7 +6,7 @@ import { effectiveDisplayWidth } from "../../terminal/nerd-glyph-width.ts"
 
 import type { Spinner } from "./index.ts"
 import { BlinkingNerdSpinner, SpinnerManager } from "./index.ts"
-import { THINKING_BREATHING, TOOL_SQUARE_PULSE } from "./library/frames.ts"
+import { THINKING_BREATHING, TOOL_DOT_PULSE } from "./library/frames.ts"
 import {
   ICON_DOT_FILLED,
   ICON_PAUSE,
@@ -240,14 +240,14 @@ describe("BlinkingNerdSpinner", () => {
     ])
   })
 
-  it("animated icons (e.g. TOOL_SQUARE_PULSE) stay continuously visible — no off-frame whitespace", () => {
+  it("animated icons (e.g. TOOL_DOT_PULSE) stay continuously visible — no off-frame whitespace", () => {
     // Regression for the "blinking icon I can barely see" bug: the
     // previous `tool.running` default was a static glyph (`▸`) routed
     // through the static-blink branch, which replaces it with whitespace
     // every other 500ms step. Switching to an animated rotor
-    // (TOOL_SQUARE_PULSE) routes through the animated branch, where
+    // (TOOL_DOT_PULSE) routes through the animated branch, where
     // every step renders a frame from the frames[] array. Sample a
-    // 4-frame span (covering 2 full big↔small cycles) at 500ms steps
+    // 4-frame span (covering 2 full ●↔○ cycles) at 500ms steps
     // and assert NONE of them are pure whitespace — i.e. the icon is
     // always visible.
     const spinner = new BlinkingNerdSpinner({
@@ -268,8 +268,8 @@ describe("BlinkingNerdSpinner", () => {
       const frame = spinner.render({ ...base, elapsedMs: step * 500 })
       // Strip any SGR (none in this palette) and assert non-whitespace.
       expect(frame.glyph.trim().length).toBeGreaterThan(0)
-      // And one of the two SQUARE_PULSE frames must be present.
-      expect([ICON_SQUARE_BIG, ICON_SQUARE_SMALL]).toContain(frame.glyph)
+      // And one of the two DOT_BLINK frames must be present.
+      expect(["●", "○"]).toContain(frame.glyph)
     }
   })
 
@@ -324,14 +324,13 @@ describe("DEFAULT_ICON_BY_NOTIFICATION_ID (live-area status defaults)", () => {
     expect(THINKING_BREATHING.steadyColor).toBe(true)
   })
 
-  it("tool.running → big/small square size-pulse (animated, no off-frame blank)", () => {
-    expect(DEFAULT_ICON_BY_NOTIFICATION_ID["tool.running"]).toBe(TOOL_SQUARE_PULSE)
-    expect(isAnimatedIcon(TOOL_SQUARE_PULSE)).toBe(true)
-    // Color advances per frame (no steadyColor) — gives the "lazy
-    // color-and-size pulse" feel.
-    expect(TOOL_SQUARE_PULSE.steadyColor).toBeUndefined()
-    expect(TOOL_SQUARE_PULSE.intervalMs).toBe(500)
-    expect(TOOL_SQUARE_PULSE.frames).toEqual([ICON_SQUARE_BIG, ICON_SQUARE_SMALL])
+  it("tool.running → filled/empty circle blink (animated, no off-frame blank)", () => {
+    expect(DEFAULT_ICON_BY_NOTIFICATION_ID["tool.running"]).toBe(TOOL_DOT_PULSE)
+    expect(isAnimatedIcon(TOOL_DOT_PULSE)).toBe(true)
+    // Same `●` / `○` pair and 1 s frame as the live tool tree rows.
+    expect(TOOL_DOT_PULSE.steadyColor).toBe(true)
+    expect(TOOL_DOT_PULSE.intervalMs).toBe(1000)
+    expect(TOOL_DOT_PULSE.frames).toEqual(["●", "○"])
   })
 
   it("network.request → blinking filled dot (static, rainbow per cycle)", () => {
@@ -360,7 +359,7 @@ describe("DEFAULT_ICON_BY_NOTIFICATION_ID (live-area status defaults)", () => {
     // them aligned so a plugin emitting `category: "tool"` without a
     // notification id still gets the same visual.
     expect(DEFAULT_ICON_BY_CATEGORY.agent).toBe(THINKING_BREATHING)
-    expect(DEFAULT_ICON_BY_CATEGORY.tool).toBe(TOOL_SQUARE_PULSE)
+    expect(DEFAULT_ICON_BY_CATEGORY.tool).toBe(TOOL_DOT_PULSE)
     expect(DEFAULT_ICON_BY_CATEGORY.network).toBe(ICON_DOT_FILLED)
     expect(DEFAULT_ICON_BY_CATEGORY.auth).toBe(NF_LOCK)
     expect(DEFAULT_ICON_BY_CATEGORY.reflection).toBe(ICON_PAUSE)

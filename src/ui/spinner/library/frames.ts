@@ -179,15 +179,17 @@ export const THINKING_BAR_GROW: AnimatedIcon = {
   steadyColor: true,
 }
 
+/** Filled/empty circle blink — the same `●` / `○` pair as the live tool tree. */
+export const DOT_BLINK: readonly string[] = ["●", "○"]
+
 /**
- * Heavy lazy size-pulse for `tool.running`. 500ms per frame → 1 s full
- * `◼ ↔ ◾` cycle. `steadyColor` is intentionally OMITTED so the color
- * advances per frame: at 500ms intervals, `◼` and `◾` each land on a
- * different palette entry, giving a deliberate "lazy color-and-size
- * pulse" that matches the cadence of the legacy static blink (500ms on /
- * 500ms off) but stays continuously visible — no off-frame whitespace.
+ * Circle blink for `tool.running`: `●` then `○`, 1 s per frame (a 2 s
+ * cycle), like the rows of the live tool tree (`ui/status/tool-tree.ts`,
+ * `BLINK_FRAME_MS`). Both glyphs are 1-cell text, so the label does not
+ * move. `steadyColor` is set: the color stays the same for a full cycle.
  */
-export const TOOL_SQUARE_PULSE: AnimatedIcon = {
-  frames: SQUARE_PULSE,
-  intervalMs: 500,
+export const TOOL_DOT_PULSE: AnimatedIcon = {
+  frames: DOT_BLINK,
+  intervalMs: 1000,
+  steadyColor: true,
 }

@@ -50,8 +50,7 @@ export interface NamedSpinnerPreset {
 export const SPINNER_PRESETS: readonly NamedSpinnerPreset[] = [
   {
     id: "default",
-    description:
-      "Breathing dot for thinking, size-pulse `◼ ↔ ◾` for tool.running, rainbow palette.",
+    description: "Breathing dot for thinking, blink `● ↔ ○` for tool.running, rainbow palette.",
     factory: () => new BlinkingNerdSpinner(),
   },
   {
