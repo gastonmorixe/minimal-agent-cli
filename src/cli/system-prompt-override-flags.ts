@@ -50,11 +50,6 @@ const FLAG_NAMES: Readonly<Record<SystemPromptOverridePart, SystemPromptOverride
     fileFlag: "--system-instructions-file",
     noFlag: "--no-system-instructions",
   },
-  loopSafety: {
-    valueFlag: "--system-loop-safety",
-    fileFlag: "--system-loop-safety-file",
-    noFlag: "--no-system-loop-safety",
-  },
   toolOutputConventions: {
     valueFlag: "--system-tool-output-conventions",
     fileFlag: "--system-tool-output-conventions-file",

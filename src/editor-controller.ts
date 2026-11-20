@@ -457,7 +457,7 @@ export class EditorController extends EventEmitter {
   /**
    * The {@link InputCaptureStack} this controller routes ESC through
    * before the hook chain and the abort-quit FSM. Exposed so agent-
-   * side / host-side overlays (reflection cooldown, future confirm
+   * side / host-side overlays (the host countdown, future confirm
    * modals) can `push` onto it without taking a separate import on
    * the singleton — useful for tests that inject a fresh stack.
    */

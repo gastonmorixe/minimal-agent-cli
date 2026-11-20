@@ -901,7 +901,7 @@ export function stringifyUserText(
     // every runtime-injected attachment from the rendered text. The
     // attachment set is broader than mode-change alone : it also
     // includes <short-term-memory>, <ma::plugin::tasks>, <memory-saved>,
-    // and <ma::agent::reflection-checkpoint>, all of which the agent prepends
+    // and other <ma::agent::*> blocks, all of which the agent prepends
     // to user content for model context and which would otherwise leak
     // into scrollback verbatim on `--resume`.
     const to = readModeChangeTo(b)

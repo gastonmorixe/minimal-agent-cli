@@ -785,7 +785,7 @@ describe("EditorController - overlay plugin claims ESC before abort-quit FSM", (
 //
 //   1. A capture pushed onto the stack claims ESC BEFORE the priority-based
 //      hook chain ever runs. (Use case: an agent-side overlay like the
-//      reflection cooldown that has no plugin manifest.)
+//      host countdown that has no plugin manifest.)
 //   2. LIFO: when two captures are stacked, the one pushed LAST wins.
 //   3. Walk order: stack (LIFO) → hook chain (priority) → FSM. Any layer
 //      claiming short-circuits the rest.
@@ -859,7 +859,7 @@ describe("EditorController - InputCaptureStack precedence over hook chain + FSM"
 
   it("LIFO peel-off: each ESC pops the top capture, then FSM aborts", async () => {
     // Mirrors the canonical user scenario: stack is [bottom, top] with
-    // the reflection cooldown on top and a slash-menu-like overlay
+    // the host countdown on top and a slash-menu-like overlay
     // below. Each ESC closes the top capture (which disposes itself);
     // the third ESC sees an empty stack and falls through to the FSM.
     const stack = new InputCaptureStack()

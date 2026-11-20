@@ -341,7 +341,7 @@ describe("replayToScrollback", () => {
     expect(plain).toContain("❯ carry on")
   })
 
-  it("strips a tool_result + <ma::agent::reflection-checkpoint> user turn (no own arrow row)", async () => {
+  it("strips a tool_result + <ma::agent::*> attachment user turn (no own arrow row)", async () => {
     const messages: Message[] = [
       { role: "user", content: [{ type: "text", text: "kick off" }] },
       {
@@ -355,7 +355,7 @@ describe("replayToScrollback", () => {
           {
             type: "text",
             text:
-              '<ma::agent::reflection-checkpoint round="50" cooldown-applied-seconds="60" />\n' +
+              '<ma::agent::example-notice round="50" />\n' +
               "Soft checkpoint, not a stop signal. Briefly consider whether you are still on track.",
           },
         ],
@@ -366,7 +366,7 @@ describe("replayToScrollback", () => {
     await replayToScrollback(messages, sink)
     const plain = stripAnsi(sink.out)
     // Neither the tag nor the prose body sneaks into the scrollback.
-    expect(plain).not.toContain("<ma::agent::reflection-checkpoint")
+    expect(plain).not.toContain("<ma::agent::example-notice")
     expect(plain).not.toContain("Soft checkpoint")
     // The mid-loop user turn renders no own arrow row (it's a
     // tool_result + attachment pairing with no user payload).

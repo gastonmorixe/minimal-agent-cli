@@ -85,15 +85,15 @@ Why this exists (and why it's not the `editor.key` hook chain):
 |---|---|
 | **Durable** subscribers - lifetime spans the session | **Transient** captures - open and close mid-session |
 | Static `priority` declared once at registration | LIFO: top of stack claims first |
-| Plugins with manifest entries | Reflection cooldown, confirm modals, no manifest |
-| Examples: history, slash-menu, autocomplete | Reflection cooldown (~60s mid-turn), future "save changes? [y/N]" |
+| Plugins with manifest entries | Host countdown, confirm modals, no manifest |
+| Examples: history, slash-menu, autocomplete | Host countdown (`ctx.countdown`, some seconds mid-turn), future "save changes? [y/N]" |
 
 Two overlays may be open at once. The one that opened LAST should close FIRST. A priority chain can't express "most recently pushed" without ad-hoc fiddling. The stack is the smallest abstraction that gets this right.
 
 Safety contract (from the source):
 
 - **Single source of truth**: module-level singleton `inputCaptureStack` shared by `EditorController` (consumer) and any push-side caller. Tests construct a fresh `InputCaptureStack` and inject it.
-- **Out-of-order release is safe**: removing a capture from the middle of the stack does not disturb the others. Needed when the slash-menu was below the reflection cooldown but the user pressed Enter on the menu (closing it) before the cooldown elapsed.
+- **Out-of-order release is safe**: removing a capture from the middle of the stack does not disturb the others. Needed when the slash-menu was below the host countdown but the user pressed Enter on the menu (closing it) before the countdown elapsed.
 - **Handler errors are absorbed**: a throwing handler is logged (best-effort) and treated as "did not claim", so a buggy capture cannot trap subsequent ones or wedge the dispatch loop.
 
 ## Stage 4: `editor.key` hook chain

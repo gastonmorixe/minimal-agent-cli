@@ -136,7 +136,6 @@ function buildCore(): AgentCore {
     systemPromptOverrides: {
       identity: { kind: "replace", text: "You are a test agent." },
       instructions: { kind: "omit" },
-      loopSafety: { kind: "omit" },
       toolOutputConventions: { kind: "omit" },
     },
     retry: { clock: { now: () => Date.now(), sleep: async () => {} }, random: () => 0 },

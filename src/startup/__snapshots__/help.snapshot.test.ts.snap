@@ -143,10 +143,6 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
                                         (also --system-instructions-file <path>,
                                         --no-system-instructions; env:
                                         MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
-      --system-loop-safety <text>       Replace the loop-safety paragraph (also
-                                        --system-loop-safety-file <path>,
-                                        --no-system-loop-safety; env:
-                                        MINIMAL_AGENT_SYSTEM_LOOP_SAFETY)
       --system-tool-output-conventions <text>
           Replace the tool-output-conventions paragraph (also
           --system-tool-output-conventions-file <path>,
@@ -399,8 +395,6 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
                                                --no-system-identity; env: MINIMAL_AGENT_SYSTEM_IDENTITY)
       --system-instructions <text>             Replace the base instructions block (also --system-instructions-file
                                                <path>, --no-system-instructions; env: MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
-      --system-loop-safety <text>              Replace the loop-safety paragraph (also --system-loop-safety-file <path>,
-                                               --no-system-loop-safety; env: MINIMAL_AGENT_SYSTEM_LOOP_SAFETY)
       --system-tool-output-conventions <text>  Replace the tool-output-conventions paragraph (also
                                                --system-tool-output-conventions-file <path>,
                                                --no-system-tool-output-conventions; env:

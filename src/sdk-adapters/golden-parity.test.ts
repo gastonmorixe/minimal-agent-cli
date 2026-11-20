@@ -16,7 +16,6 @@
  *   1. A plain multi-chunk text turn (no tools).
  *   2. A tool-using turn (round 1 = tool_use, round 2 = final text), which
  *      drives the ToolExecutorAdapter's verbatim `executeToolRound` reuse.
- *   3. A reflection-ack turn (the ack tag is stripped from the yielded text).
  *
  * The transport is scripted per-round and created fresh for each run, so the
  * engine sees the same responses regardless of how it assembles the request.
@@ -124,23 +123,5 @@ describe("G1 — golden final answer (AgentCore+adapters)", () => {
     }
     const core = await runCore(makeScript(), widgetLoader("hello"), "use the widget")
     expect(core).toBe("Widget said hello.")
-  })
-
-  it("reflection-ack text is stripped from the golden answer", async () => {
-    const script: SendFn = async function* () {
-      const body = 'Working. <ma::agent::reflection-ack silence-for="2" reason="batch" /> Done.'
-      yield body
-      return {
-        blocks: [{ type: "text" as const, text: body }],
-        text: body,
-        stopReason: "end_turn",
-      } as StreamedResponse
-    }
-    const core = await runCore(script, null, "go")
-    // The ack tag is stripped from the yielded answer.
-    expect(core).not.toContain("reflection-ack")
-    // Golden: the bytes the legacy Agent also produced (the tag's two
-    // surrounding spaces both survive the strip).
-    expect(core).toBe("Working.  Done.")
   })
 })

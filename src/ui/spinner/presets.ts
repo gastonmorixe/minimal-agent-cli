@@ -25,7 +25,7 @@ export const DEFAULT_NERD_ICON: IconSpec = ICON_DOT_SMALL
  *                                  at 1 s per frame (as the tool tree)
  * - `network.request`           → blinking filled dot `●` (rainbow per cycle)
  * - `auth.refresh`              → blinking `nf-md-lock` (rainbow per cycle)
- * - `agent.reflection-cooldown` → blinking pause `⏸` (rainbow per cycle)
+ * - `host.countdown`            → blinking pause `⏸` (rainbow per cycle)
  *
  * Design notes:
  *
@@ -45,9 +45,9 @@ export const DEFAULT_NERD_ICON: IconSpec = ICON_DOT_SMALL
  *   the same for a full cycle (`steadyColor`). The glyph stays visible —
  *   no off-frame whitespace.
  *
- * - `agent.reflection-cooldown` previously fell through to the
- *   `DEFAULT_NERD_ICON` (`·`) because no notification-id OR category
- *   mapping existed. Now mapped to `ICON_PAUSE` (`⏸`).
+ * - `host.countdown` (the host countdown row of `src/host-countdown.ts`)
+ *   maps to `ICON_PAUSE` (`⏸`), not to the `DEFAULT_NERD_ICON` (`·`)
+ *   fallback.
  *
  * - `auth.refresh` is the only remaining NF-PUA dependency
  *   (`NF_LOCK` = U+F033E). It renders correctly on Nerd Font Mono setups
@@ -61,7 +61,7 @@ export const DEFAULT_ICON_BY_NOTIFICATION_ID: Readonly<Record<string, IconSpec>>
   "tool.running": TOOL_DOT_PULSE,
   "network.request": ICON_DOT_FILLED,
   "auth.refresh": NF_LOCK,
-  "agent.reflection-cooldown": ICON_PAUSE,
+  "host.countdown": ICON_PAUSE,
 }
 
 export const DEFAULT_ICON_BY_CATEGORY: Readonly<Record<string, IconSpec>> = {
@@ -69,5 +69,5 @@ export const DEFAULT_ICON_BY_CATEGORY: Readonly<Record<string, IconSpec>> = {
   tool: TOOL_DOT_PULSE,
   network: ICON_DOT_FILLED,
   auth: NF_LOCK,
-  reflection: ICON_PAUSE,
+  countdown: ICON_PAUSE,
 }

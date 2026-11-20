@@ -19,6 +19,20 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ## [Unreleased]
 
+### Removed
+
+- 2026-11-20: **Breaking: the loop-safety flags and the reflection cooldown
+  are removed.** Core removed the reflection checkpoint and the `loopSafety`
+  system prompt slot. A plugin (disabled by default) will add the feature
+  again later.
+  - The flags `--system-loop-safety`, `--system-loop-safety-file` and
+    `--no-system-loop-safety` are removed. The CLI now rejects them as
+    unknown flags. The env vars `MINIMAL_AGENT_SYSTEM_LOOP_SAFETY(_FILE)` and
+    the config keys `systemPrompt.loopSafety(File)` have no effect.
+  - The CLI no longer shows a cooldown row at a checkpoint, and no longer
+    shows the `reflection ack` notice. `src/reflection-cooldown.ts` is
+    removed.
+
 ### Changed
 
 - 2026-11-20: **Live tool tree: every running tool call shows in the live
@@ -168,6 +182,14 @@ terminal client is being moved out of `minimal-agent-core` into this repo
   `strip` by default.
 
 ### Added
+
+- 2026-11-20: **Generic host countdown for plugins**
+  (`src/host-countdown.ts`). The CLI gives the plugin loader its own
+  `countdown` (`PluginLoaderOptions.countdown`). When a hook handler calls
+  `ctx.countdown({ id, label, ms, signal })`, the live area shows
+  `⏸ <label> · Ns remaining · press Esc to skip`. Esc ends the wait with
+  `"skipped"` and the turn continues. An abort of `signal` gives
+  `"aborted"`. The end of the time gives `"elapsed"`.
 
 - 2026-11-19: **New `sessions` list and detail view**
   (`src/commands/sessions.ts`, `src/commands/sessions-detail.ts`,

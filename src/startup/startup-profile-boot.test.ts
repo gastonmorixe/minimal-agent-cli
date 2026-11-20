@@ -86,13 +86,11 @@ describe("buildStartupProfile", () => {
     const p = buildStartupProfile({
       ...BASE_INPUT,
       systemPrompt: {
-        loopSafety: { kind: "omit" },
         providerPreamble: { kind: "replace", text: "file contents" },
         unsafeProviderOverrides: true,
       },
     })
     expect(p.systemPrompt).toEqual({
-      loopSafety: { kind: "omit" },
       providerPreamble: { kind: "replace", text: "file contents" },
       unsafeProviderOverrides: true,
     })

@@ -20,7 +20,6 @@ import type { DumpBlockRef } from "../../logging/request-dump-model.ts"
 export type SystemSlotId =
   | "identity"
   | "instructions"
-  | "loopSafety"
   | "toolOutputConventions"
   | "afterInstructions"
   | "sessionContext"

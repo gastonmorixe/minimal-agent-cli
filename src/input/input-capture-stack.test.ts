@@ -4,8 +4,8 @@
  * The stack is small but the contract has teeth: LIFO precedence,
  * out-of-order disposer release, throw absorption, dispatch-snapshot
  * stability. Each of those needs a guard so future refactors don't
- * silently regress the contract that EditorController + reflection
- * cooldown rely on.
+ * silently regress the contract that EditorController + the host
+ * countdown rely on.
  */
 import { describe, expect, it } from "bun:test"
 
@@ -138,9 +138,9 @@ describe("InputCaptureStack — disposers", () => {
   })
 
   it("out-of-order dispose: removing a mid-stack entry leaves the others intact", () => {
-    // This mirrors the real scenario: slash-menu is BELOW the reflection
-    // cooldown, the user presses Enter on the menu (closing it) BEFORE
-    // the cooldown's timer elapses. The menu's disposer fires while
+    // This mirrors the real scenario: slash-menu is BELOW the host
+    // countdown, the user presses Enter on the menu (closing it) BEFORE
+    // the countdown's timer elapses. The menu's disposer fires while
     // it's not at the top.
     const s = new InputCaptureStack()
     const calls: string[] = []

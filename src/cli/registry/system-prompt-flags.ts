@@ -54,12 +54,6 @@ const PARTS: readonly SystemPromptPartData[] = [
     summary: "Replace the base instructions block",
   },
   {
-    flag: "system-loop-safety",
-    env: "MINIMAL_AGENT_SYSTEM_LOOP_SAFETY",
-    fileEnv: "MINIMAL_AGENT_SYSTEM_LOOP_SAFETY_FILE",
-    summary: "Replace the loop-safety paragraph",
-  },
-  {
     flag: "system-tool-output-conventions",
     env: "MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS",
     fileEnv: "MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS_FILE",

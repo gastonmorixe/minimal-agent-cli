@@ -66,7 +66,6 @@ async function runCli(prompt: string, extraArgs: string[] = []) {
       "--no-plugin-prompts",
       "--no-system-instructions",
       "--no-agents-md",
-      "--no-system-loop-safety",
       "--no-system-tool-output-conventions",
       "--no-color",
       ...extraArgs,
