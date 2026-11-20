@@ -51,7 +51,7 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
       --thinking-display <mode>  Force the thinking display mode (one of:
                                  summarized, omitted; env:
                                  MINIMAL_AGENT_THINKING_DISPLAY)
-      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 5m; env:
+      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 1h; env:
                                  MINIMAL_AGENT_CACHE_TTL)
       --service-tier <tier>      Provider service tier: auto, default, flex,
                                  scale, priority (env:
@@ -342,7 +342,7 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
       -F, --fast                 Fast-mode dispatch on fast-capable models (env: MINIMAL_AGENT_FAST)
       --thinking-display <mode>  Force the thinking display mode (one of: summarized, omitted; env:
                                  MINIMAL_AGENT_THINKING_DISPLAY)
-      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 5m; env: MINIMAL_AGENT_CACHE_TTL)
+      --cache-ttl <5m|1h>        Prompt-cache breakpoint TTL (default: 1h; env: MINIMAL_AGENT_CACHE_TTL)
       --service-tier <tier>      Provider service tier: auto, default, flex, scale, priority (env:
                                  MINIMAL_AGENT_SERVICE_TIER)
       --credential-name <name>   Select a stored credential by name (env: MINIMAL_AGENT_CREDENTIAL_NAME)

@@ -107,7 +107,7 @@ const MODEL_FLAGS: readonly FlagSpec[] = [
     value: "required",
     valueName: "5m|1h",
     choices: ["5m", "1h"],
-    default: "5m",
+    default: "1h",
     env: "MINIMAL_AGENT_CACHE_TTL",
     summary: "Prompt-cache breakpoint TTL",
     description: ["Else the env value, then the config key cacheTtl."],
