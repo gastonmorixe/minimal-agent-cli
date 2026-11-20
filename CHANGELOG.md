@@ -6,7 +6,7 @@ status: living
 scope: cli
 working-dir: "."
 created-at: "2026-08-07T13:45:26-0400"
-updated-at: "2026-11-19T00:00:00-0500"
+updated-at: "2026-11-20T00:00:00-0500"
 format: "Keep a Changelog (pragmatic, date-stamped)"
 ---
 
@@ -20,6 +20,32 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 ## [Unreleased]
 
 ### Changed
+
+- 2026-11-20: **Concurrent tool calls: waves, one status row, default cap
+  10.** Requires core `baf21e72` (branch `concurrent-tool-calls`). Terms:
+  `GLOSSARY.md` (wave, concurrency-safe, concurrency cap).
+  - Transcript: a call in a wave (core sets `started.concurrent`) keeps its
+    rows and writes them as one block when the call ends, so the blocks
+    come in end order. The block header shows the start time of the call.
+    A solo call and a `Bash` call do not change: their rows show live.
+  - Status row (decision A): while 2 or more calls run, the status row
+    shows one line, for example `Running N tools · Fetch ×7 · (12s)`, with
+    the timer of the oldest call that still runs and the tool names in the
+    order they first started. With one call, the row is the same as
+    before. A modal still pauses the timer. The decoration band does not
+    change. The group row has the new notification id `tool.group`
+    (`TOOL_GROUP_NOTIFICATION_ID`); a single call keeps `tool.running`.
+  - `createStatusPort(bus, opts?)` takes an optional `{ now }` clock for
+    the start time of each call (default `Date.now`).
+  - Concurrency cap: the CLI resolves it once at startup with core's
+    resolver: env `MINIMAL_AGENT_MAX_CONCURRENT_TOOL_CALLS` > config.jsonc
+    `maxConcurrentToolCalls` > the CLI default 10
+    (`CLI_DEFAULT_MAX_CONCURRENT_TOOL_CALLS`,
+    `src/config/concurrency-cap.ts`). It gives the value to the
+    interactive, event-stream and ACP host routes. The SDK default in core
+    stays 1; the CLI default is 10. Sub-agent workers are CLI processes,
+    so each worker resolves its own cap. To get the old serial loop, set
+    the env or the config value to 1.
 
 - 2026-11-19: **`ma sessions` shows the saved session title.** A title
   that a user or the title plugin saved in `index-meta.jsonl` replaces the
