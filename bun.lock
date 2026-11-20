@@ -5,7 +5,7 @@
     "": {
       "name": "minimal-agent-cli",
       "dependencies": {
-        "@minimal-agent/core": "git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#874db827f25d59dfb4599f0e12eee8c3d1db7589",
+        "@minimal-agent/core": "git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#d217eff82d277dac065f27d68bc875fa184b1aed",
       },
       "devDependencies": {
         "@biomejs/biome": "2.6.6",
@@ -130,7 +130,7 @@
 
     "@minimal-agent/config": ["@minimal-agent/config@git+ssh://git@github.com/gastonmorixe/minimal-agent-config.git#802b50afdd9c63b508b8ae3a6ee83efd366cb9da", { "peerDependencies": { "@biomejs/biome": "2.6.6", "oxlint": "1.92.0", "oxlint-tsgolint": "7.0.2006", "typescript": "7.0.2" }, "optionalPeers": ["typescript"] }, "802b50afdd9c63b508b8ae3a6ee83efd366cb9da"],
 
-    "@minimal-agent/core": ["@minimal-agent/core@git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#874db827f25d59dfb4599f0e12eee8c3d1db7589", { "hasInstallScript": true }, "874db827f25d59dfb4599f0e12eee8c3d1db7589"],
+    "@minimal-agent/core": ["@minimal-agent/core@git+ssh://git@github.com/gastonmorixe/minimal-agent-core.git#d217eff82d277dac065f27d68bc875fa184b1aed", { "hasInstallScript": true }, "d217eff82d277dac065f27d68bc875fa184b1aed"],
 
     "@oxlint-tsgolint/darwin-arm64": ["@oxlint-tsgolint/darwin-arm64@7.0.2006", "", { "os": "darwin", "cpu": "arm64" }, "sha512-uc0MEHXZUDW23Zmo5X28eSNeSnP17jKnh9GiehpVZqhfy99ks8spyXT5Llar3tjDN7ppnQN0Qd9FK6WNkdD+fQ=="],
 
