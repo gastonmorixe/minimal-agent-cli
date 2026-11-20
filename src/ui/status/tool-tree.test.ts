@@ -11,6 +11,7 @@ import {
   BLINK_FRAME_MS,
   blinkDot,
   cutMiddle,
+  formatToolLimit,
   formatToolTime,
   renderToolTree,
   shortTarget,
@@ -61,6 +62,16 @@ describe("formatToolTime", () => {
     expect(formatToolTime(12_900)).toBe("12s")
     expect(formatToolTime(64_000)).toBe("1m04s")
     expect(formatToolTime(3_720_000)).toBe("1h02m")
+  })
+})
+
+describe("formatToolLimit", () => {
+  it("shows a limit without a zero last part, and ms below one second", () => {
+    expect(formatToolLimit(200)).toBe("200ms")
+    expect(formatToolLimit(45_000)).toBe("45s")
+    expect(formatToolLimit(90_000)).toBe("1m30s")
+    expect(formatToolLimit(120_000)).toBe("2m")
+    expect(formatToolLimit(600_000)).toBe("10m")
   })
 })
 
@@ -327,6 +338,108 @@ describe("one call", () => {
     h.tracker.queue("b", "Read", { file_path: "x" })
     h.tracker.start("a", "Bash", { command: "ls" }, false)
     expect(h.plain()).toHaveLength(1)
+  })
+})
+
+describe("Bash time limit", () => {
+  /** The plain rows with every dot as `○`: the blink is not the subject here. */
+  const still = (rows: string[]): string[] => rows.map((row) => row.replace(/●/g, "○"))
+
+  it("one call: shows the elapsed time and the default limit", () => {
+    const h = harness()
+    h.start("a", "Bash", { command: "bun test" }, false)
+    h.clock.now += 10_000
+    expect(still(h.plain())).toEqual(["○ Running » Bash  bun test · 10s / 2m"])
+    // Dim, as the elapsed time of the other tools.
+    expect(h.render()[0]).toEndWith("\x1b[2m · 10s / 2m\x1b[22m")
+  })
+
+  it("one call: shows the limit at once, in the first second", () => {
+    const h = harness()
+    h.start("a", "Bash", { command: "bun test" }, false)
+    expect(still(h.plain())).toEqual(["○ Running » Bash  bun test · timeout 2m"])
+    h.clock.now += 999
+    expect(still(h.plain())).toEqual(["○ Running » Bash  bun test · timeout 2m"])
+    h.clock.now += 1
+    expect(still(h.plain())).toEqual(["○ Running » Bash  bun test · 1s / 2m"])
+  })
+
+  it("one call: uses the limit of the input, with the rules of core", () => {
+    const limitOf = (timeout: unknown): string => {
+      const h = harness()
+      h.start("a", "Bash", { command: "x", timeout }, false)
+      h.clock.now += 5000
+      return still(h.plain())[0] ?? ""
+    }
+    expect(limitOf(30_000)).toBe("○ Running » Bash  x · 5s / 30s")
+    expect(limitOf(90_000)).toBe("○ Running » Bash  x · 5s / 1m30s")
+    // Above the maximum: core decreases it to 10 minutes.
+    expect(limitOf(3_600_000)).toBe("○ Running » Bash  x · 5s / 10m")
+    // 0, a negative value and a non-number: the default. No "no limit".
+    expect(limitOf(0)).toBe("○ Running » Bash  x · 5s / 2m")
+    expect(limitOf(-1)).toBe("○ Running » Bash  x · 5s / 2m")
+    expect(limitOf("abc")).toBe("○ Running » Bash  x · 5s / 2m")
+  })
+
+  it("one call: the longer suffix stays inside the width, and the target gives way", () => {
+    const h = harness()
+    h.start("a", "Bash", { command: `cd /some/long/path && ${"bun test ".repeat(20)}` }, false)
+    h.clock.now += 10_000
+    for (const columns of [80, 50, 40, 30]) {
+      const [row = ""] = h.plain({ columns })
+      expect(effectiveDisplayWidth(row), String(columns)).toBeLessThan(columns)
+      expect(row, String(columns)).toEndWith(" · 10s / 2m")
+    }
+    // No room for the limit: the suffix is the elapsed time only, as before.
+    expect(still(h.plain({ columns: 24 }))).toEqual(["○ Running » Bash · 10s"])
+  })
+
+  it("a row of the tree: a Bash row always shows its time and limit", () => {
+    const h = harness()
+    h.start("a", "Bash", { command: "bun test", timeout: 300_000 })
+    h.start("b", "Read", { file_path: "src/x.ts" })
+    const first = still(h.plain({ columns: 40 }))
+    expect(first[0]).toBe("○ Running 2 tools")
+    expect(first[1]).toMatch(/^├ ○ » Bash  bun test +timeout 5m$/)
+    expect(first[2]).toBe("╰ ○ • Read  src/x.ts")
+    h.clock.now += 10_000
+    const rows = still(h.plain({ columns: 40 }))
+    expect(rows[0]).toBe("○ Running 2 tools · 10s")
+    expect(rows[1]).toMatch(/^├ ○ » Bash  bun test +10s \/ 5m$/)
+    expect(rows[2]).toBe("╰ ○ • Read  src/x.ts")
+    // The time is at the right edge, dim.
+    expect(effectiveDisplayWidth(rows[1] ?? "")).toBe(39)
+    expect(h.render({ columns: 40 })[1]).toEndWith("\x1b[2m10s / 5m\x1b[22m")
+  })
+
+  it("a row of the tree: stays inside the width, and shows no timer growth while paused", () => {
+    const h = harness()
+    h.start("a", "Bash", { command: `echo ${"long ".repeat(40)}` })
+    h.start("b", "Read", { file_path: "src/x.ts" })
+    h.clock.now += 10_000
+    for (const columns of [80, 50, 30]) {
+      const row = h.plain({ columns })[1] ?? ""
+      expect(effectiveDisplayWidth(row), String(columns)).toBeLessThan(columns)
+      expect(row, String(columns)).toEndWith("10s / 2m")
+    }
+    const paused = h.plain({ columns: 50, paused: true })[1] ?? ""
+    expect(paused).toEndWith("timeout 2m")
+    expect(effectiveDisplayWidth(paused)).toBeLessThan(50)
+  })
+
+  it("the other tools do not change, also with a `timeout` input", () => {
+    const h = harness()
+    h.start("a", "Fetch", { url: "https://a.com", timeout: 5000 }, false)
+    expect(still(h.plain())).toEqual(["○ Running ⤓ Fetch  a.com"])
+    h.clock.now += 10_000
+    expect(still(h.plain())).toEqual(["○ Running ⤓ Fetch  a.com · 10s"])
+    h.start("b", "Read", { file_path: "src/x.ts" })
+    h.clock.now += 1000
+    expect(still(h.plain())).toEqual([
+      "○ Running 2 tools · 11s",
+      "├ ○ ⤓ Fetch  a.com",
+      expect.stringMatching(/^╰ ○ • Read   src\/x\.ts +1s$/),
+    ])
   })
 })
 
