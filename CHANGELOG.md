@@ -21,6 +21,13 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Changed
 
+- 2026-11-20: **The cache-break row has the warning color for every break.**
+  Before, an expected break (for example `ttl expired`) had a sky `◇` and
+  `cache` label, which looked cyan, and only an actionable break was gold.
+  Now both kinds use the warning color (gold, as the `⚠ warn` block of the
+  scrollback sink). The glyph still tells them apart: `◇` with a dim body
+  is expected, `◆` with a normal body is actionable
+  (`src/ui/status/cache-break-row.ts`).
 - 2026-11-20: **Concurrent tool calls: waves, one status row, default cap
   10.** Requires core `baf21e72` (branch `concurrent-tool-calls`). Terms:
   `GLOSSARY.md` (wave, concurrency-safe, concurrency cap).

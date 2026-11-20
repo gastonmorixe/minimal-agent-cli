@@ -13,10 +13,12 @@
  *   ◇ cache rewrote 26,426 tok · ttl expired · idle 63 min \> 5 min TTL · turn 5 · 16:49:36
  *   ◆ cache rewrote 30,000 tok · tools changed · turn 7 · 2 in a row, 52,000 tok · 16:50:02
  *
- * Expected breaks (`actionable === false`) use a hollow sky `◇` and a dim
- * body. Actionable breaks (a client change, a likely server miss) use a
- * solid gold `◆`, the warning color of the scrollback sink. The timestamp
- * is dim, as in the sink's block head.
+ * Every row uses the warning color (gold, the color of the scrollback sink)
+ * for the glyph and the `cache` label. The glyph and the body tell the two
+ * kinds apart: an expected break (`actionable === false`) has a hollow `◇`
+ * and a dim body. An actionable break (a client change, a likely server
+ * miss) has a solid `◆` and a normal body. The timestamp is dim, as in the
+ * sink's block head.
  *
  * # Relation to the `⚠ warn cache.anomaly` block
  *
@@ -154,7 +156,10 @@ export interface CacheBreakRowOptions {
  * @param opts - The fallback time and the terminal width.
  */
 export function formatCacheBreakRow(p: CacheBreakPayload, opts: CacheBreakRowOptions = {}): string {
-  const color = p.actionable ? PALETTE.gold : PALETTE.sky
+  // Every break row is a warning, so it has the warning color (gold), as the
+  // scrollback sink has. The glyph and the body tell an expected break from
+  // an actionable one.
+  const color = PALETTE.gold
   const glyph = p.actionable ? "◆" : "◇"
 
   const parts: string[] = [`rewrote ${formatTokens(p.lost)} tok`, causeText(p)]

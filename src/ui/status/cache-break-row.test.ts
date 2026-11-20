@@ -51,10 +51,26 @@ describe("formatCacheBreakRow", () => {
     expect(stripAnsi(row)).toBe(
       `  ◇ cache rewrote 48,213 tok · ttl expired · idle 63 min > 5 min TTL · turn 5 · ${formatScrollbackTs(AT)}`,
     )
-    // Expected: sky, not gold.
-    expect(row).toContain(PALETTE.sky)
-    expect(row).not.toContain(PALETTE.gold)
+    // The warning color (gold), as the scrollback sink. Never sky.
+    expect(row).toContain(`${PALETTE.gold}◇`)
+    expect(row).toContain(`${PALETTE.gold}cache`)
+    expect(row).not.toContain(PALETTE.sky)
     expect(row).not.toContain("\n")
+  })
+
+  test("an expected row and an actionable row have the same warning color", () => {
+    const expected = formatCacheBreakRow(ttlExpired())
+    const actionable = formatCacheBreakRow(
+      ttlExpired({ cause: "server_miss", idle: false, actionable: true }),
+    )
+    for (const row of [expected, actionable]) {
+      expect(row).toContain(`${PALETTE.gold}cache`)
+      expect(row).not.toContain(PALETTE.sky)
+      expect(row).not.toContain(PALETTE.cyan)
+    }
+    // Only the glyph tells the two kinds apart.
+    expect(stripAnsi(expected)).toContain("◇ cache")
+    expect(stripAnsi(actionable)).toContain("◆ cache")
   })
 
   test("prefix_changed: names the changed part, and idle", () => {
