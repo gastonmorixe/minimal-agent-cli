@@ -10,7 +10,7 @@
  * @module spinner/presets
  */
 
-import { THINKING_BREATHING, TOOL_SQUARE_PULSE } from "./library/frames.ts"
+import { THINKING_BREATHING, TOOL_DOT_PULSE } from "./library/frames.ts"
 import { ICON_DOT_FILLED, ICON_DOT_SMALL, ICON_PAUSE, NF_LOCK } from "./library/icons.ts"
 import type { IconSpec } from "./types.ts"
 
@@ -21,8 +21,8 @@ export const DEFAULT_NERD_ICON: IconSpec = ICON_DOT_SMALL
  * Ships:
  * - `agent.thinking`            → breathing dot `· ∙ • ● • ∙` at 160ms
  *                                  (`steadyColor`: 1 hue per full breath)
- * - `tool.running`              → big/small square size-pulse `◼ ↔ ◾`
- *                                  at 500ms, rainbow per frame
+ * - `tool.running`              → filled/empty circle blink `● ↔ ○`
+ *                                  at 1 s per frame (as the tool tree)
  * - `network.request`           → blinking filled dot `●` (rainbow per cycle)
  * - `auth.refresh`              → blinking `nf-md-lock` (rainbow per cycle)
  * - `agent.reflection-cooldown` → blinking pause `⏸` (rainbow per cycle)
@@ -30,7 +30,7 @@ export const DEFAULT_NERD_ICON: IconSpec = ICON_DOT_SMALL
  * Design notes:
  *
  * - Two animation modes coexist. Animated rotors (`THINKING_BREATHING`,
- *   `TOOL_SQUARE_PULSE`) cycle through frames continuously — the motion
+ *   `TOOL_DOT_PULSE`) cycle through frames continuously — the motion
  *   IS the heartbeat. Static glyphs (`ICON_DOT_FILLED`, `NF_LOCK`,
  *   `ICON_PAUSE`) go through `BlinkingNerdSpinner`'s static branch and
  *   blink on/off at 500ms with the rainbow palette rotating per on-cycle.
@@ -40,11 +40,10 @@ export const DEFAULT_NERD_ICON: IconSpec = ICON_DOT_SMALL
  *   (6 × 160ms = 960ms per color), not per frame — calmer cadence to
  *   match the meditative reading of "Thinking…".
  *
- * - `tool.running` omits `steadyColor` on `TOOL_SQUARE_PULSE` so the
- *   color advances per frame: at 500ms intervals `◼` and `◾` each land on
- *   a different palette entry. Cadence intentionally matches the legacy
- *   static-blink rhythm (500ms beats), but the glyph stays continuously
- *   visible — no off-frame whitespace.
+ * - `tool.running` uses `TOOL_DOT_PULSE`: `●` then `○`, 1 s per frame,
+ *   the same blink as the rows of the live tool tree. The color stays
+ *   the same for a full cycle (`steadyColor`). The glyph stays visible —
+ *   no off-frame whitespace.
  *
  * - `agent.reflection-cooldown` previously fell through to the
  *   `DEFAULT_NERD_ICON` (`·`) because no notification-id OR category
@@ -59,7 +58,7 @@ export const DEFAULT_NERD_ICON: IconSpec = ICON_DOT_SMALL
  */
 export const DEFAULT_ICON_BY_NOTIFICATION_ID: Readonly<Record<string, IconSpec>> = {
   "agent.thinking": THINKING_BREATHING,
-  "tool.running": TOOL_SQUARE_PULSE,
+  "tool.running": TOOL_DOT_PULSE,
   "network.request": ICON_DOT_FILLED,
   "auth.refresh": NF_LOCK,
   "agent.reflection-cooldown": ICON_PAUSE,
@@ -67,7 +66,7 @@ export const DEFAULT_ICON_BY_NOTIFICATION_ID: Readonly<Record<string, IconSpec>>
 
 export const DEFAULT_ICON_BY_CATEGORY: Readonly<Record<string, IconSpec>> = {
   agent: THINKING_BREATHING,
-  tool: TOOL_SQUARE_PULSE,
+  tool: TOOL_DOT_PULSE,
   network: ICON_DOT_FILLED,
   auth: NF_LOCK,
   reflection: ICON_PAUSE,
