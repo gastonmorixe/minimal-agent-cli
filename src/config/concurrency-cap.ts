@@ -23,7 +23,7 @@ import {
  * The CLI default of the concurrency cap. It applies when the env value and
  * the config value are both absent or not valid.
  */
-export const CLI_DEFAULT_MAX_CONCURRENT_TOOL_CALLS = 1
+export const CLI_DEFAULT_MAX_CONCURRENT_TOOL_CALLS = 10
 
 /**
  * Give the concurrency cap of this CLI process. `env` is the process env;

@@ -35,8 +35,13 @@ describe("resolveCliMaxConcurrentToolCalls", () => {
     expect(resolveCliMaxConcurrentToolCalls({ [ENV]: "1" }, undefined, 10)).toBe(1)
   })
 
-  it("the CLI default is 1 now (the serial loop, today's events)", () => {
-    expect(CLI_DEFAULT_MAX_CONCURRENT_TOOL_CALLS).toBe(1)
+  it("the CLI default is 10 (core's SDK default stays 1)", () => {
+    expect(CLI_DEFAULT_MAX_CONCURRENT_TOOL_CALLS).toBe(10)
+    expect(resolveCliMaxConcurrentToolCalls({}, undefined)).toBe(10)
+  })
+
+  it("config 1 wins over the CLI default (the serial loop on request)", () => {
+    expect(resolveCliMaxConcurrentToolCalls({}, 1)).toBe(1)
   })
 })
 
