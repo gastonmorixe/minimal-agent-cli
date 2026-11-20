@@ -147,7 +147,7 @@ describe("root help model (M-8d, spec 8.4)", () => {
     const by = (term: string): string | undefined => rows.find((r) => r.term === term)?.summary
     expect(by("-m, --model <id>")).toBe("Select the model (env: MINIMAL_AGENT_MODEL)")
     expect(by("--cache-ttl <5m|1h>")).toBe(
-      "Prompt-cache breakpoint TTL (default: 5m; env: MINIMAL_AGENT_CACHE_TTL)",
+      "Prompt-cache breakpoint TTL (default: 1h; env: MINIMAL_AGENT_CACHE_TTL)",
     )
     expect(by("--system-identity <text>")).toBe(
       "Replace the neutral identity block (also --system-identity-file <path>, " +
