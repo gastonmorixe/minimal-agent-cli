@@ -48,6 +48,8 @@ terminal client is being moved out of `minimal-agent-core` into this repo
   - The row of a call goes away in the same frame as its block reaches the
     scrollback (`EditorController.beginFrame` / `endFrame`).
   - The stray `·` before the first timer tick is gone.
+  - Known limit: in a terminal that draws East Asian Ambiguous characters
+    wide, the tool tree rows can shift.
   - Code: `src/ui/status/tool-calls.ts` (`ToolCallTracker`, the one source of
     truth for the open calls), `src/ui/status/tool-tree.ts` (pure rendering),
     `LiveAreaStatusController` option `toolTree`. `EditorController.setStatus`
