@@ -9,6 +9,7 @@ import { afterAll, describe, expect, test } from "bun:test"
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { createSessionsReadApi } from "@minimal-agent/core/host/sessions-read"
+import { testSideband as sb, sidebandFixturePresent } from "../test-utils/sideband-fixture.ts"
 import { fixtures } from "./__fixtures__/session-dump-fixtures.ts"
 import { formatSessionAsMarkdown, formatSessionAsXml } from "./session-dump.ts"
 
@@ -23,12 +24,13 @@ const api = createSessionsReadApi({ dir })
 async function render(sid: string, format: "markdown" | "xml"): Promise<string> {
   const r = await api.records(sid)
   if (!r) return ""
-  return format === "xml" ? formatSessionAsXml(r) : formatSessionAsMarkdown(r)
+  return format === "xml" ? formatSessionAsXml(r, sb) : formatSessionAsMarkdown(r, sb)
 }
 
 const goldenPath = (sid: string) => join(import.meta.dir, "__fixtures__", `dump-${sid}.golden.json`)
 
-describe.each(Object.keys(fixtures))("dump parity: %s", (sid) => {
+// The codec renders the data-URI stubs: the goldens need the real codec.
+describe.skipIf(!sidebandFixturePresent()).each(Object.keys(fixtures))("dump parity: %s", (sid) => {
   test("markdown is byte-equal to golden", async () => {
     const g = JSON.parse(readFileSync(goldenPath(sid), "utf8")) as { markdown: string; xml: string }
     expect(await render(sid, "markdown")).toBe(g.markdown)

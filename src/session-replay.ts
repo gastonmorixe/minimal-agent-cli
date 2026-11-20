@@ -22,6 +22,7 @@
 
 import { isRuntimeAttachmentBlock } from "@minimal-agent/core/host/runtime-attachments"
 import type { CompactDisplayBoundary } from "@minimal-agent/core/host/session-restore"
+import { NO_SIDEBAND, type SidebandReader } from "@minimal-agent/core/host/sideband"
 import { writePathFromInput } from "@minimal-agent/core/host/tool-input-aliases"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { SessionRecord } from "@minimal-agent/core/host-kit/session-store"
@@ -105,6 +106,15 @@ export interface ReplayOptions {
 
   /** Optional warm syntax highlighter for re-rendering Read tool bodies. */
   codeHighlighter?: CodeHighlighter | null
+
+  /**
+   * The sideband reader (`sidebandOf(loader)`, or `loadSidebandOnly()` with
+   * no loader). It reads the mode-change blocks (each old wire form too) and
+   * cuts the model-only annotations from a tool result with no stored
+   * `outcome`. Omitted: `NO_SIDEBAND`, which reads no tag: no mode chip and
+   * no annotation cut.
+   */
+  sideband?: SidebandReader | null
 
   /**
    * Optional time-hint tracker shared with the live Agent. When provided
@@ -254,6 +264,7 @@ export async function replayToScrollback(
   const modeManager = opts.modeManager ?? null
   const formatterCmd = opts.formatterCmd
   const codeHighlighter = opts.codeHighlighter ?? null
+  const sideband = opts.sideband ?? NO_SIDEBAND
   const toolTimeTracker = opts.toolTimeTracker ?? null
   const toolStartTimes = opts.toolStartTimes ?? null
   const userTimestamps = opts.userTimestamps ?? null
@@ -387,7 +398,7 @@ export async function replayToScrollback(
         content.every((b) => b.type === "tool_result" || isRuntimeAttachmentBlock(b))
       ) {
         for (const b of content) {
-          const change = readModeChangeFromTo(b)
+          const change = readModeChangeFromTo(b, sideband)
           if (change !== undefined) {
             emitModeChangeChip(change.from, change.to, msgTs)
             activeModeId = change.to === "default" ? null : change.to
@@ -401,11 +412,11 @@ export async function replayToScrollback(
       // typed the prompt, so visually it belongs above the `❯`.
       if (Array.isArray(content)) {
         for (const b of content) {
-          const change = readModeChangeFromTo(b)
+          const change = readModeChangeFromTo(b, sideband)
           if (change !== undefined) emitModeChangeChip(change.from, change.to, msgTs)
         }
       }
-      const { text, modeAfter } = stringifyUserText(content, activeModeId)
+      const { text, modeAfter } = stringifyUserText(content, activeModeId, sideband)
       activeModeId = modeAfter
       if (text.length > 0) {
         const arrow = modeManager
@@ -540,19 +551,17 @@ export async function replayToScrollback(
             const language = resolveFileLanguage({ path: tu.input.file_path, content })
             if (language) {
               // The stored `outcome` gives the body end. A record with no or a
-              // bad `outcome` (the view is `undefined`) uses the regex cut. The
+              // bad `outcome` (the view is `undefined`) uses the codec cut. The
               // offsets refer to the first text block: when `content` joins more
-              // blocks, the view text is not `content`, so the regex cut stays.
+              // blocks, the view text is not `content`, so the codec cut stays.
               const view = viewPersistedOutcome(result.content, result.outcome)
-              const annotationCandidates = [
-                content.indexOf("\n\n<ma::"),
-                content.indexOf("\n\n[truncated:"),
-                content.indexOf("\n\n[note:"),
-              ].filter((index) => index >= 0)
-              const regexIdx =
-                annotationCandidates.length === 0 ? -1 : Math.min(...annotationCandidates)
+              const codecIdx = sideband.trailing(content).bodyEnd
               const annotationIdx =
-                view !== undefined && view.text === content ? view.bodyEnd : regexIdx
+                view !== undefined && view.text === content
+                  ? view.bodyEnd
+                  : codecIdx < content.length
+                    ? codecIdx
+                    : -1
               const body = annotationIdx < 0 ? content : content.slice(0, annotationIdx)
               const annotation = annotationIdx < 0 ? "" : content.slice(annotationIdx)
               const highlighted = await highlightReadBody(body, language, codeHighlighter)
@@ -589,6 +598,7 @@ export async function replayToScrollback(
             cols: replayCols,
             footer: displays?.displayFooter,
             ansiContent: previewHasAnsi,
+            sideband,
           })) {
             sink.write(`${line}\n`)
           }
@@ -639,29 +649,6 @@ function makeFormatterOutput(
     }) as NodeJS.WriteStream["write"],
   }
 }
-
-/**
- * Match the mode-change activation block as written by
- * `ModeManager.consumePendingAttachment`. The block is always emitted
- * as a self-contained text block (one per user turn), so an exact
- * whole-string match is sufficient : no inline parsing needed.
- *
- * Accepts BOTH spellings during the tag-namespace migration
- * (TODOS.md#T-ca2ce1):
- *
- *   - new: `<ma::agent::mode-change from="…" to="…" at="…" />`
- *   - intermediate: `<ma::mode-change from="…" to="…" at="…" />`
- *   - legacy: `<mode-change from="…" to="…" at="…" />`
- *
- * The `at` attribute is optional in the regex so older session logs
- * (recorded before the timestamp was added) still replay cleanly.
- *
- * The `(?:ma::(?:agent::)?)?` non-capturing group makes both namespace
- * prefixes optional; all three forms produce identical capture-group
- * output.
- */
-const MODE_CHANGE_RE =
-  /^\s*<(?:ma::(?:agent::)?)?mode-change\s+from="([^"]*)"\s+to="([^"]*)"(?:\s+at="([^"]*)")?\s*\/>\s*$/
 
 /**
  * Build the `userTimestamps` array for {@link replayToScrollback} from
@@ -726,6 +713,8 @@ export function toolDisplaysFromRecords(
      * path which preserves the tree shape but loses body colors.
      */
     sidecarTasks?: readonly ReplaySidecarTask[] | null
+    /** Sideband reader for the Task fallback cut (see `deriveTaskDisplay`). Omitted: no cut. */
+    sideband?: SidebandReader
   },
 ): Map<string, { display?: string; displayHeader?: string; displayFooter?: string }> {
   const out = new Map<
@@ -788,6 +777,7 @@ export function toolDisplaysFromRecords(
       isError: rec.isError,
       callTs: tu.ts,
       sidecarTasks,
+      ...(opts?.sideband === undefined ? {} : { sideband: opts.sideband }),
     })
     if (derived !== undefined) out.set(rec.tool_use_id, derived)
   }
@@ -858,25 +848,31 @@ function parseDate(ts: string): Date | null {
 }
 
 /**
- * If `b` is a mode-change activation block, return its `to=` value
- * (`"ask"`, `"default"`, …). Otherwise return `undefined`.
+ * If `b` is a mode-change activation block, return its `from` and `to`
+ * values. The block is a self-contained text block (one per user turn), so
+ * the node must be the whole text (white space aside), self-closing, and
+ * carry both values. The codec reads each wire form of old session files
+ * (the agent level, the old `ma::` form and the bare form). `at` is not
+ * read here (older logs do not have it).
  */
-function readModeChangeTo(b: ContentBlock): string | undefined {
+function readModeChangeFromTo(
+  b: ContentBlock,
+  sb: SidebandReader,
+): { from: string; to: string } | undefined {
   if (b.type !== "text") return undefined
-  const m = b.text.match(MODE_CHANGE_RE)
-  return m ? m[2] : undefined
+  const nodes = sb.find(b.text, { kinds: [MODE_CHANGE_KIND] })
+  if (nodes.length !== 1) return undefined
+  const n = nodes[0] as (typeof nodes)[number]
+  if (!n.selfClosing) return undefined
+  if (b.text.slice(0, n.span.start).trim() !== "" || b.text.slice(n.span.end).trim() !== "") {
+    return undefined
+  }
+  const { from, to } = n.attrs
+  return from === undefined || to === undefined ? undefined : { from, to }
 }
 
-/**
- * If `b` is a mode-change activation block, return both `from=` and `to=`.
- * Used by the replay chip renderer; the prompt-prefix path only cares
- * about `to`.
- */
-function readModeChangeFromTo(b: ContentBlock): { from: string; to: string } | undefined {
-  if (b.type !== "text") return undefined
-  const m = b.text.match(MODE_CHANGE_RE)
-  return m ? { from: m[1], to: m[2] } : undefined
-}
+/** The sideband kind of the mode-change activation block. */
+const MODE_CHANGE_KIND = "mode-change"
 
 /**
  * Extract user-visible text from a user message's content array, while
@@ -891,6 +887,7 @@ function readModeChangeFromTo(b: ContentBlock): { from: string; to: string } | u
 export function stringifyUserText(
   content: string | ContentBlock[],
   initialModeId: string | null,
+  sb: SidebandReader = NO_SIDEBAND,
 ): { text: string; modeAfter: string | null } {
   if (typeof content === "string") return { text: content, modeAfter: initialModeId }
   let modeAfter = initialModeId
@@ -904,7 +901,7 @@ export function stringifyUserText(
     // and other <ma::agent::*> blocks, all of which the agent prepends
     // to user content for model context and which would otherwise leak
     // into scrollback verbatim on `--resume`.
-    const to = readModeChangeTo(b)
+    const to = readModeChangeFromTo(b, sb)?.to
     if (to !== undefined) modeAfter = to === "default" ? null : to
     if (isRuntimeAttachmentBlock(b)) continue
     parts.push(b.text)

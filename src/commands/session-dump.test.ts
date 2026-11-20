@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-
+import { testSideband as sb, sidebandFixturePresent } from "../test-utils/sideband-fixture.ts"
 import {
   formatSessionAsMarkdown,
   formatSessionAsXml,
@@ -54,7 +54,7 @@ const mockSession: LoadedSession = {
 }
 
 test("formatSessionAsMarkdown", () => {
-  const md = formatSessionAsMarkdown(mockSession)
+  const md = formatSessionAsMarkdown(mockSession, sb)
   expect(md).toContain("# Session: test-sid-123")
   expect(md).toContain("## User")
   expect(md).toContain("## Assistant")
@@ -66,7 +66,7 @@ test("formatSessionAsMarkdown", () => {
 })
 
 test("formatSessionAsXml", () => {
-  const xml = formatSessionAsXml(mockSession)
+  const xml = formatSessionAsXml(mockSession, sb)
   expect(xml).toContain('<session id="test-sid-123"')
   expect(xml).toContain('<turn role="user">')
   expect(xml).toContain("<text>Hello</text>")
@@ -95,63 +95,69 @@ const mockSessionRedacted: LoadedSession = {
 }
 
 test("formatSessionAsMarkdown redacted thinking", () => {
-  const md = formatSessionAsMarkdown(mockSessionRedacted)
+  const md = formatSessionAsMarkdown(mockSessionRedacted, sb)
   expect(md).toContain("> 🤔 **Thinking**")
   expect(md).toContain("*(Redacted thinking, signature: very-long-signat...)*")
 })
 
 test("formatSessionAsXml redacted thinking", () => {
-  const xml = formatSessionAsXml(mockSessionRedacted)
+  const xml = formatSessionAsXml(mockSessionRedacted, sb)
   expect(xml).toContain('<thinking signature="very-long-signature-xyz"/>')
 })
 
-test("formatSessionAsMarkdown scrubs data-URIs in tool_result text", () => {
-  const payload = "A".repeat(400)
-  const uri = `data:image/png;base64,${payload}`
-  const session: LoadedSession = {
-    meta: null,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: "call_1",
-            content: `page body\n\n![x](${uri})\n\ndone`,
-            is_error: false,
-          },
-        ],
-      },
-    ],
-  }
-  const md = formatSessionAsMarkdown(session)
-  expect(md).not.toContain(";base64,")
-  expect(md).not.toContain(payload.slice(0, 40))
-  expect(md).toContain("<ma::agent::redacted-asset")
-  expect(md).toContain("page body")
-  expect(md).toContain("done")
-})
+test.skipIf(!sidebandFixturePresent())(
+  "formatSessionAsMarkdown scrubs data-URIs in tool_result text",
+  () => {
+    const payload = "A".repeat(400)
+    const uri = `data:image/png;base64,${payload}`
+    const session: LoadedSession = {
+      meta: null,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "call_1",
+              content: `page body\n\n![x](${uri})\n\ndone`,
+              is_error: false,
+            },
+          ],
+        },
+      ],
+    }
+    const md = formatSessionAsMarkdown(session, sb)
+    expect(md).not.toContain(";base64,")
+    expect(md).not.toContain(payload.slice(0, 40))
+    expect(md).toContain("<ma::agent::redacted-asset")
+    expect(md).toContain("page body")
+    expect(md).toContain("done")
+  },
+)
 
-test("formatSessionAsXml scrubs data-URIs in tool_result text", () => {
-  const payload = "B".repeat(400)
-  const uri = `data:image/jpeg;base64,${payload}`
-  const session: LoadedSession = {
-    meta: null,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: "call_2",
-            content: `img ${uri}`,
-            is_error: false,
-          },
-        ],
-      },
-    ],
-  }
-  const xml = formatSessionAsXml(session)
-  expect(xml).not.toContain(";base64,")
-  expect(xml).toContain("redacted-asset")
-})
+test.skipIf(!sidebandFixturePresent())(
+  "formatSessionAsXml scrubs data-URIs in tool_result text",
+  () => {
+    const payload = "B".repeat(400)
+    const uri = `data:image/jpeg;base64,${payload}`
+    const session: LoadedSession = {
+      meta: null,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "call_2",
+              content: `img ${uri}`,
+              is_error: false,
+            },
+          ],
+        },
+      ],
+    }
+    const xml = formatSessionAsXml(session, sb)
+    expect(xml).not.toContain(";base64,")
+    expect(xml).toContain("redacted-asset")
+  },
+)

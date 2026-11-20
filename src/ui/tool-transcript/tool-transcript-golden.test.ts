@@ -19,6 +19,7 @@ import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { ToolExecutorAdapter } from "@minimal-agent/core/host-kit/tool-executor-adapter"
 import type { LifecyclePort } from "@minimal-agent/core/sdk/lifecycle"
 import { TOOL_PRESENTATION } from "../../plugins-ui/tool-presentation.ts"
+import { testSideband } from "../../test-utils/sideband-fixture.ts"
 import {
   fixtureSyntheticTextResolver,
   textFixturesPresent,
@@ -127,12 +128,17 @@ function replExecutor(rows: string[], opts: CaseOptions): ToolExecutorAdapter {
       presentation: TOOL_PRESENTATION,
       toolTimeTracker: new FixedTimeTracker(),
       codeHighlighter: opts.highlighter ?? null,
+      // The real codec cuts the annotations of a result with no `bodyEnd`.
+      sideband: testSideband,
       columns: () => 100,
       // A fixed cwd outside the fixture root, so header paths stay absolute
       // and the `<ROOT>` scrub still sees them.
       cwd: "/nonexistent-golden-cwd",
     }),
     loader: opts.loader ?? null,
+    // Core renders the model annotations (e.g. `diagnostics`) with the
+    // session sideband API (design step 6). The test codec is that API.
+    sideband: testSideband,
     modeManager: opts.modeManager ?? null,
     blobStore: null,
     blobSkipTools: new Set(),

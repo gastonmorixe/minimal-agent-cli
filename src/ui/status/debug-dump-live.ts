@@ -41,6 +41,7 @@ import {
   processRequestInspector,
   type RequestInspector,
 } from "@minimal-agent/core/host/request-inspector"
+import { NO_SIDEBAND } from "@minimal-agent/core/host/sideband"
 import { describeSystemBlock } from "@minimal-agent/core/host/system-block-origins"
 import { type DebugGateEnv, isVerboseEnv } from "../../cli/debug-gate.ts"
 import { dumpView } from "../../logging/request-dump-model.ts"
@@ -183,6 +184,10 @@ function withOriginExtras(opts: LiveAreaDumpOptions): DumpOriginSource | undefin
         : {}
       : { describeSystemBlock: describe }),
     afterInstructionsText: () => after ?? base?.afterInstructionsText?.(),
+    // The loader's sideband API: it finds the section tags and the attachments.
+    ...(typeof base?.sideband === "function"
+      ? { sideband: () => base.sideband?.() ?? NO_SIDEBAND }
+      : {}),
   }
 }
 

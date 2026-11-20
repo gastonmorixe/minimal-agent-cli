@@ -19,12 +19,13 @@ import {
   type ToolDidInvokePayload,
 } from "@minimal-agent/core/sdk/tool-lifecycle"
 
+import { testSideband as sb, sidebandFixturePresent } from "../../test-utils/sideband-fixture.ts"
 import { formatDiagnosticsAnnotation, formatToolPreview, renderFindingsPanel } from "./format.ts"
 
 const noLog = () => {}
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "")
 
-describe("diagnostics seam end-to-end (no transport)", () => {
+describe.skipIf(!sidebandFixturePresent())("diagnostics seam end-to-end (no transport)", () => {
   it("a chain listener augments an Edit result; agent-side render + annotation work", async () => {
     const hooks = new Hooks({ logger: noLog })
 
@@ -69,11 +70,12 @@ describe("diagnostics seam end-to-end (no transport)", () => {
 
     // ... and appends the annotation (model).
     const content =
-      "File edited: /repo/x.ts (1 replacement(s))" + formatDiagnosticsAnnotation(payload.notes)
+      "File edited: /repo/x.ts (1 replacement(s))" +
+      formatDiagnosticsAnnotation(payload.notes, undefined, sb)
     expect(content).toContain("<ma::agent::diagnostics")
 
     // The annotation is invisible to the human preview.
-    const preview = formatToolPreview(content, false, undefined, { tool: "Edit" })
+    const preview = formatToolPreview(content, false, undefined, { tool: "Edit", sideband: sb })
       .map(stripAnsi)
       .join("\n")
     expect(preview).not.toContain("ma::agent::diagnostics")
@@ -87,7 +89,7 @@ describe("diagnostics seam end-to-end (no transport)", () => {
     expect(payload.findings).toEqual([])
     expect(payload.notes).toEqual([])
     expect(renderFindingsPanel(payload.findings)).toEqual([])
-    expect(formatDiagnosticsAnnotation(payload.notes)).toBe("")
+    expect(formatDiagnosticsAnnotation(payload.notes, undefined, sb)).toBe("")
   })
 
   it("a throwing listener is absorbed; agent still gets a usable payload", async () => {

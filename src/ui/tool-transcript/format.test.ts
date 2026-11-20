@@ -25,7 +25,7 @@ import { describe, expect, it } from "bun:test"
 import type { TruncationInfo } from "@minimal-agent/core/host/truncation"
 import { displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { ToolUseBlock } from "@minimal-agent/core/sdk/messages"
-
+import { testSideband } from "../../test-utils/sideband-fixture.ts"
 import {
   clampBodyWithHint,
   clampTranscriptRow,
@@ -558,7 +558,10 @@ describe("formatToolPreview — strips trailing `[truncated:` notice", () => {
       "[truncated: shown 50 of 1000 bytes, 5/120 lines; cut at byte 50, line 5. " +
       "to continue, call Read with offset=5 (and limit as needed).]"
     const content = `${body}\n\n${notice}`
-    const lines = formatToolPreview(content, false, undefined, { tool: "Read" })
+    const lines = formatToolPreview(content, false, undefined, {
+      tool: "Read",
+      sideband: testSideband,
+    })
     const stripped = lines.map(stripAnsi).join("\n")
     // Notice + action verb must NOT appear in the TUI render.
     expect(stripped).not.toContain("[truncated:")
@@ -580,7 +583,10 @@ describe("formatToolPreview — strips trailing `[truncated:` notice", () => {
       "[note: you've truncated 3 Read calls in a row. Use the totals from " +
       "the last [truncated: ...] notice to compute a single offset+limit.]"
     const content = `${body}\n\n${truncNotice}\n\n${streakNote}`
-    const lines = formatToolPreview(content, false, undefined, { tool: "Read" })
+    const lines = formatToolPreview(content, false, undefined, {
+      tool: "Read",
+      sideband: testSideband,
+    })
     const stripped = lines.map(stripAnsi).join("\n")
     expect(stripped).not.toContain("[truncated:")
     expect(stripped).not.toContain("[note:")

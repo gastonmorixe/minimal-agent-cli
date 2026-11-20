@@ -60,10 +60,7 @@ import {
 import { getSessionId } from "@minimal-agent/core/host/session-id"
 import { resolveSessionTarget } from "@minimal-agent/core/host/session-index"
 import { BUILTIN_TOOL_NAMES } from "@minimal-agent/core/host/tool-catalog"
-import {
-  combineTurnDrains,
-  instantiateTurnAttachments,
-} from "@minimal-agent/core/host/turn-attachments"
+import { combineTurnDrains } from "@minimal-agent/core/host/turn-attachments"
 import { bootstrapUserPlugins } from "@minimal-agent/core/host-kit/auto-plugins"
 import {
   computeStartupHashes,
@@ -141,6 +138,7 @@ import {
 import type { StreamInfo } from "./startup/stream-json-writer.ts"
 import { takeControlEnv, workerSessionWrapper } from "./startup/target-control-worker.ts"
 import { cliHasPlugins, cliLoaderBase } from "./startup/text-contracts.ts"
+import { instantiateSessionTurnAttachments, sidebandOf } from "./startup/turn-attachment-context.ts"
 import { isColdStart, maybeShowFirstRunWelcome } from "./ui/chrome/first-run.ts"
 import { formatQuotaWindows } from "./ui/chrome/quota-summary.ts"
 import { buildReadyBanner } from "./ui/chrome/ready-banner.ts"
@@ -742,9 +740,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // identities (the I2 invariant). A disabled/absent plugin simply
   // contributes nothing: the agent then runs without that attachment
   // (graceful degradation, pinned in `src/agent/turn-attachments.test.ts`).
-  const turnAttachmentSeam = await instantiateTurnAttachments(
-    { sessionId: getSessionId(), bus: loader.bus() },
-    (m) => diag.notice("turn-attachments", m),
+  const turnAttachmentSeam = await instantiateSessionTurnAttachments(loader, getSessionId(), (m) =>
+    diag.notice("turn-attachments", m),
   )
   const saveEcho = combineTurnDrains(turnAttachmentSeam.drains)
   // Resolve async prompt fragments BEFORE querying getExtraTools().
@@ -966,7 +963,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     }
     let resumed: ResumeState
     try {
-      resumed = loadResumeState(resumeSid, env)
+      resumed = loadResumeState(resumeSid, env, sidebandOf(loader))
     } catch (err) {
       return failResume(err)
     }
@@ -1225,6 +1222,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         modeManager,
         formatterCmd,
         codeHighlighter,
+        // The codec reads the mode-change blocks and cuts tool annotations.
+        sideband: sidebandOf(loader),
         toolTimeTracker,
         toolStartTimes,
         userTimestamps: userTimestamps ?? undefined,

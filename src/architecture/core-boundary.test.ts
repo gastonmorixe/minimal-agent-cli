@@ -293,6 +293,7 @@ describe("CLI core architecture boundary", () => {
     expect(CORE_PUBLIC_CONTRACT.completion).toEqual(["TurnResult"])
     expect(CORE_PUBLIC_CONTRACT.coreSubpaths).toContain("./host/diagnostics")
     expect(CORE_PUBLIC_CONTRACT.coreSubpaths).toContain("./host/status-bus")
+    expect(CORE_PUBLIC_CONTRACT.coreSubpaths).toContain("./host/sideband")
     expect(CORE_PUBLIC_CONTRACT.diagnostics).toContain("DiagnosticBus")
     expect(CORE_PUBLIC_CONTRACT.status).toContain("StatusBus")
     expect(CORE_PUBLIC_CONTRACT).not.toHaveProperty("blockedUntilProgram2")

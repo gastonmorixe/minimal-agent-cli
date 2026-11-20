@@ -84,6 +84,13 @@ export async function runStartupSubcommand(ctx: SubcommandContext): Promise<bool
           format: ctx.dumpFormatArg,
           paths: ctx.dumpPaths,
           cwd: process.cwd(),
+          // The same roots as `list-plugins`: the codec plugin is found there.
+          pluginRoots: computePluginRoots(
+            ctx.repoRoot,
+            process.env,
+            process.cwd(),
+            resolveAgentHome(),
+          ),
         })
       } catch (err) {
         if (err instanceof DumpCommandError) {

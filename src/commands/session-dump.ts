@@ -1,7 +1,7 @@
 import type { MetaRecord } from "@minimal-agent/core/host-kit/session-store"
 import type { ContentBlock, Message, TextBlock } from "@minimal-agent/core/sdk/messages"
 
-import { scrubEmbeddedPayloads } from "./embedded-payload-scrub-port.ts"
+import { type ScrubSideband, scrubEmbeddedPayloads } from "./embedded-payload-scrub-port.ts"
 
 /** Data a dump needs: the meta record and the model-facing messages. */
 export interface DumpSessionData {
@@ -13,17 +13,20 @@ type LoadedSession = DumpSessionData
 
 /**
  * Redact oversized `data:*;base64,...` URIs in tool_result text for human
- * dumps.
+ * dumps. The sideband codec renders the stubs.
  */
-function scrubDumpText(s: string): string {
-  const r = scrubEmbeddedPayloads(s)
+function scrubDumpText(s: string, sb: ScrubSideband): string {
+  const r = scrubEmbeddedPayloads(s, sb)
   return r.changed ? r.text : s
 }
 
 /**
  * Format a session as a human-readable Markdown string.
+ *
+ * @param session - The meta record and the messages.
+ * @param sb - The sideband slice for the data-URI scrub (`loadSidebandOnly()`).
  */
-export function formatSessionAsMarkdown(session: LoadedSession): string {
+export function formatSessionAsMarkdown(session: LoadedSession, sb: ScrubSideband): string {
   let out = ""
 
   if (session.meta) {
@@ -41,7 +44,7 @@ export function formatSessionAsMarkdown(session: LoadedSession): string {
       out += msg.content + "\n\n"
     } else {
       for (const block of msg.content) {
-        out += formatBlockAsMarkdown(block) + "\n\n"
+        out += formatBlockAsMarkdown(block, sb) + "\n\n"
       }
     }
   }
@@ -49,7 +52,7 @@ export function formatSessionAsMarkdown(session: LoadedSession): string {
   return out.trim() + "\n"
 }
 
-function formatBlockAsMarkdown(block: ContentBlock): string {
+function formatBlockAsMarkdown(block: ContentBlock, sb: ScrubSideband): string {
   switch (block.type) {
     case "text":
       return block.text
@@ -84,13 +87,14 @@ function formatBlockAsMarkdown(block: ContentBlock): string {
 
       let contentStr = ""
       if (typeof block.content === "string") {
-        contentStr = scrubDumpText(block.content)
+        contentStr = scrubDumpText(block.content, sb)
       } else {
         contentStr = scrubDumpText(
           block.content
             .filter((b) => b.type === "text")
             .map((b) => (b as TextBlock).text)
             .join("\n"),
+          sb,
         )
       }
 
@@ -131,8 +135,11 @@ function formatBlockAsMarkdown(block: ContentBlock): string {
 
 /**
  * Format a session as a structured XML string.
+ *
+ * @param session - The meta record and the messages.
+ * @param sb - The sideband slice for the data-URI scrub (`loadSidebandOnly()`).
  */
-export function formatSessionAsXml(session: LoadedSession): string {
+export function formatSessionAsXml(session: LoadedSession, sb: ScrubSideband): string {
   let out = ""
 
   if (session.meta) {
@@ -148,7 +155,7 @@ export function formatSessionAsXml(session: LoadedSession): string {
       out += `    <text>${escapeXml(msg.content)}</text>\n`
     } else {
       for (const block of msg.content) {
-        out += formatBlockAsXml(block, 4) + "\n"
+        out += formatBlockAsXml(block, 4, sb) + "\n"
       }
     }
     out += `  </turn>\n`
@@ -158,7 +165,7 @@ export function formatSessionAsXml(session: LoadedSession): string {
   return out
 }
 
-function formatBlockAsXml(block: ContentBlock, indent: number): string {
+function formatBlockAsXml(block: ContentBlock, indent: number, sb: ScrubSideband): string {
   const pad = " ".repeat(indent)
   switch (block.type) {
     case "text":
@@ -184,13 +191,14 @@ function formatBlockAsXml(block: ContentBlock, indent: number): string {
       const isErrorAttr = block.is_error ? ` is_error="true"` : ""
       let contentStr = ""
       if (typeof block.content === "string") {
-        contentStr = scrubDumpText(block.content)
+        contentStr = scrubDumpText(block.content, sb)
       } else {
         contentStr = scrubDumpText(
           block.content
             .filter((b) => b.type === "text")
             .map((b) => (b as TextBlock).text)
             .join("\n"),
+          sb,
         )
       }
 

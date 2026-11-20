@@ -56,6 +56,8 @@ for (const [name, dir] of [
     join(CLI_ROOT, "src", "startup", "fixtures", "plugins", "ma-text-stub-fixture-plugin"),
   ],
   ["ma-background-plugin", join(SIBLING_REPO_ROOT, "ma-background-plugin")],
+  // The sideband codec: core renders the hook halt note with it (step 6).
+  ["ma-sideband-plugin", join(SIBLING_REPO_ROOT, "ma-sideband-plugin")],
 ] as const) {
   if (existsSync(dir)) symlinkSync(dir, join(PLUGINS, name))
 }

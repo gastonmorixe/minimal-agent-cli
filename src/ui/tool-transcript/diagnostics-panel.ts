@@ -6,6 +6,7 @@
  * @module ui/tool-transcript/diagnostics-panel
  */
 
+import type { SidebandApi } from "@minimal-agent/core/host/sideband"
 import { expandTabs } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { Finding, FindingSeverity } from "@minimal-agent/core/sdk/tool-lifecycle"
 import { c } from "../style/ansi.ts"
@@ -21,9 +22,9 @@ import { toolPreviewBodyWidth } from "./preview-width.ts"
 //
 //  - {@link renderFindingsPanel}: colored transcript rows inside the tool-block
 //    gutter (`│ ┊ ╰`), severity dots, dim codes/locations, `·`-joined summary.
-//  - {@link formatDiagnosticsAnnotation}: the model-facing
-//    `<ma::agent::diagnostics>` block appended to the tool_result content (and
-//    stripped from the human preview by `findAnnotationStart`).
+//  - {@link formatDiagnosticsAnnotation}: the model-facing diagnostics
+//    block (sideband kind `diagnostics`) appended to the tool_result content
+//    (and stripped from the human preview by the codec cut).
 //
 // Both are deliberately pure (no IO) so they unit-test without a TTY.
 // ---------------------------------------------------------------------------
@@ -156,25 +157,32 @@ export function renderFindingsPanel(
 }
 
 /**
- * Build the model-facing `<ma::agent::diagnostics>` annotation from the
- * plugin's `notes`. Returns `""` when there are no notes (so the caller appends
- * nothing). The block rides at the tail of `tool_result.content`, separated by
- * `\n\n`, and is stripped from the human transcript by `findAnnotationStart`
- * (the prefix is registered in `ANNOTATION_PREFIXES`).
+ * Build the model-facing diagnostics annotation (sideband kind
+ * `diagnostics`) from the plugin's `notes`. Returns `""` when there are no
+ * notes or no codec (so the caller appends nothing). The block rides at the
+ * tail of `tool_result.content`, after `\n\n`, and the codec cut
+ * (`sb.trailing`) strips it from the human transcript.
  *
- * Shape (one note per line, `count` attribute for a quick scan):
+ * Data: one note per line in the body, the `count` attribute for a quick
+ * scan, and `scope` only for `ad-hoc`.
  *
- * ```text
- * <ma::agent::diagnostics count="2">
- * 12:5 error TS2322 Type 'string' is not assignable to type 'number'.
- * 7:1 warning no-unused-vars 'x' is never used.
- * </ma::agent::diagnostics>
- * ```
+ * @param notes - The plugin notes. Empty notes are dropped.
+ * @param scope - The scope. Only `ad-hoc` is written.
+ * @param sb - The sideband renderer of the session.
  */
-export function formatDiagnosticsAnnotation(notes: string[], scope?: string): string {
+export function formatDiagnosticsAnnotation(
+  notes: string[],
+  scope: string | undefined,
+  sb: Pick<SidebandApi, "render">,
+): string {
   const clean = notes.filter((n) => typeof n === "string" && n.trim().length > 0)
   if (clean.length === 0) return ""
-  const inner = clean.join("\n")
-  const scopeAttr = scope === "ad-hoc" ? ' scope="ad-hoc"' : ""
-  return `\n\n<ma::agent::diagnostics count="${clean.length}"${scopeAttr}>\n${inner}\n</ma::agent::diagnostics>`
+  const tag = sb.render(DIAGNOSTICS_KIND, {
+    attrs: { count: clean.length, ...(scope === "ad-hoc" ? { scope } : {}) },
+    body: clean.join("\n"),
+  })
+  return tag === "" ? "" : `\n\n${tag}`
 }
+
+/** The sideband kind of the model-facing diagnostics annotation. */
+const DIAGNOSTICS_KIND = "diagnostics"

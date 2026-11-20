@@ -10,6 +10,7 @@ import {
   type ReplayToolRenderInput,
   registerReplayRenderer,
 } from "./session-replay-derivers.ts"
+import { testSideband } from "./test-utils/sideband-fixture.ts"
 import { newFileDisplay } from "./ui/tool-transcript/diff-rows.ts"
 
 function stripAnsi(s: string): string {
@@ -46,7 +47,7 @@ describe("deriveTaskDisplay", () => {
       "   3  ○  #ccc  Third step",
       " 0 done · 0 doing · 3 todo",
     ].join("\n")
-    const d = deriveTaskDisplay({ content })
+    const d = deriveTaskDisplay({ sideband: testSideband, content })
     expect(d?.displayHeader).toBe("+ added 3 tasks · 0/3 · 2026-05-28 13:50:22")
     expect(d?.displayFooter).toBe(" 0 done · 0 doing · 3 todo")
     expect(d?.display).toBe(
@@ -63,7 +64,7 @@ describe("deriveTaskDisplay", () => {
       "   2  ✔  #d2abe0  another task",
       " ✦ ALL DONE · 39 done · 47m 59s",
     ].join("\n")
-    const d = deriveTaskDisplay({ content })
+    const d = deriveTaskDisplay({ sideband: testSideband, content })
     expect(d?.displayHeader).toBe("✔ ALL DONE · 39/39 · 2026-05-28 08:29:05")
     expect(d?.displayFooter).toBe(" ✦ ALL DONE · 39 done · 47m 59s")
     expect(d?.display).toBe("   1  ✔  #3dc7fa  one task\n   2  ✔  #d2abe0  another task")
@@ -71,6 +72,7 @@ describe("deriveTaskDisplay", () => {
 
   it("two-line content: first = header, second = body, no footer", () => {
     const d = deriveTaskDisplay({
+      sideband: testSideband,
       content: "◐ started #abc · 0/1 · ts\n  1  ◐  #abc  doing",
     })
     expect(d?.displayHeader).toBe("◐ started #abc · 0/1 · ts")
@@ -79,15 +81,15 @@ describe("deriveTaskDisplay", () => {
   })
 
   it("single-line content: header only", () => {
-    const d = deriveTaskDisplay({ content: "only line" })
+    const d = deriveTaskDisplay({ sideband: testSideband, content: "only line" })
     expect(d?.displayHeader).toBe("only line")
     expect(d?.display).toBeUndefined()
     expect(d?.displayFooter).toBeUndefined()
   })
 
   it("returns undefined for empty / whitespace-only content", () => {
-    expect(deriveTaskDisplay({ content: "" })).toBeUndefined()
-    expect(deriveTaskDisplay({ content: "\n\n\n" })).toBeUndefined()
+    expect(deriveTaskDisplay({ sideband: testSideband, content: "" })).toBeUndefined()
+    expect(deriveTaskDisplay({ sideband: testSideband, content: "\n\n\n" })).toBeUndefined()
   })
 
   it("strips trailing <ma::agent::output-preview> annotation before splitting", () => {
@@ -101,7 +103,7 @@ describe("deriveTaskDisplay", () => {
       "",
       '<ma::agent::output-preview shown="3" total="5" tool="Task">noise</ma::agent::output-preview>',
     ].join("\n")
-    const d = deriveTaskDisplay({ content })
+    const d = deriveTaskDisplay({ sideband: testSideband, content })
     expect(d?.displayHeader).toBe("header")
     expect(d?.displayFooter).toBe("footer line")
     expect(d?.display).toBe("  body 1\n  body 2")
@@ -109,7 +111,7 @@ describe("deriveTaskDisplay", () => {
 
   it("strips trailing [truncated:] annotation before splitting", () => {
     const content = ["header", "body", "footer", "", "[truncated: at 64 KB...]"].join("\n")
-    const d = deriveTaskDisplay({ content })
+    const d = deriveTaskDisplay({ sideband: testSideband, content })
     expect(d?.displayHeader).toBe("header")
     expect(d?.displayFooter).toBe("footer")
     expect(d?.display).toBe("body")
@@ -117,7 +119,7 @@ describe("deriveTaskDisplay", () => {
 
   it("strips trailing newlines before evaluating line count", () => {
     // A content of "header\nbody\nfooter\n\n\n" should still split into 3 parts.
-    const d = deriveTaskDisplay({ content: "header\nbody\nfooter\n\n\n" })
+    const d = deriveTaskDisplay({ sideband: testSideband, content: "header\nbody\nfooter\n\n\n" })
     expect(d?.displayHeader).toBe("header")
     expect(d?.display).toBe("body")
     expect(d?.displayFooter).toBe("footer")
@@ -137,8 +139,8 @@ describe("deriveTaskDisplay with a stored outcome (T8 replay parity)", () => {
     const opener = "\n\n<ma::agent::output-preview"
     const content = `${BODY}${opener} shown="3" total="5" tool="Task">noise</ma::agent::output-preview>`
     const outcome = outcomeFor(content, opener, "output-preview")
-    const withOutcome = deriveTaskDisplay({ content, outcome })
-    expect(withOutcome).toEqual(deriveTaskDisplay({ content }))
+    const withOutcome = deriveTaskDisplay({ sideband: testSideband, content, outcome })
+    expect(withOutcome).toEqual(deriveTaskDisplay({ sideband: testSideband, content }))
     expect(withOutcome?.displayHeader).toBe("header")
     expect(withOutcome?.display).toBe("  body 1\n  body 2")
     expect(withOutcome?.displayFooter).toBe("footer line")
@@ -148,8 +150,8 @@ describe("deriveTaskDisplay with a stored outcome (T8 replay parity)", () => {
     const opener = "\n\n[truncated:"
     const content = `${BODY}${opener} at 64 KB...]`
     const outcome = outcomeFor(content, opener, "output-truncated")
-    const withOutcome = deriveTaskDisplay({ content, outcome })
-    expect(withOutcome).toEqual(deriveTaskDisplay({ content }))
+    const withOutcome = deriveTaskDisplay({ sideband: testSideband, content, outcome })
+    expect(withOutcome).toEqual(deriveTaskDisplay({ sideband: testSideband, content }))
     expect(withOutcome?.displayFooter).toBe("footer line")
   })
 
@@ -157,15 +159,18 @@ describe("deriveTaskDisplay with a stored outcome (T8 replay parity)", () => {
     // Only the stored `outcome` knows that the "[note:" line is part of the body.
     const content = "header\nline\n\n[note: kept]\nfooter"
     const outcome = { v: 1, bodyEnd: content.length, annotations: [] }
-    expect(deriveTaskDisplay({ content, outcome })?.displayFooter).toBe("footer")
-    // The regex cuts at "[note:" and sees two lines only: no footer.
-    expect(deriveTaskDisplay({ content })?.displayFooter).toBeUndefined()
+    expect(deriveTaskDisplay({ sideband: testSideband, content, outcome })?.displayFooter).toBe(
+      "footer",
+    )
+    // The old regex cut at "[note:" (no footer). The sideband codec (step 13)
+    // reads only the trailing run, so a mid-body line is kept here too.
+    expect(deriveTaskDisplay({ sideband: testSideband, content })?.displayFooter).toBe("footer")
   })
 
   it("a bad outcome falls back to the regex and does not throw", () => {
     const opener = "\n\n[truncated:"
     const content = `${BODY}${opener} at 64 KB...]`
-    const expected = deriveTaskDisplay({ content })
+    const expected = deriveTaskDisplay({ sideband: testSideband, content })
     const good = outcomeFor(content, opener, "output-truncated")
     const bad: unknown[] = [
       { ...good, bodyEnd: content.length + 10 },
@@ -184,17 +189,19 @@ describe("deriveTaskDisplay with a stored outcome (T8 replay parity)", () => {
       42,
     ]
     for (const outcome of bad) {
-      expect(() => deriveTaskDisplay({ content, outcome })).not.toThrow()
-      expect(deriveTaskDisplay({ content, outcome })).toEqual(expected)
+      expect(() => deriveTaskDisplay({ sideband: testSideband, content, outcome })).not.toThrow()
+      expect(deriveTaskDisplay({ sideband: testSideband, content, outcome })).toEqual(expected)
     }
   })
 
   it("no outcome: the regex path is unchanged", () => {
     const content = `${BODY}\n\n[note: x]`
-    expect(deriveTaskDisplay({ content, outcome: undefined })).toEqual(
-      deriveTaskDisplay({ content }),
+    expect(deriveTaskDisplay({ sideband: testSideband, content, outcome: undefined })).toEqual(
+      deriveTaskDisplay({ sideband: testSideband, content }),
     )
-    expect(deriveTaskDisplay({ content })?.displayFooter).toBe("footer line")
+    expect(deriveTaskDisplay({ sideband: testSideband, content })?.displayFooter).toBe(
+      "footer line",
+    )
   })
 
   it("deriveDisplayFallback passes the outcome to the Task deriver", () => {

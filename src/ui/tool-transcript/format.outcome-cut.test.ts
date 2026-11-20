@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "bun:test"
 import type { ToolViewOutcome } from "@minimal-agent/core/host-kit/tool-executor-adapter"
+import { testSideband } from "../../test-utils/sideband-fixture.ts"
 import type {
   CodeHighlighter,
   CodeHighlightRequest,
@@ -27,6 +28,7 @@ const ANNOTATIONS: Record<string, string> = {
 
 const bashOpts = (bodyEnd?: number) => ({
   tool: "Bash",
+  sideband: testSideband,
   ...(bodyEnd === undefined ? {} : { bodyEnd }),
 })
 
@@ -59,8 +61,10 @@ describe("formatToolPreview: bodyEnd parity with the regex cut", () => {
     const content = body + ANNOTATIONS["output-truncated"]
     const regexRows = formatToolPreview(content, false, undefined, bashOpts()).join("\n")
     const endRows = formatToolPreview(content, false, undefined, bashOpts(body.length)).join("\n")
-    // Known quirk: the regex finds the earliest prefix and cuts inside the body.
-    expect(regexRows).not.toContain("end")
+    // The old regex found the earliest prefix and cut inside the body. The
+    // sideband codec (step 13) reads only the trailing run, so the fallback
+    // now keeps the whole body too: the same rows as the bodyEnd path.
+    expect(regexRows).toBe(endRows)
     // The bodyEnd path keeps the whole body.
     expect(endRows).toContain("[note: this is a log line]")
     expect(endRows).toContain("end")
@@ -72,7 +76,7 @@ describe("formatToolPreview: bodyEnd parity with the regex cut", () => {
     const old = formatToolPreview(content, false, undefined, bashOpts())
     const bad = [Number.NaN, -1, content.length + 5, 1.5, "3", Infinity, null] as unknown[]
     for (const value of bad) {
-      const opts = { tool: "Bash", bodyEnd: value as number }
+      const opts = { tool: "Bash", sideband: testSideband, bodyEnd: value as number }
       expect(() => formatToolPreview(content, false, undefined, opts)).not.toThrow()
       expect(formatToolPreview(content, false, undefined, opts)).toEqual(old)
     }
@@ -85,6 +89,7 @@ describe("REPL tool view: outcome.bodyEnd", () => {
     const view = createReplToolView({
       writeTranscript: (line) => rows.push(line),
       presentation: new Map(),
+      sideband: testSideband,
     })
     const bodyEnd = content.indexOf("\n\n[truncated:")
     const outcome: ToolViewOutcome = {
@@ -138,6 +143,7 @@ describe("REPL tool view: Read highlight with `outcome.bodyEnd`", () => {
     const view = createReplToolView({
       writeTranscript: (line) => rows.push(line),
       presentation: new Map(),
+      sideband: testSideband,
       codeHighlighter: makeHighlighter(calls),
     })
     const outcome: ToolViewOutcome = {

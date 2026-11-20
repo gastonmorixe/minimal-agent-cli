@@ -36,6 +36,8 @@ import { c } from "../style/ansi.ts"
 import {
   blockRef,
   type DumpOriginSource,
+  type DumpSideband,
+  dumpSideband,
   type OriginRef,
   systemRefs,
   toolRef,
@@ -59,6 +61,12 @@ export interface VerboseRenderOptions {
   readonly enabled?: boolean
   /** Origin data for the reference lines. Omitted: refs show "origin not recorded". */
   readonly origins?: DumpOriginSource
+  /**
+   * The sideband reader that finds the system section tags and the
+   * attachment blocks. Omitted: `origins.sideband()`, else `NO_SIDEBAND`
+   * (no section ref and no attachment ref).
+   */
+  readonly sideband?: DumpSideband
   /** Cells per terminal line for the hanging-indent wrap. Omitted: no wrap. */
   readonly wrapWidth?: number
 }
@@ -164,9 +172,7 @@ function refFields(ref: OriginRef): string {
     case "msg-text":
       return c.yellow("text")
     case "msg-attachment":
-      return [c.yellow("attachment"), c.magenta(stripControls(`<ma::agent::${ref.name}>`))].join(
-        DOT,
-      )
+      return [c.yellow("attachment"), c.magenta(stripControls(`<${ref.tag}>`))].join(DOT)
     case "msg-tool-use":
       return [
         c.yellow("tool_use"),
@@ -390,6 +396,7 @@ function renderMessage(
   n: number,
   toolNames: Map<string, string>,
   wrapWidth: number | undefined,
+  sb: DumpSideband,
 ): string[] {
   const out = [
     fitTitle(
@@ -402,7 +409,7 @@ function renderMessage(
   for (const b of part.blocks) {
     const own = part.lines.filter((l) => l.block === b.block)
     for (const l of own) used.add(l)
-    out.push(refLine(blockRef(b, toolNames, own[0]?.text), wrapWidth, b.size))
+    out.push(refLine(blockRef(b, toolNames, own[0]?.text, sb), wrapWidth, b.size))
     if (b.blockType === "tool_use" && b.toolUseId !== undefined && b.toolName !== undefined) {
       toolNames.set(b.toolUseId, b.toolName)
     }
@@ -420,7 +427,7 @@ function renderMessage(
 }
 
 /** One system block part: its refs, each placed before its line. */
-function renderSystem(part: DumpPart, opts: VerboseRenderOptions): string[] {
+function renderSystem(part: DumpPart, opts: VerboseRenderOptions, sb: DumpSideband): string[] {
   const out = [
     fitTitle(
       `${PART_INDENT}${styledName(part, CACHE_BLOCK_LABEL, c.magenta)}${sizeTag(part.size)}`,
@@ -428,7 +435,7 @@ function renderSystem(part: DumpPart, opts: VerboseRenderOptions): string[] {
     ),
   ]
   const text = part.lines.map((l) => l.text).join("\n")
-  const refs = systemRefs(text, opts.origins)
+  const refs = systemRefs(text, opts.origins, sb)
   const digits = digitsOf(part.lines)
   let r = 0
   part.lines.forEach((l, i) => {
@@ -577,12 +584,13 @@ function renderPart(
   n: number,
   toolNames: Map<string, string>,
   opts: VerboseRenderOptions,
+  sb: DumpSideband,
 ): string[] {
   switch (section) {
     case "messages":
-      return renderMessage(part, n, toolNames, opts.wrapWidth)
+      return renderMessage(part, n, toolNames, opts.wrapWidth, sb)
     case "system":
-      return renderSystem(part, opts)
+      return renderSystem(part, opts, sb)
     case "tools":
       return renderTool(part, opts)
     default: {
@@ -607,8 +615,9 @@ export function renderVerboseSection(
 ): string[] {
   const out: string[] = []
   const toolNames = new Map<string, string>()
+  const sb = opts.sideband ?? dumpSideband(opts.origins)
   parts.forEach((part, i) => {
-    out.push(...renderPart(section, part, i + 1, toolNames, opts))
+    out.push(...renderPart(section, part, i + 1, toolNames, opts, sb))
   })
   return out
 }

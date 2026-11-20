@@ -11,6 +11,7 @@
 import { join } from "node:path"
 import type { RequestSnapshot } from "@minimal-agent/core/host/request-inspector"
 import { type DumpView, dumpView } from "../../logging/request-dump-model.ts"
+import { testSideband } from "../../test-utils/sideband-fixture.ts"
 import type { DumpOriginSource } from "./debug-dump-origins.ts"
 
 /** A loose request shape for the fixtures (tests cast like the core tests do). */
@@ -127,6 +128,8 @@ export const ENV_DIR = join(process.cwd(), "plugins", "ma-env-info-plugin")
 /** A fake loader with every optional getter, matching {@link VERBOSE_REQUEST}. */
 export function fakeOrigins(): DumpOriginSource {
   return {
+    // The real codec of the sibling checkout reads the section tags.
+    sideband: () => testSideband,
     loadedPackages: () => [
       { id: "ma-skills-plugin", packageDir: SKILLS_DIR },
       { id: "ma-env-info-plugin", packageDir: ENV_DIR },

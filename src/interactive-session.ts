@@ -22,6 +22,7 @@ import {
   type CompactRequestOpts,
   takePendingCompact,
 } from "@minimal-agent/core/host/compact-contract"
+import { NO_SIDEBAND, type SidebandApi, sidebandOf } from "@minimal-agent/core/host/sideband"
 import { loadBlobStoreConfig } from "@minimal-agent/core/host-kit/blob-store"
 import { type BuildAgentCoreDeps, toEffort } from "@minimal-agent/core/host-kit/build-agent-core"
 import { ToolFeedbackTracker } from "@minimal-agent/core/host-kit/feedback-tracker"
@@ -190,13 +191,19 @@ export function withAppendContributor<C extends object>(
  * explicit deps value wins. Else the loader's providers and the loader's
  * one resolver, so the session core does not build a second resolver.
  * Same default as core `buildAgentCore`, which this path does not go through.
+ * The sideband API (an explicit `deps.sideband`, else the loader's one API,
+ * `sidebandOf(loader)`) goes to the session core as `sideband` (design step
+ * 13), so `AgentCore.sideband` is that API.
  */
 export function textProvidersOf(
-  deps: Pick<BuildAgentCoreDeps, "loader" | "syntheticTextProviders" | "toolTextProviders">,
+  deps: Pick<
+    BuildAgentCoreDeps,
+    "loader" | "syntheticTextProviders" | "toolTextProviders" | "sideband"
+  >,
 ): Partial<
   Pick<
     ResumeSessionOptions,
-    "syntheticTextProviders" | "syntheticTextResolver" | "toolTextProviders"
+    "syntheticTextProviders" | "syntheticTextResolver" | "toolTextProviders" | "sideband"
   >
 > {
   const loader = deps.loader
@@ -211,10 +218,14 @@ export function textProvidersOf(
   const tool =
     deps.toolTextProviders ??
     (typeof loader?.toolTextProviders === "function" ? loader.toolTextProviders() : undefined)
+  const sideband =
+    deps.sideband ??
+    (loader && typeof loader.sideband === "function" ? sidebandOf(loader) : undefined)
   return {
     ...(synthetic ? { syntheticTextProviders: synthetic } : {}),
     ...(resolver ? { syntheticTextResolver: resolver } : {}),
     ...(tool ? { toolTextProviders: tool } : {}),
+    ...(sideband ? { sideband } : {}),
   }
 }
 
@@ -233,6 +244,14 @@ export function textProvidersOf(
  * fallback. This is also `Session`'s default since core decision 34. The
  * value stays explicit, because no `session.answer()` caller exists here.
  */
+/**
+ * The sideband API of the loader, or `NO_SIDEBAND` with no loader (or a
+ * test loader with no `sideband()`).
+ */
+function loaderSideband(loader: PluginLoader | null | undefined): SidebandApi {
+  return loader && typeof loader.sideband === "function" ? sidebandOf(loader) : NO_SIDEBAND
+}
+
 async function openInteractiveSession(
   deps: InteractiveSessionDeps,
   writeTranscript: TranscriptWriter,
@@ -258,6 +277,8 @@ async function openInteractiveSession(
     presentation: TOOL_PRESENTATION,
     toolTimeTracker: deps.toolTimeTracker ?? null,
     codeHighlighter: deps.codeHighlighter ?? null,
+    // The codec cuts model-only annotations when a result has no core `bodyEnd`.
+    sideband: loaderSideband(deps.loader),
     columns: terminalColumns,
     // Header paths show relative to the start cwd, as the rest of this file does.
     cwd: process.cwd(),

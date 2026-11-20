@@ -44,6 +44,7 @@ import {
   getReplayRenderer,
   type ReplaySidecarTask,
 } from "@minimal-agent/core/host/session-replay-sidecar"
+import { NO_SIDEBAND, type SidebandReader } from "@minimal-agent/core/host/sideband"
 import {
   writeContentFromInput,
   writePathFromInput,
@@ -76,29 +77,13 @@ export interface DerivedDisplay {
 }
 
 /**
- * Annotation prefixes the agent appends to `content` for the model.
- * Stripped before splitting Task content so the trailing
- * `<ma::agent::output-preview …>…</ma::agent::output-preview>` and
- * `<ma::tui-preview …>…</ma::tui-preview>` blocks don't bleed into
- * the derived header/body/footer.
- *
- * Mirrors `findAnnotationStart` in `src/ui/tool-transcript/format.ts`. Kept
- * local here to avoid the import-cycle risk (replay → agent → replay).
+ * The text of `content` before its trailing model-only annotations (the
+ * truncation notice, the streak note, the preview hints, old and new). The
+ * sideband codec finds the region, so the old forms of old session files
+ * stay readable.
  */
-const ANNOTATION_OPENERS: readonly string[] = [
-  "\n\n[truncated:",
-  "\n\n[note:",
-  "\n\n<ma::agent::output-preview",
-  "\n\n<ma::tui-preview",
-]
-
-function stripTrailingAnnotations(content: string): string {
-  let earliest = -1
-  for (const op of ANNOTATION_OPENERS) {
-    const i = content.lastIndexOf(op)
-    if (i !== -1 && (earliest === -1 || i < earliest)) earliest = i
-  }
-  return earliest === -1 ? content : content.slice(0, earliest)
+function stripTrailingAnnotations(content: string, sb: SidebandReader): string {
+  return content.slice(0, sb.trailing(content).bodyEnd)
 }
 
 /**
@@ -124,11 +109,15 @@ function stripTrailingAnnotations(content: string): string {
  */
 export function deriveTaskDisplay(opts: {
   content: string
-  /** Stored `outcome` (not validated here). A bad or missing value uses the regex. */
+  /** Stored `outcome` (not validated here). A bad or missing value uses the codec cut. */
   outcome?: unknown
+  /** Sideband reader for the cut with no valid `outcome`. Omitted: no cut. */
+  sideband?: SidebandReader
 }): DerivedDisplay | undefined {
   const view = viewPersistedOutcome(opts.content, opts.outcome)
-  const trimmed = (view ? view.body : stripTrailingAnnotations(opts.content)).replace(/\n+$/g, "")
+  const trimmed = (
+    view ? view.body : stripTrailingAnnotations(opts.content, opts.sideband ?? NO_SIDEBAND)
+  ).replace(/\n+$/g, "")
   if (trimmed.length === 0) return undefined
   const lines = trimmed.split("\n")
   if (lines.length === 1) return { displayHeader: lines[0] }
@@ -263,6 +252,8 @@ export function deriveDisplayFallback(opts: {
    * core Task fallback's content-split path still works (plain text).
    */
   sidecarTasks?: readonly ReplaySidecarTask[] | null
+  /** Sideband reader for the Task fallback cut. Omitted: no cut. */
+  sideband?: SidebandReader
 }): DerivedDisplay | undefined {
   if (opts.isError) return undefined
   const input = opts.input ?? {}
@@ -289,7 +280,11 @@ export function deriveDisplayFallback(opts: {
   try {
     switch (opts.toolName) {
       case "Task":
-        return deriveTaskDisplay({ content: opts.content, outcome: opts.outcome })
+        return deriveTaskDisplay({
+          content: opts.content,
+          outcome: opts.outcome,
+          ...(opts.sideband === undefined ? {} : { sideband: opts.sideband }),
+        })
       case "Edit":
         return deriveEditDisplay(input)
       case "Write":

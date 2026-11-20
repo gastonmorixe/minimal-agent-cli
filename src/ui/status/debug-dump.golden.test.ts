@@ -42,6 +42,7 @@ import {
 } from "@minimal-agent/core/testing/provider-fixture"
 
 import { type DumpView, dumpView } from "../../logging/request-dump-model.ts"
+import { testSideband } from "../../test-utils/sideband-fixture.ts"
 import {
   CORE_VARIANTS,
   GOLDEN_SNAPSHOT,
@@ -87,6 +88,8 @@ function renderBytes(
 ): string {
   const lines = renderDumpBlock(input, v.width, {
     enabled: v.verbose,
+    // The codec reads the tags. With no origins, the host still has a codec.
+    sideband: testSideband,
     ...(origins === undefined ? {} : { origins }),
     ...(v.wrapWidth === undefined ? {} : { wrapWidth: v.wrapWidth }),
   })

@@ -27,6 +27,7 @@ import { mkdtempSync, rmSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import type { SidebandApi } from "@minimal-agent/core/host/sideband"
 import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import type { SyntheticTextProvider } from "@minimal-agent/core/plugin-api/types/synthetic-text"
 import type { ToolTextProvider } from "@minimal-agent/core/plugin-api/types/tool-text"
@@ -42,12 +43,21 @@ export const TEXT_PLUGINS = [
   "ma-base-prompt-plugin",
 ] as const
 
+/**
+ * The sideband codec plugin. The fixture loader also loads it, so
+ * `loader().sideband()` has the real codec: the text plugins declare their
+ * own kinds and render their tags with it (as in production).
+ */
+const CODEC_PLUGIN = "ma-sideband-plugin"
+
 async function loadTextLoader(): Promise<PluginLoader | null> {
   if (!TEXT_PLUGINS.every((dir) => siblingPluginPresent(dir))) return null
   const root = mkdtempSync(join(tmpdir(), "ma-cli-text-fixture-"))
   // The root holds links only: removing it never touches the checkout.
   process.on("exit", () => rmSync(root, { recursive: true, force: true }))
-  for (const dir of TEXT_PLUGINS) symlinkSync(join(SIBLING_REPO_ROOT, dir), join(root, dir))
+  const dirs: string[] = [...TEXT_PLUGINS]
+  if (siblingPluginPresent(CODEC_PLUGIN)) dirs.push(CODEC_PLUGIN)
+  for (const dir of dirs) symlinkSync(join(SIBLING_REPO_ROOT, dir), join(root, dir))
   return PluginLoader.load({ roots: { embedded: [root] }, logger: () => {} })
 }
 
@@ -124,17 +134,36 @@ export function fixtureSyntheticTextResolver(): SyntheticTextResolverLike {
   return loader().syntheticText()
 }
 
-/** The 2 text deps of a core (`BuildAgentCoreDeps`, `InteractiveSessionDeps`). */
+/**
+ * The fixture loader's sideband API: the real codec of `ma-sideband-plugin`
+ * and the kinds of the loaded text plugins. The same object that
+ * {@link fixtureSyntheticTextResolver} gives to the providers.
+ */
+export function fixtureSideband(): SidebandApi {
+  return loader().sideband()
+}
+
+/**
+ * The text deps of a core (`BuildAgentCoreDeps`, `InteractiveSessionDeps`).
+ * `sideband` is the session API that the core gives to each synthetic text
+ * provider (the codec of the tags).
+ */
 export interface TextCoreDeps {
   syntheticTextProviders: SyntheticTextProvider[]
   toolTextProviders: ToolTextProvider[]
+  sideband: SidebandApi
 }
 
-/** The synthetic and tool text providers to spread into core deps. `{}` when the plugins are absent. */
+/**
+ * The synthetic and tool text providers and the fixture loader's sideband API,
+ * to spread into core deps. `{}` when the plugins are absent. A test that
+ * gives its own `sideband` puts it after the spread.
+ */
 export function textCoreDeps(): Partial<TextCoreDeps> {
   if (LOADER === null) return {}
   return {
     syntheticTextProviders: fixtureSyntheticTextProviders(),
     toolTextProviders: fixtureToolTextProviders(),
+    sideband: fixtureSideband(),
   }
 }
