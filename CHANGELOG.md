@@ -46,6 +46,16 @@ terminal client is being moved out of `minimal-agent-core` into this repo
     stays 1; the CLI default is 10. Sub-agent workers are CLI processes,
     so each worker resolves its own cap. To get the old serial loop, set
     the env or the config value to 1.
+- 2026-11-20: **SIGTERM wrap-up for a headless sub-agent worker.** A `-p`
+  run with `--output-format json`, `stream-json` or `open-responses` and a
+  non-empty `MINIMAL_AGENT_WRAP_UP_TOOLS` (the sub-agents plugin sets it for
+  each worker) now answers the first SIGTERM with ONE short final turn that
+  advertises only those tools, then exits 143 (`run_finished` `truncated`,
+  then the `result` line). A second SIGTERM (500 ms or more later), or 45 s
+  after the first one, ends the process at once with 143. After the run, a
+  live handle can keep the process at most 2 s more. A SIGTERM after a
+  completed run does not change its exit code. Without the env (a normal
+  user or CI run), SIGTERM works as before (`src/startup/headless-wrap-up.ts`).
 
 - 2026-11-19: **`ma sessions` shows the saved session title.** A title
   that a user or the title plugin saved in `index-meta.jsonl` replaces the

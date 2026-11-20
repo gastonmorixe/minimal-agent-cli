@@ -109,8 +109,14 @@ import { enforceOutputSchema, PrintOutput, resolvePrintModeOptions } from "../pr
 import type { ReplAgentLike } from "../repl.ts"
 import { applyTurnWillStart } from "../repl-editor-hooks.ts"
 import { Formatter } from "../ui/formatter/formatter.ts"
-
 import { DRY_RUN_DONE_MESSAGE, isDryRunHalt } from "./dry-run.ts"
+import {
+  type HeadlessWrapUp,
+  type HeadlessWrapUpOptions,
+  installHeadlessWrapUp,
+  SIGTERM_EXIT_CODE,
+  wantsHeadlessWrapUp,
+} from "./headless-wrap-up.ts"
 import { isHostModeRun } from "./resume-mode.ts"
 import {
   type StreamInfo,
@@ -299,6 +305,14 @@ export interface RunNonInteractivePromptInput {
    * Default false: the halt is a failure, as before.
    */
   readonly dryRun?: boolean
+  /**
+   * The SIGTERM wrap-up of the event-stream route (`headless-wrap-up.ts`).
+   * It is installed only for a sub-agent worker (a non-empty
+   * `MINIMAL_AGENT_WRAP_UP_TOOLS` in `wrapUp.env`, default `process.env`).
+   * Injectable for tests (a fake signal source, no real exit). Default:
+   * the real process.
+   */
+  readonly wrapUp?: HeadlessWrapUpOptions
 }
 
 /**
@@ -398,7 +412,10 @@ async function runGuardedEventStream(
   // So the default only sets the exit code, and the caller returns. The
   // process then ends by itself once stdout drains. An injected `exit` (tests)
   // keeps its old behavior.
+  // The last code that `fail` set (for the end after a wrap-up).
+  let exitCode = 0
   const fail = (code: number): void => {
+    exitCode = code
     if (input.exit) input.exit(code)
     else process.exitCode = code
   }
@@ -435,6 +452,8 @@ async function runGuardedEventStream(
   const or = input.outputFormat === "open-responses" ? openOrWriter(input, session, write) : null
   if (or !== null) or.begin()
 
+  // Only a sub-agent worker gets the SIGTERM wrap-up (headless-wrap-up.ts).
+  let wrapUp: HeadlessWrapUp | undefined
   const out = {
     write,
     keep: or !== null ? EMPTY_KIND_SET : keep,
@@ -454,14 +473,32 @@ async function runGuardedEventStream(
     if (input.outputSchema !== undefined) {
       armRunOutputSchema(session, input.outputSchema)
     }
-    const ok = await runEventStreamTurn(
-      session,
-      { text: input.prompt, additionalContext: turnContext },
-      out,
-    )
-    if (!ok) {
+    // A worker SIGTERM: one final short turn, then exit 143.
+    if (wantsHeadlessWrapUp(input.wrapUp?.env ?? process.env)) {
+      wrapUp = installHeadlessWrapUp(input.wrapUp)
+    }
+    try {
+      const ok = await runEventStreamTurn(
+        session,
+        {
+          text: input.prompt,
+          additionalContext: turnContext,
+          ...(wrapUp ? { signal: wrapUp.signal } : {}),
+        },
+        out,
+      )
+      if (!ok) {
+        runOk = false
+        fail(1)
+      }
+    } finally {
+      wrapUp?.dispose()
+    }
+    // A SIGTERM after a completed run (before dispose) changes no exit code:
+    // the run did its work. A wrap-up run ends `truncated` (or `aborted`).
+    if (wrapUp?.started() === true && acc.outcome !== "completed") {
       runOk = false
-      fail(1)
+      fail(SIGTERM_EXIT_CODE)
     }
   }
   // R11: one final `result` line after run_finished, then the exit code.
@@ -476,7 +513,9 @@ async function runGuardedEventStream(
   // turn in the same session with a corrective user message. Each attempt
   // streams its own events (new turn numbers). `acc` sums the usage, and
   // its text is the text of the last attempt.
-  const maxRetries = input.oneShotRunOptions?.schemaRetries ?? 0
+  // No retry turn after a SIGTERM (also a late one): the process must end.
+  const maxRetries =
+    runOk && wrapUp?.started() !== true ? (input.oneShotRunOptions?.schemaRetries ?? 0) : 0
   for (let used = 0; used < maxRetries; used++) {
     if (schema === undefined || schema.ok || acc.outcome !== "completed") break
     const outputSchema = input.outputSchema as object
@@ -512,6 +551,8 @@ async function runGuardedEventStream(
     stderr(`error: the JSON route dropped ${strays} stray stdout write(s)\n`)
     fail(1)
   }
+  // After a SIGTERM, the process must end: a live handle cannot keep it.
+  if (wrapUp?.started() === true) wrapUp.exitAfterRun(exitCode)
 }
 
 /** No event kind is kept as a line (the open-responses route). */
@@ -583,7 +624,12 @@ function writeResultLine(
  */
 async function runEventStreamTurn(
   session: Session,
-  turn: { text: string; additionalContext?: readonly HookContextEntry[] },
+  turn: {
+    text: string
+    additionalContext?: readonly HookContextEntry[]
+    /** Aborts the run (the SIGTERM wrap-up signal). */
+    signal?: AbortSignal
+  },
   out: {
     write: (chunk: string) => void
     keep: ReadonlySet<string>
@@ -603,6 +649,7 @@ async function runEventStreamTurn(
   try {
     const run = session.run(turn.text, {
       emitDeltas: out.emitDeltas,
+      ...(turn.signal !== undefined ? { signal: turn.signal } : {}),
       ...(turn.additionalContext !== undefined && turn.additionalContext.length > 0
         ? { additionalContext: [...turn.additionalContext] }
         : {}),
