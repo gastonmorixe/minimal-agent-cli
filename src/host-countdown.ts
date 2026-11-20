@@ -8,9 +8,13 @@
  *
  * - A status row in the global status bus (the channel of the spinner and
  *   of the `Running <tool>` row): `<label> · Ns remaining · press Esc to skip`.
- *   The leading pause glyph comes from the live-area status icon (see
- *   {@link HOST_COUNTDOWN_NOTIFICATION_ID} in `src/ui/spinner/presets.ts`).
- *   Thus the label must not have a glyph of its own.
+ *   The row has its own notification id for each request
+ *   ({@link countdownNotificationId}: `host.countdown:<request id>`), so two
+ *   countdowns at the same time do not share or clear one row. The leading
+ *   pause glyph comes from the live-area status icon: the spinner finds it by
+ *   the category {@link HOST_COUNTDOWN_CATEGORY} (`countdown`) in
+ *   `src/ui/spinner/presets.ts`. Thus the label must not have a glyph of its
+ *   own.
  * - An input capture (the input capture stack) for the life of the wait:
  *   Esc ends the wait with `"skipped"`, and the turn continues. Esc does not
  *   go to the abort-quit state machine while the row shows.
@@ -35,8 +39,17 @@ import type {
 } from "@minimal-agent/core/plugin-api/types/plugin"
 import { type InputCaptureStack, inputCaptureStack } from "./input/input-capture-stack.ts"
 
-/** The status-bus notification id and input-capture id of a host countdown. */
+/**
+ * The prefix of the status-bus notification id and of the input-capture id
+ * of a host countdown. Each request adds its own id (see
+ * {@link countdownNotificationId}).
+ */
 export const HOST_COUNTDOWN_NOTIFICATION_ID = "host.countdown"
+
+/** The notification id and capture id of one request: `host.countdown:<id>`. */
+export function countdownNotificationId(requestId: string): string {
+  return `${HOST_COUNTDOWN_NOTIFICATION_ID}:${requestId}`
+}
 
 /** The status-bus category of a host countdown. */
 export const HOST_COUNTDOWN_CATEGORY = "countdown"
@@ -80,8 +93,9 @@ async function runHostCountdown(
   if (!Number.isFinite(ms) || ms <= 0) return "elapsed"
   const stack = deps.inputCaptureStack
   const totalSec = Math.max(1, Math.ceil(ms / 1000))
+  const rowId = countdownNotificationId(request.id)
   const handle = deps.statusBus.create(countdownRowText(label, totalSec), {
-    notificationId: HOST_COUNTDOWN_NOTIFICATION_ID,
+    notificationId: rowId,
     category: HOST_COUNTDOWN_CATEGORY,
   })
   let remaining = totalSec
@@ -107,7 +121,7 @@ async function runHostCountdown(
       timer = setTimeout(() => settle("elapsed"), ms)
       if (signal) signal.addEventListener("abort", onAbort, { once: true })
       if (stack) {
-        releaseCapture = stack.push(`${HOST_COUNTDOWN_NOTIFICATION_ID}:${request.id}`, (key) => {
+        releaseCapture = stack.push(rowId, (key) => {
           if (key !== "Escape") return false
           // Esc skips the wait. It does not abort the turn.
           settle("skipped")
