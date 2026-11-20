@@ -14,14 +14,17 @@
  * @module logging/request-dump-text
  */
 
+import { type DumpKvSection, keyWidth, kvUnit } from "./request-dump-kv.ts"
 import {
   clampWithHint,
   type DumpBlockRef,
   type DumpPart,
   type DumpSectionName,
   type DumpView,
+  oneLine,
   PREVIEW_CAP,
 } from "./request-dump-model.ts"
+import { paramSummary, paramTable } from "./tool-schema.ts"
 
 /** Marker after a `messages` role whose last block has `cache_control`. */
 const CACHE_MSG_MARK = " [← cached prefix ends here]"
@@ -44,11 +47,13 @@ export interface RequestDumpRowData {
   /** Set on the final row of the dump. */
   readonly last?: true
   /** Row type. Verbose only. */
-  readonly kind?: "part" | "block" | "line" | "elided"
+  readonly kind?: "part" | "block" | "line" | "elided" | "param" | "field"
   /** Lines dropped by the row cap. Set on `elided` rows only. */
   readonly hiddenLines?: number
   /** Body section of the row. Verbose only. */
-  readonly section?: DumpSectionName
+  readonly section?: DumpSectionName | DumpKvSection["name"]
+  /** Header name or body key of a `field` row. Verbose only. */
+  readonly key?: string
   /** Index in `messages[]`, `system[]`, or `tools[]`. */
   readonly part?: number
   /** Content block index in the message (messages only). */
@@ -149,20 +154,69 @@ function pushDetail(out: RequestDumpTextRow[], p: DumpPart, block: number | unde
   }
 }
 
+/**
+ * The parameter rows of one tool. Compact: one `params:` row with the
+ * summary, capped like a preview (the full text follows when cut). Verbose:
+ * a `params:` row, then one aligned row per parameter.
+ */
+function pushParams(out: RequestDumpTextRow[], p: DumpPart, verbose: boolean): void {
+  const params = p.params ?? []
+  if (params.length === 0) return
+  if (!verbose) {
+    const full = paramSummary(params)
+    const shown = clampWithHint(full, PREVIEW_CAP)
+    out.push({ text: `        params: ${shown}` })
+    if (shown !== full) out.push({ text: `          ${full}` })
+    return
+  }
+  const data = { kind: "param", section: p.section, part: p.index } as const
+  out.push({ text: "        params:", data })
+  for (const line of paramTable(params)) out.push({ text: `          ${line}`, data })
+}
+
 /** The rows of one part: the labelled row, the continuation row, and the verbose rows. */
 function pushPart(out: RequestDumpTextRow[], p: DumpPart, verbose: boolean): void {
   const preview = verbose ? p.full : clampWithHint(p.full, PREVIEW_CAP)
   const text = `      ${labelOf(p)}: ${preview}`
   out.push(verbose ? { text, data: { kind: "part", section: p.section, part: p.index } } : { text })
   if (p.full !== preview) out.push({ text: `        ${p.full}` })
-  if (!verbose) return
+  if (!verbose) {
+    pushParams(out, p, false)
+    return
+  }
   if (p.section !== "messages") {
     pushDetail(out, p, undefined)
+    pushParams(out, p, true)
     return
   }
   for (const b of p.blocks) {
     out.push({ text: `        block ${b.block} ${b.blockType}`, data: blockData(p, b) })
     pushDetail(out, p, b.block)
+  }
+}
+
+/**
+ * The rows of one `headers` or `body` section: an aligned `key value` row
+ * per entry. Compact: the value is cut at the preview cap with the hint.
+ * Verbose: the full value, and an object value as pretty JSON lines behind a
+ * `┆` gutter.
+ */
+function pushKv(out: RequestDumpTextRow[], section: DumpKvSection, verbose: boolean): void {
+  out.push({ text: `    ${section.name}: [${section.rows.length} ${kvUnit(section.name)}]` })
+  const w = keyWidth(section)
+  for (const r of section.rows) {
+    const key = r.key.padEnd(w)
+    if (!verbose) {
+      out.push({ text: `      ${key}  ${clampWithHint(oneLine(r.value), PREVIEW_CAP)}` })
+      continue
+    }
+    const data = { kind: "field", section: section.name, key: r.key } as const
+    if (r.pretty === undefined) {
+      out.push({ text: `      ${key}  ${r.value}`, data })
+      continue
+    }
+    out.push({ text: `      ${r.key}`, data })
+    for (const line of r.pretty) out.push({ text: `        ┆ ${line}`, data })
   }
 }
 
@@ -178,6 +232,7 @@ export function requestDumpTextRows(view: DumpView, verbose: boolean): RequestDu
   const out: RequestDumpTextRow[] = [{ text: `--- POST ${view.model ?? "(default model)"} ---` }]
   for (const [key, value] of view.fields) out.push({ text: `  ${key}: ${value}` })
   out.push({ text: "  Body:" })
+  for (const section of view.kv) pushKv(out, section, verbose)
   for (const section of view.sections) {
     out.push({ text: `    ${section.name}: [${section.parts.length} ${unitOf(section.name)}]` })
     for (const p of section.parts) pushPart(out, p, verbose)

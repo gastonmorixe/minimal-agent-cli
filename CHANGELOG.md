@@ -35,6 +35,20 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Changed
 
+- 2026-11-20: **`--debug` dump shows the HTTP headers and the other body
+  fields.** New `headers` and `body` sections before `tools` (from core's
+  `RequestSnapshot.headers` / `.body`, secrets masked by core). Default:
+  aligned `key value` rows, one-line values cut with the `...(+Nch)` hint,
+  header names lowercase and sorted. `--verbose`: full values, and an
+  object value as pretty JSON behind the `┆` gutter. REPL: key cyan, value
+  normal, masked value dim italic. New `src/logging/request-dump-kv.ts`;
+  `DumpView.kv`; row data kind `field` with `key`. Goldens updated.
+- 2026-11-20: **`--debug` dump shows the tool parameter schemas.** New helper
+  `src/logging/tool-schema.ts` turns `input_schema` into typed rows (type
+  arrays, enums, `T[]`, `anyOf`/`oneOf`, nested objects, required marker,
+  default). Default mode adds a one-line `params:` summary under each tool.
+  `--verbose` adds an aligned parameter table. Log rows, stderr rows and the
+  REPL block all show it. Goldens updated.
 - 2026-11-20: **Live tool tree: every running tool call shows in the live
   area.** Replaces the one group row `Running N tools · Fetch ×7 · (12s)`.
   Terms: `GLOSSARY.md` (tool call, batch, wave, concurrency cap).

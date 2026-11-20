@@ -478,6 +478,22 @@ when a host subscribes, so a run without `--debug` costs nothing. With
 Add `--verbose` to show the full text of each part, with line gutters,
 instead of the 80-character previews.
 
+Each tool also shows its parameter schema (from `input_schema`). The default
+form adds one `params:` line, for example
+`params: (path*: string, limit?: integer = 100, mode?: "text"|"bin")`
+(`*` is required, `?` is optional). With `--verbose`, each tool shows a table
+with one parameter per line (name, type, required, description), and nested
+object properties are indented.
+
+Before `tools`, the dump shows two more sections. `headers` gives the final
+HTTP request headers (names lowercase and sorted). `body` gives the other
+fields of the wire body, for example `tool_choice`, `temperature`,
+`metadata` or `context_management`. Core masks each secret before the CLI
+gets it (`Bearer …abcd`, `<redacted:N chars>`); the REPL draws a masked
+value dim and italic. The default form gives one aligned `key value` row per
+entry. With `--verbose`, the values are full, and an object value shows as
+indented JSON behind a `┆` gutter.
+
 Use network debug capture when you want raw request and response files:
 
 ```sh
