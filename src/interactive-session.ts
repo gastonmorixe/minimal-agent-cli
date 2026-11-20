@@ -49,7 +49,12 @@ import { retryBoundaryText } from "./logging/retry-boundary-text.ts"
 import { TOOL_PRESENTATION } from "./plugins-ui/tool-presentation.ts"
 import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
-import { createPluginEventsPort, createStatusPort } from "./startup/host-ports.ts"
+import {
+  createPluginEventsPort,
+  createStatusPort,
+  type HostStatusPort,
+  isCliStatusPort,
+} from "./startup/host-ports.ts"
 import { credentialNamesFrom, defaultDiscoverTargets } from "./startup/host-targets.ts"
 import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 import { TERMINAL_TOOL_ENV, terminalColumns } from "./terminal/terminal-tool-env.ts"
@@ -162,6 +167,17 @@ class RunPortState {
   reflection: ((round: number) => Promise<void>) | null = null
   /** The render pump of the run in progress. */
   pump: TurnRenderPump | null = null
+  /**
+   * Writes the kept tool rows of calls that got no outcome (D11). Set once,
+   * with the session's tool view. The run calls it when it ends.
+   */
+  flushToolRows: () => void = () => {}
+  /**
+   * Forgets the tool status rows of calls that are still open when the run
+   * ends (D11, W1), so a stale call cannot group with a later call. Set
+   * once, when the session owns its status port. A caller port: no-op.
+   */
+  resetToolRows: () => void = () => {}
 
   /** The `inputQueue` port: reads the queue of the run in progress. */
   readonly inputQueuePort: InputQueuePort = {
@@ -262,7 +278,9 @@ async function openInteractiveSession(
   const hooks = deps.loader && typeof deps.loader.hooks === "function" ? deps.loader.hooks() : null
   const lifecycle = createLifecyclePort(hooks)
   // S23: one status port for the sends and the tool rows. A caller port wins.
-  const statusPort = deps.statusPort ?? createStatusPort()
+  const statusPort: HostStatusPort = deps.statusPort ?? createStatusPort()
+  // D11 (W1): a CLI status port forgets stale tool rows when a run ends.
+  if (isCliStatusPort(statusPort)) runPorts.resetToolRows = () => statusPort.resetToolRows()
 
   // S24: core sends plain tool view events. The CLI builds the rows.
   const toolView = createReplToolView({
@@ -275,6 +293,7 @@ async function openInteractiveSession(
     // Header paths show relative to the start cwd, as the rest of this file does.
     cwd: process.cwd(),
   })
+  runPorts.flushToolRows = () => toolView.flushPending()
   const toolExecutor = new ToolExecutorAdapter({
     loader: deps.loader,
     modeManager: deps.modeManager,
@@ -328,6 +347,10 @@ async function openInteractiveSession(
     ...(deps.cacheTtl !== undefined ? { cacheTtl: deps.cacheTtl } : {}),
     ...(deps.cacheAnchor !== undefined ? { cacheAnchor: deps.cacheAnchor } : {}),
     ...(deps.thinkingHistory !== undefined ? { thinkingHistory: deps.thinkingHistory } : {}),
+    // Concurrency cap of a wave. Omitted: core's default (1, the serial loop).
+    ...(deps.maxConcurrentToolCalls !== undefined
+      ? { maxConcurrentToolCalls: deps.maxConcurrentToolCalls }
+      : {}),
     ...(deps.sendFn !== undefined ? { sendFn: deps.sendFn } : {}),
     ...(deps.networkClient !== undefined ? { networkClient: deps.networkClient } : {}),
     toolRegistry,
@@ -581,6 +604,10 @@ export class InteractiveSession implements ReplAgentLike {
         })
       }
       unsubscribe()
+      // Safety net (D11): a wave call with no outcome (abort, view throw)
+      // still shows its kept rows, before the run gives back the transcript.
+      this.runPorts.flushToolRows()
+      this.runPorts.resetToolRows()
       this.runPorts.inputQueue = null
       this.runPorts.reflection = null
       this.runPorts.pump = null

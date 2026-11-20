@@ -97,6 +97,34 @@ interface CallState {
   pendingChunk: string
   discardingLine: boolean
   didStream: boolean
+  /**
+   * The rows of a call in a wave of 2 or more, kept until the call ends
+   * (D11). `null`: the rows go to the transcript live, as today. A
+   * function item makes its rows at flush time (the header: its time text
+   * must follow the print order, see `writeHeader`).
+   */
+  buffer: Array<string | (() => string[])> | null
+  /** When a buffered call started. Its header shows this time. */
+  startedAt: number | undefined
+}
+
+/** The REPL tool view, with the end-of-run safety net. */
+export interface ReplToolView extends ToolViewPort {
+  /**
+   * Write the kept rows of each call that got no `outcome` (for example
+   * after an abort), then forget those calls. The host calls it when the
+   * run ends. Calls that write live are not changed.
+   */
+  flushPending(): void
+}
+
+/**
+ * True when core marks the call as one that runs in a wave of 2 or more.
+ * The key is absent for a solo call, at cap 1, and with a core that does
+ * not send it yet.
+ */
+function isConcurrentStart(event: Extract<ToolViewEvent, { type: "started" }>): boolean {
+  return event.concurrent === true
 }
 
 /**
@@ -147,9 +175,31 @@ function stripDiffPathPrefix(raw: string): string | undefined {
  * Build the REPL tool view: a {@link ToolViewPort} that writes the framed
  * tool rows to `opts.writeTranscript`.
  */
-export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
+export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
   const { writeTranscript } = opts
   const calls = new Map<string, CallState>()
+
+  /** Write one row now, or keep it in the call's block (D11). */
+  const emitRow = (state: CallState, row: string): void => {
+    if (state.buffer) state.buffer.push(row)
+    else writeTranscript(row)
+  }
+
+  /**
+   * Write the kept block of a call. The rows go out in one synchronous
+   * loop, so no row of another call can come between them, and each row
+   * gets the same writer step as a live row (the live area adds its blank
+   * row after each `╰` closer).
+   */
+  const flushBlock = (state: CallState): void => {
+    const rows = state.buffer
+    if (!rows) return
+    state.buffer = null
+    for (const item of rows) {
+      if (typeof item === "string") writeTranscript(item)
+      else for (const row of item()) writeTranscript(row)
+    }
+  }
 
   const stateFor = (tool: ToolUseBlock): CallState => {
     const known = calls.get(tool.id)
@@ -166,6 +216,8 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
       pendingChunk: "",
       discardingLine: false,
       didStream: false,
+      buffer: null,
+      startedAt: undefined,
     }
     calls.set(tool.id, state)
     return state
@@ -174,16 +226,28 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
   const writeHeader = (tool: ToolUseBlock, state: CallState, override?: string): void => {
     if (state.headerWritten) return
     state.headerWritten = true
-    const timeText = state.suppressToolTime ? undefined : opts.toolTimeTracker?.format(Date.now())
-    const rows = formatToolHeaderRows({
-      tool,
-      presentation: opts.presentation.get(tool.name),
-      headerOverride: override,
-      timeText,
-      cols: state.cols,
-      pathContext: opts.cwd !== undefined ? { cwd: opts.cwd } : undefined,
-    })
-    for (const [idx, row] of rows.entries()) writeTranscript(idx === 0 ? `\n${row}` : row)
+    const headerRows = (at: number): string[] => {
+      const timeText = state.suppressToolTime ? undefined : opts.toolTimeTracker?.format(at)
+      const rows = formatToolHeaderRows({
+        tool,
+        presentation: opts.presentation.get(tool.name),
+        headerOverride: override,
+        timeText,
+        cols: state.cols,
+        pathContext: opts.cwd !== undefined ? { cwd: opts.cwd } : undefined,
+      })
+      return rows.map((row, idx) => (idx === 0 ? `\n${row}` : row))
+    }
+    const startedAt = state.startedAt
+    if (state.buffer && startedAt !== undefined) {
+      // A kept block shows the time its call started, not the time it
+      // ends. The time text is made at flush time: the tracker adds the
+      // date when the day changes, so it must see the headers in the order
+      // they print (end order), not in start order.
+      state.buffer.push(() => headerRows(startedAt))
+      return
+    }
+    for (const row of headerRows(Date.now())) emitRow(state, row)
   }
 
   /** Add one finished stream line. The last line stays buffered. */
@@ -194,7 +258,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
       return
     }
     if (state.bufferedLastLine !== null) {
-      writeTranscript(formatStreamBodyRow(state.bufferedLastLine))
+      emitRow(state, formatStreamBodyRow(state.bufferedLastLine))
     }
     // Cheap pre-slice before the width math: a mega-line is already
     // ruined for the preview.
@@ -249,7 +313,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
       budget: state.budget,
       truncInfo: ev.truncInfo,
       isError: ev.isError,
-      writeTranscript,
+      writeTranscript: (line) => emitRow(state, line),
       cols: state.cols,
     })
   }
@@ -369,11 +433,15 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
       const lastIdx = previewLines.length - 1
       previewLines[lastIdx] = reopenFrameCloser(previewLines[lastIdx] ?? "")
     }
-    for (const line of previewLines) writeTranscript(line)
-    for (const line of panel) writeTranscript(line)
+    for (const line of previewLines) emitRow(state, line)
+    for (const line of panel) emitRow(state, line)
   }
 
   return {
+    flushPending(): void {
+      for (const state of calls.values()) flushBlock(state)
+      calls.clear()
+    },
     async onToolEvent(event: ToolViewEvent): Promise<void> {
       const { tool } = event
       const state = stateFor(tool)
@@ -381,20 +449,29 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
         case "refused":
           writeHeader(tool, state)
           for (const row of formatRefusalRows(event.message, event.refusedBy)) {
-            writeTranscript(row)
+            emitRow(state, row)
           }
+          flushBlock(state)
           calls.delete(tool.id)
           return
         case "input_error":
           writeHeader(tool, state)
+          flushBlock(state)
           calls.delete(tool.id)
           return
         case "mode":
           writeHeader(tool, state)
-          writeTranscript(formatModeCloseRow(event.label))
+          emitRow(state, formatModeCloseRow(event.label))
+          flushBlock(state)
           calls.delete(tool.id)
           return
         case "started":
+          // A call in a wave keeps its rows until it ends (D11). Bash stays
+          // live: its rows stream as the command runs (X4).
+          if (isConcurrentStart(event) && tool.name !== "Bash") {
+            state.buffer = []
+            state.startedAt = Date.now()
+          }
           // A built-in tool, or a plugin tool with a header key, shows its
           // header at once. Other plugin tools wait for their header text.
           if (!event.pluginTool || opts.presentation.get(tool.name)?.headerKey != null) {
@@ -416,6 +493,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ToolViewPort {
           try {
             await onOutcome(tool, state, event.outcome)
           } finally {
+            flushBlock(state)
             calls.delete(tool.id)
           }
           return

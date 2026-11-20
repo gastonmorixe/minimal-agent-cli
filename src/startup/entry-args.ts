@@ -32,6 +32,7 @@ import { suggest } from "../cli/registry/suggest.ts"
 import { resolveSystemPromptOverridesForStartup } from "../cli/system-prompt-override-resolution.ts"
 import { commandFlags, findUnknownFlag, formatUnknownFlag } from "../cli/unknown-flags.ts"
 import { isVersionRequest, renderVersion } from "../commands/version.ts"
+import { resolveCliMaxConcurrentToolCalls } from "../config/concurrency-cap.ts"
 import { type CliUserConfig, loadCliUserConfig } from "../config/terminal-config.ts"
 import { parseFormatterCommand } from "../ui/formatter/formatter.ts"
 import { wantsJsonHelp } from "../ui/help/json.ts"
@@ -137,6 +138,12 @@ export interface EntrypointArgs {
   readonly showHeader: boolean
   /** Read an inline-or-spaced flag value from normalized args. */
   readonly readFlagValue: (name: string) => string | undefined
+  /**
+   * Concurrency cap of a tool wave, resolved ONCE for the process: env \>
+   * config \> CLI default (see `config/concurrency-cap.ts`). `main()` gives
+   * this one value to each route (REPL, event stream, host mode).
+   */
+  readonly maxConcurrentToolCalls: number
   /** Resolve the one-shot prompt, reading stdin only for the `-` sentinel. */
   readonly extractPrompt: (stdin?: PromptInput) => Promise<string | null>
 }
@@ -300,6 +307,10 @@ export function prepareEntrypointArgs(input: PrepareEntrypointArgsInput): Entryp
     commandPlan,
     showHeader: opts.showHeader,
     readFlagValue,
+    maxConcurrentToolCalls: resolveCliMaxConcurrentToolCalls(
+      input.env,
+      userConfig.maxConcurrentToolCalls,
+    ),
     extractPrompt: (stdin = process.stdin) => extractPrompt(args, stdin),
   }
 }

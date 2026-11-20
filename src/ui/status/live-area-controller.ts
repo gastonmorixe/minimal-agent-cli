@@ -27,6 +27,7 @@ import {
   formatActivityInfix,
   formatElapsedSuffix,
   LABEL_BYTES_RE,
+  pinnedEntryStart,
   RateWindow,
 } from "./format.ts"
 import type { StatusSpinnerTheme } from "./line-renderer.ts"
@@ -196,7 +197,13 @@ export class LiveAreaStatusController implements StatusController {
       return
     }
     // Per-entry start time: see `statusId` / `clock` above.
-    if (status.id !== this.statusId) {
+    // The tool group row (D11) gives its own start: the oldest call that
+    // still runs. Other rows count from the time they are first seen.
+    const pinned = pinnedEntryStart(status)
+    if (pinned !== null) {
+      this.statusId = status.id
+      this.statusStartedAt = pinned
+    } else if (status.id !== this.statusId) {
       this.statusId = status.id
       this.statusStartedAt = this.clock.startOf(status.id, this.now())
     }
