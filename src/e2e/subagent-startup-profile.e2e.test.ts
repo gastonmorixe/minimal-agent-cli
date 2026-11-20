@@ -53,8 +53,8 @@ writeFileSync(join(WORK, "AGENTS.md"), `${AGENTS_MARKER}\n`)
 
 /** Text from the default instructions section (core prompts/instructions.md). */
 const INSTRUCTIONS_PROBE = "# Instructions (INS)"
-/** Text from the default loop-safety section. */
-const LOOP_SAFETY_PROBE = "# Tool loop safety"
+/** Text from the default tool-output-conventions section. */
+const TOOL_OUTPUT_PROBE = "# Tool output conventions"
 /** Text that only plugin prompts add (the `<ma::sys::...>` blocks). */
 const PLUGIN_PROMPT_PROBE = "<ma::sys::"
 
@@ -173,7 +173,6 @@ async function bootLead(sid: string, flags: string[]): Promise<string> {
 
 const T4_LEAD_FLAGS = [
   "--no-system-instructions",
-  "--no-system-loop-safety",
   "--no-system-tool-output-conventions",
   "--no-agents-md",
   "--no-plugin-prompts",
@@ -181,14 +180,14 @@ const T4_LEAD_FLAGS = [
 
 function expectInheritedOmits(c: Captured): void {
   expect(c.system).not.toContain(INSTRUCTIONS_PROBE)
-  expect(c.system).not.toContain(LOOP_SAFETY_PROBE)
+  expect(c.system).not.toContain(TOOL_OUTPUT_PROBE)
   expect(c.system).not.toContain(AGENTS_MARKER)
   expect(c.system).not.toContain(PLUGIN_PROMPT_PROBE)
 }
 
 function expectDefaults(c: Captured): void {
   expect(c.system).toContain(INSTRUCTIONS_PROBE)
-  expect(c.system).toContain(LOOP_SAFETY_PROBE)
+  expect(c.system).toContain(TOOL_OUTPUT_PROBE)
   expect(c.system).toContain(AGENTS_MARKER)
   expect(c.system).toContain(PLUGIN_PROMPT_PROBE)
 }
@@ -205,7 +204,6 @@ describe.skipIf(!HAVE_PLUGINS)("subagent child boots with the lead startup profi
       pluginPrompts: { all: boolean }
     }
     expect(p.systemPrompt.instructions).toEqual({ kind: "omit" })
-    expect(p.systemPrompt.loopSafety).toEqual({ kind: "omit" })
     expect(p.systemPrompt.toolOutputConventions).toEqual({ kind: "omit" })
     expect(p.noAgentsMd).toBe(true)
     expect(p.pluginPrompts.all).toBe(true)
@@ -242,7 +240,7 @@ describe.skipIf(!HAVE_PLUGINS)("subagent child boots with the lead startup profi
     ])
     expect(c.system).toContain(marker)
     // The other inherited omits still hold.
-    expect(c.system).not.toContain(LOOP_SAFETY_PROBE)
+    expect(c.system).not.toContain(TOOL_OUTPUT_PROBE)
     expect(c.system).not.toContain(AGENTS_MARKER)
   }, 60000)
 

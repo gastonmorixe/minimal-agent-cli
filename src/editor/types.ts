@@ -281,7 +281,7 @@ export interface EditorControllerOptions {
    * chain, then the abort-quit FSM.
    *
    * Push onto this stack when an overlay opens that owns "ESC means
-   * me, not abort" — the reflection cooldown, future confirm modals,
+   * me, not abort" — the host countdown, future confirm modals,
    * or any plugin that needs strict LIFO precedence over peer overlays.
    *
    * Defaults to the singleton from `./input-capture-stack.ts`.

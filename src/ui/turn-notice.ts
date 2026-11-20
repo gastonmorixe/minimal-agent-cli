@@ -1,7 +1,7 @@
 /**
  * TUI rendering for {@link TurnNotice} values: out-of-band conditions the
  * agent loop surfaces (provider refusal / content filter, output-budget
- * events, reflection-ack confirmations).
+ * events).
  *
  * The agent core detects each condition and emits the semantic value as a
  * `notice` event; THIS module
@@ -55,14 +55,6 @@ export function renderTurnNotice(notice: TurnNotice): string {
       return `\n  ${c.boldYellow("!")} ${c.yellow(
         `Response hit the max_tokens ceiling ${notice.cap} times in a row — stopping. Consider narrowing the request or raising max_tokens.`,
       )}`
-    case "reflection_ack": {
-      const suffix = notice.reason.length > 0 ? ` — ${notice.reason}` : ""
-      const via = notice.fromToolFallback ? " (from tool_use fallback)" : ""
-      const plural = notice.silenceFor === 1 ? "" : "s"
-      return `  ${c.dim("›")} ${c.dim(
-        `reflection ack: silencing next ${notice.silenceFor} checkpoint${plural}${suffix}${via}`,
-      )}`
-    }
     case "stream_interrupted_salvaged": {
       const n = notice.completedToolCalls
       return `\n  ${c.boldYellow("!")} ${c.yellow(

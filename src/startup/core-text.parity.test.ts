@@ -434,45 +434,6 @@ const FIXTURES: readonly Fixture[] = [
       printNotice({ kind: "stream_interrupted_salvaged", severity: "warn", completedToolCalls: 1 }),
   ],
   [
-    "b13-reflection-plural",
-    "notice: reflection ack, plural, with reason",
-    "core src/agent/turn-notice.ts:224-227",
-    () =>
-      printNotice({
-        kind: "reflection_ack",
-        severity: "info",
-        silenceFor: 3,
-        reason: "long run",
-        fromToolFallback: false,
-      }),
-  ],
-  [
-    "b13-reflection-singular",
-    "notice: reflection ack, singular, no reason",
-    "core src/agent/turn-notice.ts:224-227",
-    () =>
-      printNotice({
-        kind: "reflection_ack",
-        severity: "info",
-        silenceFor: 1,
-        reason: "",
-        fromToolFallback: false,
-      }),
-  ],
-  [
-    "b13-reflection-tool",
-    "notice: reflection ack, tool fallback, with reason",
-    "core src/agent/turn-notice.ts:224-227",
-    () =>
-      printNotice({
-        kind: "reflection_ack",
-        severity: "info",
-        silenceFor: 2,
-        reason: "focus",
-        fromToolFallback: true,
-      }),
-  ],
-  [
     "b13-content-filter",
     "notice: content filter with category and message",
     "core src/agent/turn-notice.ts:211-216",

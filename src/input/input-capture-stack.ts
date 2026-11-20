@@ -12,7 +12,7 @@
  *
  * Some captures don't fit:
  *
- *  - The reflection cooldown opens for ~60s mid-turn, then closes. It
+ *  - The host countdown (`ctx.countdown`) opens for some seconds mid-turn, then closes. It
  *    isn't a plugin; it has no manifest entry; it has no stable
  *    priority relative to whatever plugins happen to be loaded. It
  *    just wants to say "while I'm visible, Esc means ME, not abort".
@@ -48,12 +48,12 @@
  * ---------------
  *  - **Single source of truth**: a module-level {@link inputCaptureStack}
  *    singleton is shared by `EditorController` (consumer) and any
- *    push-side caller (reflection cooldown, future confirm modals,
+ *    push-side caller (the host countdown, future confirm modals,
  *    plugins that opt in). Tests can construct a fresh
  *    {@link InputCaptureStack} and inject it explicitly.
  *  - **Out-of-order release is safe**: removing a capture from the
  *    middle of the stack does not disturb the others. This is needed
- *    when, say, the slash-menu was below the reflection cooldown but
+ *    when, say, the slash-menu was below the host countdown but
  *    the user pressed Enter on the menu (closing it) before the
  *    cooldown elapsed.
  *  - **Handler errors are absorbed**: a throwing handler is logged
@@ -217,7 +217,7 @@ export class InputCaptureStack {
 /**
  * Process-wide singleton, mirroring {@link abortBus}. Both
  * {@link EditorController} (consumer) and push-side callers (the
- * reflection cooldown, future confirm modals, plugins that opt in)
+ * host countdown, future confirm modals, plugins that opt in)
  * resolve to this instance by default. Tests construct a fresh
  * {@link InputCaptureStack} and pass it explicitly.
  */

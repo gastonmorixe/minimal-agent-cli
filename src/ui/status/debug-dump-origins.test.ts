@@ -16,17 +16,22 @@ const bare: DumpOriginSource = { loadedPackages: () => [] }
 
 describe("systemRefs", () => {
   it("places each core slot span at its first line", () => {
-    const text = "identity\n\n# Instructions\nbe short\n\n# Safety\nstop"
+    const text = "identity\n\n# Instructions\nbe short\n\n# Tool output\nstop"
     const src: DumpOriginSource = {
       loadedPackages: () => [],
       describeSystemBlock: () => [
         { slot: "instructions", start: 0, end: 22, overridden: false },
-        { slot: "loopSafety", start: text.indexOf("# Safety"), end: text.length, overridden: true },
+        {
+          slot: "toolOutputConventions",
+          start: text.indexOf("# Tool output"),
+          end: text.length,
+          overridden: true,
+        },
       ],
     }
     expect(systemRefs(text, src)).toEqual([
       { atLine: 1, ref: { kind: "core-slot", slot: "instructions", overridden: false } },
-      { atLine: 6, ref: { kind: "core-slot", slot: "loopSafety", overridden: true } },
+      { atLine: 6, ref: { kind: "core-slot", slot: "toolOutputConventions", overridden: true } },
     ])
   })
 

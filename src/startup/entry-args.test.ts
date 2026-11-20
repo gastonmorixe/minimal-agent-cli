@@ -308,7 +308,11 @@ describe("prepareEntrypointArgs", () => {
   it("resolves system prompt overrides from CLI flags", () => {
     const h = makeHarness()
     const prepared = prepareEntrypointArgs({
-      rawArgv: ["--system-instructions", "custom instructions", "--no-system-loop-safety"],
+      rawArgv: [
+        "--system-instructions",
+        "custom instructions",
+        "--no-system-tool-output-conventions",
+      ],
       env: {},
       cwd: "/tmp",
       ...h.deps,
@@ -317,7 +321,7 @@ describe("prepareEntrypointArgs", () => {
       kind: "replace",
       text: "custom instructions",
     })
-    expect(prepared.opts.systemPromptOverrides.loopSafety).toEqual({ kind: "omit" })
+    expect(prepared.opts.systemPromptOverrides.toolOutputConventions).toEqual({ kind: "omit" })
   })
 
   it("rejects --effort --fast as a missing effort level (does not swallow --fast)", () => {

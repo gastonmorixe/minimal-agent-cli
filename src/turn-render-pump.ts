@@ -132,7 +132,7 @@ export class TurnRenderPump {
 
   /**
    * Resolves when no item waits and no step runs, or after {@link abandon}.
-   * A host write that is not a step (for example the reflection cooldown)
+   * A host write that is not a step (for example a host status row)
    * waits for this, so it shows after the rows before it.
    */
   idle(): Promise<void> {

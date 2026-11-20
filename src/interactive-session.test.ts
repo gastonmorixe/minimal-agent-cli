@@ -6,8 +6,7 @@
  * behavior, while the engine stays usable by headless hosts.
  *
  * Interactive-only behavior is injected through deterministic host seams, so
- * routing and reflection policy can be characterized without timers or TUI
- * singletons.
+ * routing can be characterized without timers or TUI singletons.
  */
 
 import { afterEach, describe, expect, it } from "bun:test"
@@ -24,11 +23,7 @@ import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
 import type { SyntheticTextProvider } from "@minimal-agent/core/plugin-api/types/synthetic-text"
 import type { Message } from "@minimal-agent/core/sdk/messages"
-import {
-  InteractiveSession,
-  type ReflectionCheckpointContext,
-  TranscriptRouter,
-} from "./interactive-session.ts"
+import { InteractiveSession, TranscriptRouter } from "./interactive-session.ts"
 import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 import { textCoreDeps, textFixturesPresent } from "./test-utils/text-fixture-providers.ts"
 import type {
@@ -445,52 +440,6 @@ describe("InteractiveSession", () => {
     expect(trace.at(-1)).toBe("idle-step")
   })
 
-  it("waits for the render steps before the reflection cooldown starts", async () => {
-    let invocation = 0
-    const sendFn = async function* (
-      opts: SendOptions,
-    ): AsyncGenerator<string, StreamedResponse, undefined> {
-      invocation++
-      if (invocation <= 50) {
-        if (invocation === 50) {
-          yield "text 50"
-          await opts.onBlockEdge?.({ block: "text", edge: "stop" })
-        }
-        return {
-          blocks: [{ type: "tool_use", id: `tool-${invocation}`, name: "NoSuchTool", input: {} }],
-          text: "",
-          stopReason: "tool_use",
-        } as StreamedResponse
-      }
-      return response("done")
-    }
-    const trace: string[] = []
-    const session = await InteractiveSession.create({
-      ...baseDeps(sendFn),
-      reflectionCheckpoint: {
-        async wait() {
-          trace.push("checkpoint")
-        },
-      },
-    })
-    await drain(
-      session.run("go", {
-        onTranscriptLine: (line) => {
-          if (line.includes("NoSuchTool")) trace.push("tool-row")
-        },
-        onEvent: async (event) => {
-          if (event.type !== "block_stopped") return
-          trace.push("stop:begin")
-          await new Promise<void>((resolve) => setTimeout(resolve, 5))
-          trace.push("stop:end")
-        },
-      }),
-    )
-    const checkpoint = trace.indexOf("checkpoint")
-    expect(checkpoint).toBeGreaterThan(trace.indexOf("stop:end"))
-    expect(checkpoint).toBeGreaterThan(trace.lastIndexOf("tool-row"))
-  })
-
   it("ends the turn on abort while a render step never ends", async () => {
     const sendFn = async function* (
       opts: SendOptions,
@@ -591,81 +540,6 @@ describe("InteractiveSession", () => {
 
     expect(await drain(session.run("second"))).toBe("chunk-2")
     expect(invocation).toBe(2)
-  })
-
-  it("forwards reflection context and waits for host completion", async () => {
-    const contexts: ReflectionCheckpointContext[] = []
-    const ordering: string[] = []
-    let complete: (() => void) | undefined
-    const checkpointDone = new Promise<void>((resolve) => {
-      complete = resolve
-    })
-    let invocation = 0
-    const sendFn = async function* (): AsyncGenerator<string, StreamedResponse, undefined> {
-      invocation++
-      ordering.push(`send-${invocation}`)
-      if (invocation <= 50) {
-        return {
-          blocks: [{ type: "tool_use", id: `tool-${invocation}`, name: "NoSuchTool", input: {} }],
-          text: "",
-          stopReason: "tool_use",
-        } as StreamedResponse
-      }
-      return response("done")
-    }
-    const controller = new AbortController()
-    const session = await InteractiveSession.create({
-      ...baseDeps(sendFn),
-      reflectionCheckpoint: {
-        async wait(context) {
-          contexts.push(context)
-          ordering.push("checkpoint")
-          await checkpointDone
-          ordering.push("completed")
-        },
-      },
-    })
-
-    const running = drain(session.run("go", { signal: controller.signal }))
-    while (contexts.length === 0) await Promise.resolve()
-    expect(invocation).toBe(50)
-    expect(contexts).toEqual([{ round: 50, cooldownMs: 60_000, signal: controller.signal }])
-    complete?.()
-    expect(await running).toBe("")
-    expect(ordering.slice(-3)).toEqual(["checkpoint", "completed", "send-51"])
-  })
-
-  it("delegates reflection skip and abort semantics to the injected behavior", async () => {
-    const outcomes: string[] = []
-    const controller = new AbortController()
-    let invocation = 0
-    const sendFn = async function* (): AsyncGenerator<string, StreamedResponse, undefined> {
-      invocation++
-      if (invocation <= 100) {
-        return {
-          blocks: [{ type: "tool_use", id: `tool-${invocation}`, name: "NoSuchTool", input: {} }],
-          text: "",
-          stopReason: "tool_use",
-        } as StreamedResponse
-      }
-      return response("done")
-    }
-    const session = await InteractiveSession.create({
-      ...baseDeps(sendFn),
-      reflectionCheckpoint: {
-        async wait({ round, signal }) {
-          outcomes.push(round === 50 ? "skipped" : "aborted")
-          if (round === 100) controller.abort()
-          expect(signal).toBe(controller.signal)
-        },
-      },
-    })
-
-    await expect(drain(session.run("go", { signal: controller.signal }))).rejects.toMatchObject({
-      name: "AbortError",
-    })
-    expect(outcomes).toEqual(["skipped", "aborted"])
-    expect(invocation).toBe(100)
   })
 
   it("routes transcript output to the run callback and preserves thrown and aborted outcomes", async () => {

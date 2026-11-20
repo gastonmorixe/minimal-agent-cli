@@ -3,8 +3,7 @@
  * `createRuntime`/`openSession` {@link Session}.
  *
  * Owns interaction concerns the conversation engine must not import
- * (reflection cooldown with Esc-skip, per-turn transcript rebinding,
- * ReplAgentLike surface). The REPL and other interactive frontends consume
+ * (per-turn transcript rebinding, ReplAgentLike surface). The REPL and other interactive frontends consume
  * this instead of calling the legacy {@link Agent} loop.
  *
  * Drives its turn through the same `createRuntime` / `openSession` /
@@ -23,7 +22,6 @@ import {
   type CompactRequestOpts,
   takePendingCompact,
 } from "@minimal-agent/core/host/compact-contract"
-import { GLOBAL_STATUS_BUS } from "@minimal-agent/core/host/status-bus"
 import { loadBlobStoreConfig } from "@minimal-agent/core/host-kit/blob-store"
 import { type BuildAgentCoreDeps, toEffort } from "@minimal-agent/core/host-kit/build-agent-core"
 import { ToolFeedbackTracker } from "@minimal-agent/core/host-kit/feedback-tracker"
@@ -44,10 +42,8 @@ import type { Message } from "@minimal-agent/core/sdk/messages"
 import type { InputQueuePort } from "@minimal-agent/core/sdk/ports"
 import type { PreflightIssue } from "@minimal-agent/core/sdk/provider"
 import { toolFilterFromNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
-import { inputCaptureStack } from "./input/input-capture-stack.ts"
 import { retryBoundaryText } from "./logging/retry-boundary-text.ts"
 import { TOOL_PRESENTATION } from "./plugins-ui/tool-presentation.ts"
-import { runReflectionCooldown } from "./reflection-cooldown.ts"
 import type { ReplAgentLike } from "./repl.ts"
 import {
   createPluginEventsPort,
@@ -67,21 +63,6 @@ import { createReplToolView } from "./ui/tool-transcript/tool-view.ts"
 type MaybePromise<T> = T | Promise<T>
 
 type TranscriptWriter = (line: string) => void
-
-/** Input handed to the interactive host's reflection checkpoint behavior. */
-export interface ReflectionCheckpointContext {
-  round: number
-  cooldownMs: number
-  signal?: AbortSignal
-}
-
-/**
- * Interactive reflection behavior. The implementation owns completion, abort,
- * and any host-specific skip affordance such as temporarily capturing Esc.
- */
-export interface ReflectionCheckpointBehavior {
-  wait(context: ReflectionCheckpointContext): Promise<void>
-}
 
 /**
  * Run-scoped transcript router. A lease cannot overwrite another active run,
@@ -134,8 +115,6 @@ export type InteractiveSessionDeps = BuildAgentCoreDeps & {
   toolTimeTracker?: ToolTimeTracker | null
   /** Warm, fail-closed syntax highlighter for the tool transcript bodies. */
   codeHighlighter?: CodeHighlighter | null
-  /** Injectable interactive reflection behavior. Defaults to the real TUI cooldown. */
-  reflectionCheckpoint?: ReflectionCheckpointBehavior
   /**
    * `--resume` target: the session store's id and directory. When set, the
    * session opens through core's `resumeSession` (S50), and
@@ -144,28 +123,13 @@ export type InteractiveSessionDeps = BuildAgentCoreDeps & {
   resumeFrom?: { sid: string; dir: string }
 }
 
-const DEFAULT_REFLECTION_CHECKPOINT: ReflectionCheckpointBehavior = {
-  async wait({ round, cooldownMs, signal }): Promise<void> {
-    await runReflectionCooldown({
-      totalMs: cooldownMs,
-      round,
-      statusBus: GLOBAL_STATUS_BUS,
-      inputCaptureStack,
-      ...(signal ? { signal } : {}),
-    })
-  },
-}
-
 /**
- * The per-run state behind the session's `inputQueue` and `reflectionGate`
- * ports. The ports are built once, with the session. Each run sets what
+ * The per-run state behind the session's `inputQueue` port. The ports are built once, with the session. Each run sets what
  * they read, and clears it when it ends.
  */
 class RunPortState {
   /** The queue of the run in progress, if the run has one. */
   inputQueue: InputQueuePort | null = null
-  /** The reflection wait of the run in progress. */
-  reflection: ((round: number) => Promise<void>) | null = null
   /** The render pump of the run in progress. */
   pump: TurnRenderPump | null = null
   /**
@@ -200,18 +164,6 @@ class RunPortState {
   readonly inputQueuePort: InputQueuePort = {
     take: () => this.inputQueue?.take() ?? null,
     injected: (text) => this.inputQueue?.injected?.(text),
-  }
-
-  /**
-   * The `reflectionGate` port: waits on the reflection behavior of the run
-   * in progress. It first waits for the pump to go idle, so the cooldown
-   * shows after the rows of the round before it.
-   */
-  readonly reflectionGatePort = {
-    beforeCheckpoint: async (round: number): Promise<void> => {
-      await this.pump?.idle()
-      await this.reflection?.(round)
-    },
   }
 }
 
@@ -393,24 +345,17 @@ async function openInteractiveSession(
     systemPrompt: "",
     maxTokens: 0,
     ...(deps.systemPromptOverrides ? { systemPromptOverrides: deps.systemPromptOverrides } : {}),
-    ...(deps.reflectionInterval !== undefined
-      ? { reflectionInterval: deps.reflectionInterval }
-      : {}),
-    ...(deps.reflectionCooldownMs !== undefined
-      ? { reflectionCooldownMs: deps.reflectionCooldownMs }
-      : {}),
     ...(deps.retry !== undefined ? { retry: deps.retry } : {}),
     // S23/S28: the CLI status rows and the plugin bus get the engine's
     // status phases and stream telemetry. A caller port wins.
     statusPort,
     pluginEvents: deps.pluginEvents ?? createPluginEventsPort(deps.loader),
     // S17/S27: the `compactSource` port reads the plugin host's
-    // `context:compact` queue, exactly like `buildAgentCore`. The queue and
-    // reflection ports read the state of the run in progress (S37).
+    // `context:compact` queue, exactly like `buildAgentCore`. The queue
+    // port reads the state of the run in progress (S37).
     ports: {
       compactSource: { take: () => takePendingCompact() },
       inputQueue: runPorts.inputQueuePort,
-      reflectionGate: runPorts.reflectionGatePort,
     },
     askUserFallback: "none",
   } satisfies ResumeSessionOptions
@@ -444,7 +389,6 @@ export class InteractiveSession implements ReplAgentLike {
     private readonly loader: PluginLoader | null,
     private readonly modeManager: ModeManager | null,
     private readonly transcript: TranscriptRouter,
-    private readonly reflectionCheckpoint: ReflectionCheckpointBehavior,
     private readonly runPorts: RunPortState,
   ) {}
 
@@ -461,14 +405,7 @@ export class InteractiveSession implements ReplAgentLike {
     if (typeof modes?.bindSyntheticText === "function") {
       modes.bindSyntheticText(session.agentCore().syntheticText)
     }
-    return new InteractiveSession(
-      session,
-      deps.loader,
-      deps.modeManager,
-      transcript,
-      deps.reflectionCheckpoint ?? DEFAULT_REFLECTION_CHECKPOINT,
-      runPorts,
-    )
+    return new InteractiveSession(session, deps.loader, deps.modeManager, transcript, runPorts)
   }
 
   /**
@@ -541,8 +478,8 @@ export class InteractiveSession implements ReplAgentLike {
   }
 
   /**
-   * Run one user turn through the session, with interactive cooldown +
-   * per-turn transcript rebinding. The turn renders from the session's own
+   * Run one user turn through the session, with per-turn transcript
+   * rebinding. The turn renders from the session's own
    * log entries (S36): each `text_delta` comes out as a yielded string, and
    * every other event goes to `opts.onEvent`. A {@link TurnRenderPump}
    * keeps the text, the events, and the tool transcript rows in log order.
@@ -589,12 +526,6 @@ export class InteractiveSession implements ReplAgentLike {
       { channels: ["event"] },
     )
     this.runPorts.inputQueue = opts?.inputQueue ?? null
-    this.runPorts.reflection = (round) =>
-      this.reflectionCheckpoint.wait({
-        round,
-        cooldownMs: this.session.agentCore().getReflectionCooldownMs(),
-        ...(opts?.signal ? { signal: opts.signal } : {}),
-      })
     let entries: ReturnType<Session["run"]> | undefined
     let finished: Promise<void> | undefined
     let settled = false
@@ -646,7 +577,6 @@ export class InteractiveSession implements ReplAgentLike {
       this.runPorts.resetToolRows()
       this.runPorts.toolCalls.reset()
       this.runPorts.inputQueue = null
-      this.runPorts.reflection = null
       this.runPorts.pump = null
       releaseTranscript()
     }

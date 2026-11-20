@@ -262,7 +262,7 @@ describe("resolveSystemPromptOverridesForStartup", () => {
         args: [
           "--system-instructions",
           "custom",
-          "--no-system-loop-safety",
+          "--no-system-tool-output-conventions",
           "--system-identity",
           "My Agent",
         ],
@@ -271,7 +271,7 @@ describe("resolveSystemPromptOverridesForStartup", () => {
       }),
     ).toEqual({
       instructions: { kind: "replace", text: "custom" },
-      loopSafety: { kind: "omit" },
+      toolOutputConventions: { kind: "omit" },
       identity: { kind: "replace", text: "My Agent" },
     })
   })

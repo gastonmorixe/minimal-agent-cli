@@ -314,7 +314,7 @@ export class EditorKeyDispatcher {
     }
     // Two-layer dispatch for ESC. Top to bottom:
     //
-    //   1. InputCaptureStack (LIFO, transient): reflection cooldown,
+    //   1. InputCaptureStack (LIFO, transient): the host countdown,
     //      confirm modals, anything that wants strict "most recently
     //      opened, first to close" precedence.
     //   2. editor.key hook chain (priority, durable): plugins like

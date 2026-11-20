@@ -343,14 +343,11 @@ describe("DEFAULT_ICON_BY_NOTIFICATION_ID (live-area status defaults)", () => {
     expect(isAnimatedIcon(NF_LOCK)).toBe(false)
   })
 
-  it("agent.reflection-cooldown → blinking pause (regression: was silently the fallback dot)", () => {
-    // Pre-this-change, the reflection-cooldown emitter had no entry in
-    // either `iconByNotificationId` or `iconByCategory[reflection]`, so
-    // it silently fell through to DEFAULT_NERD_ICON (the tiny `·`).
-    // This test pins the explicit mapping so a future preset refactor
-    // can't silently revert the fallback.
-    expect(DEFAULT_ICON_BY_NOTIFICATION_ID["agent.reflection-cooldown"]).toBe(ICON_PAUSE)
-    expect(DEFAULT_ICON_BY_NOTIFICATION_ID["agent.reflection-cooldown"]).not.toBe(DEFAULT_NERD_ICON)
+  it("host.countdown → blinking pause (not the fallback dot)", () => {
+    // This test keeps the explicit mapping, so a preset change cannot
+    // make the host countdown row fall back to DEFAULT_NERD_ICON (`·`).
+    expect(DEFAULT_ICON_BY_NOTIFICATION_ID["host.countdown"]).toBe(ICON_PAUSE)
+    expect(DEFAULT_ICON_BY_NOTIFICATION_ID["host.countdown"]).not.toBe(DEFAULT_NERD_ICON)
   })
 
   it("category mappings mirror notification-id mappings for the same semantic", () => {
@@ -362,7 +359,7 @@ describe("DEFAULT_ICON_BY_NOTIFICATION_ID (live-area status defaults)", () => {
     expect(DEFAULT_ICON_BY_CATEGORY.tool).toBe(TOOL_DOT_PULSE)
     expect(DEFAULT_ICON_BY_CATEGORY.network).toBe(ICON_DOT_FILLED)
     expect(DEFAULT_ICON_BY_CATEGORY.auth).toBe(NF_LOCK)
-    expect(DEFAULT_ICON_BY_CATEGORY.reflection).toBe(ICON_PAUSE)
+    expect(DEFAULT_ICON_BY_CATEGORY.countdown).toBe(ICON_PAUSE)
   })
 })
 

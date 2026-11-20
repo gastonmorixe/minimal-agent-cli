@@ -84,28 +84,6 @@ describe("renderTurnNotice (TUI treatment per kind)", () => {
     ).toContain("1 times in a row")
   })
 
-  it("renders a dim marker for reflection_ack (with and without reason)", () => {
-    const withReason = renderTurnNotice({
-      kind: "reflection_ack",
-      severity: "info",
-      silenceFor: 3,
-      reason: "long refactor",
-      fromToolFallback: false,
-    })
-    expect(withReason).toContain("silencing next 3 checkpoints")
-    expect(withReason).toContain("long refactor")
-
-    const fromTool = renderTurnNotice({
-      kind: "reflection_ack",
-      severity: "info",
-      silenceFor: 1,
-      reason: "",
-      fromToolFallback: true,
-    })
-    expect(fromTool).toContain("silencing next 1 checkpoint")
-    expect(fromTool).toContain("from tool_use fallback")
-  })
-
   it("renders a dim marker for model_adopted, with and without an effort reset", () => {
     const plain = renderTurnNotice({
       kind: "model_adopted",

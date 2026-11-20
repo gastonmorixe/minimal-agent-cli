@@ -9,6 +9,7 @@
  */
 
 import { TEXT_CONTRACTS } from "@minimal-agent/core/host-kit/plugin-loader"
+import { hostCountdown } from "../host-countdown.ts"
 
 /** Spread into the `PluginLoader.load` options of the CLI. */
 export const CLI_TEXT_CONTRACT_CHECK = {
@@ -18,14 +19,16 @@ export const CLI_TEXT_CONTRACT_CHECK = {
 
 /**
  * The plugin roots and core tool names of the CLI loader, plus the text
- * contract check. One spread in `main.ts`, so the loader options stay short.
+ * contract check and the host countdown of hook handlers (`ctx.countdown`:
+ * a status row that Esc skips, see `src/host-countdown.ts`). One spread in
+ * `main.ts`, so the loader options stay short.
  *
  * @param roots - The plugin roots of the CLI (S40).
  * @param coreToolNames - The built-in tool names, which always win.
  * @returns The loader options to spread.
  */
 export function cliLoaderBase<R, N>(roots: R, coreToolNames: N) {
-  return { roots, coreToolNames, ...CLI_TEXT_CONTRACT_CHECK }
+  return { roots, coreToolNames, ...CLI_TEXT_CONTRACT_CHECK, countdown: hostCountdown }
 }
 
 /** The loader methods that show whether a plugin supplies model-facing text. */
