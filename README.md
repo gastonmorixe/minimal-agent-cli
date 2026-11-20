@@ -334,6 +334,9 @@ Common environment variables:
 - **`MINIMAL_AGENT_TRANSPORT`:** Select `http2` or `fetch`.
 - **`MINIMAL_AGENT_ALLOW_FETCH_FALLBACK=1`:** Permit fetch fallback after an HTTP/2 failure.
 - **`MINIMAL_AGENT_NET_DBG=1`:** Mirror raw HTTP traffic to `~/.minimal-agent/net-dbg/` (honors `MINIMAL_AGENT_HOME`).
+- **`MINIMAL_AGENT_STREAM_IDLE_TIMEOUT_MS`:** Mid-stream idle limit in ms (default 30 s; minimum 1 s).
+- **`MINIMAL_AGENT_SILENT_BLOCK_IDLE_TIMEOUT_MS`:** Idle limit in ms while a thinking or tool-input block is open (default 300 s, or 90 s after a keepalive ping inside the block; minimum 1 s).
+- **`MINIMAL_AGENT_RESPONSE_HEADERS_TIMEOUT_MS`:** Base limit in ms before the response headers arrive (default 60 s for a remote host; it doubles for each retry, up to 240 s). After the headers arrive, or for a local or LAN host, the default is 120 s. Minimum 5 s. Increase it for big uploads on a slow link.
 - **`MINIMAL_AGENT_SPINNER`:** Select the spinner preset (`minimal-agent spinners` lists them).
 - **`MINIMAL_AGENT_MODEL`:** Select the model (same as `--model`).
 - **`MINIMAL_AGENT_PROVIDER`:** Select the provider (same as `--provider`).

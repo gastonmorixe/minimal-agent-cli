@@ -66,6 +66,20 @@ terminal client is being moved out of `minimal-agent-core` into this repo
   scrollback sink). The glyph still tells them apart: `◇` with a dim body
   is expected, `◆` with a normal body is actionable
   (`src/ui/status/cache-break-row.ts`).
+- 2026-11-20: **e2e: a headless run waits for its background job.** New
+  `src/e2e/headless-bg-wait.e2e.test.ts` with a scripted fixture provider
+  (`src/e2e/fixtures/ma-llm-bg-wait-fixture-plugin`). The real CLI (`-p`,
+  `stream-json`) starts `BackgroundRun`, answers "I wait.", and the
+  ma-background `turn.willStop` hook holds the turn until the job ends. The
+  result has the job output, the exit code is 0 and the job exited 0. A
+  negative control (`MINIMAL_AGENT_BG_HEADLESS_WAIT=0`) gives only the
+  rounds run/wait and no job output. A worker run that gets SIGTERM while
+  the hook waits exits 143 in less than 1.5 s with no "a live handle kept
+  the process" line, and the job is stopped. A plain `-p` run (no SIGTERM
+  owner) that gets SIGTERM while the hook waits ends by the signal, and the
+  job is stopped. The child env drops the worker, `MINIMAL_AGENT_BG_*` and
+  parent session keys. Test only. It skips with a warning when the sibling
+  ma-background plugin is absent, and fails when `CI` is set.
 - 2026-11-20: **Concurrent tool calls: waves, one status row, default cap
   10.** Requires core `baf21e72` (branch `concurrent-tool-calls`). Terms:
   `GLOSSARY.md` (wave, concurrency-safe, concurrency cap).
