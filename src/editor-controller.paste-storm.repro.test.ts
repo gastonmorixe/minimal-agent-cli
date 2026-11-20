@@ -153,6 +153,38 @@ describe("EditorController — large paste must not stack frames into scrollback
     }
   })
 
+  it("a paste with tab characters leaves clean scrollback (user report Nov 20 2026)", () => {
+    // `cat -n` style text: a line number, a TAB, then the line. The terminal
+    // moves a TAB to the next tab stop, so a raw TAB in a live-area row makes
+    // the row wider than the editor measured, and the erase walk-up stops
+    // short. The editor must paint spaces, never a raw TAB.
+    const h = makeHarness({ termCols: 40, outColumns: 40 })
+    try {
+      const raw: string[] = []
+      const feed = h.term.feed.bind(h.term)
+      ;(h.term as unknown as { feed: (s: string) => void }).feed = (s: string) => {
+        raw.push(s)
+        return feed(s)
+      }
+      const lines: string[] = []
+      for (let i = 1; i <= 30; i++) {
+        lines.push(`${String(i).padStart(6)}\t${"x".repeat(i % 3 === 0 ? 31 : 12)} ${i}`)
+      }
+      h.stdin.send("\x1b[200~")
+      for (const c of chunkify(lines.join("\r"), 8)) h.stdin.send(c)
+      h.stdin.send("\x1b[201~")
+      for (let i = 0; i < 12; i++) h.stdin.send("\x1b[A")
+
+      expect(raw.join("")).not.toContain("\t")
+      expect(ghostCount(h.term)).toBe(0)
+      // Exactly one scroll indicator on screen, and the buffer keeps the TABs.
+      expect(h.term.screen().filter((l) => /more lines?$/.test(l)).length).toBe(1)
+      expect(h.ctrl.buffer().toString()).toContain("     1\tx")
+    } finally {
+      h.cleanup()
+    }
+  })
+
   it("a 12-chunk paste burst coalesces to few paints instead of one per chunk", () => {
     const h = makeHarness({ termCols: 40, outColumns: 40 })
     try {

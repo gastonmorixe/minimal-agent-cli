@@ -12,10 +12,12 @@
  * @module editor/vertical-nav
  */
 
-import { displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
-
 import type { EditorBuffer } from "../input/editor-buffer.ts"
-import { computeCursorVisualPos, findColAtVisualPos } from "../ui/editor/renderer.ts"
+import {
+  computeCursorVisualPos,
+  editorLineWidth,
+  findColAtVisualPos,
+} from "../ui/editor/renderer.ts"
 
 /**
  * Per-row prompt geometry the navigator needs from the renderer:
@@ -122,7 +124,7 @@ export class VerticalNavigator {
     const prevRow = this.buf.row - 1
     const prevLine = this.buf.lines[prevRow]
     const prevPromptW = this.promptWidthForRow(prevRow)
-    const prevWidth = prevPromptW + displayWidth(prevLine)
+    const prevWidth = prevPromptW + editorLineWidth(prevLine)
     const prevRowCount = prevWidth <= 0 ? 1 : Math.max(1, Math.ceil(prevWidth / cols))
     const targetVisualRow = prevRowCount - 1
     const newCol = findColAtVisualPos(prevLine, targetVisualRow, target, prevPromptW, cols)

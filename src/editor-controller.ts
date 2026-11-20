@@ -1370,10 +1370,17 @@ export class EditorController extends EventEmitter {
     // decoration did not — terminal DECAWM wrap then desynced eraseLiveSeq and
     // duplicated status / scroll-indicator frames. Budget cols-1 when cols>1.
     const liveLineBudget = typeof cols === "number" && cols > 1 ? cols - 1 : (cols ?? 0)
-    const clampLiveLine = (line: string): string =>
-      !line || !cols || cols <= 0 || liveLineBudget <= 0
+    // A raw tab breaks the same invariant: the terminal moves it to the next
+    // tab stop, but `displayWidth` counts 0 cells for it, so the row is wider
+    // on screen than the clamp measured. Status, decoration and footer rows
+    // get one space for each tab. (The editor rows expand tabs to tab stops
+    // in `EditorRenderer`.)
+    const clampLiveLine = (rawLine: string): string => {
+      const line = rawLine.includes("\t") ? rawLine.replaceAll("\t", " ") : rawLine
+      return !line || !cols || cols <= 0 || liveLineBudget <= 0
         ? line
         : truncateDisplayWidth(line, liveLineBudget)
+    }
     const composedFooter = composedFooterRaw.map(clampLiveLine)
     const decorationClamped = this.decorationLines.map(clampLiveLine)
     const footerSpacerRows = composedFooter.length > 0 ? 1 : 0

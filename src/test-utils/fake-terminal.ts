@@ -8,7 +8,7 @@
  * tmux or pulling in `pyte`.
  *
  * Scope (intentionally narrow — extend on demand):
- * - Printable text, CR (`\r`), LF (`\n` or `\x0a`), BS (`\x08`).
+ * - Printable text, CR (`\r`), LF (`\n` or `\x0a`), BS (`\x08`), HT (`\t`).
  * - CSI cursor: `A` up, `B` down, `C` forward, `D` back; default 1.
  * - CSI line: `\x1b[K` erase to EOL (param 0 only).
  * - CSI screen: `\x1b[J` erase from cursor to end of screen (param 0).
@@ -124,6 +124,16 @@ export class FakeTerminal {
       }
       if (ch === "\x07") {
         // BEL — ignore.
+        i++
+        continue
+      }
+      if (ch === "\t") {
+        // HT: move to the next tab stop (every 8 cells). The cursor stops at
+        // the last column and never wraps; the cells it passes keep their text.
+        if (!this.pendingWrap) {
+          const next = (Math.floor(this.cursorCol / 8) + 1) * 8
+          this.cursorCol = Math.min(this.cols - 1, next)
+        }
         i++
         continue
       }

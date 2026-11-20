@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test"
 
 import { EditorBuffer } from "../../input/editor-buffer.ts"
 
-import { EditorRenderer } from "./renderer.ts"
+import { computeCursorVisualPos, EditorRenderer, findColAtVisualPos } from "./renderer.ts"
 
 describe("EditorRenderer", () => {
   it("renders an empty buffer as a single prompt-only row", () => {
@@ -224,6 +224,83 @@ describe("EditorRenderer", () => {
     // 5 emoji × 2 cells + 2-cell prompt = 12 cells → 2 rows in a 10-col TTY.
     buf.insert("🙂🙂🙂🙂🙂")
     expect(r.measureRows(buf, 10)).toBe(2)
+  })
+})
+
+describe("EditorRenderer — tabs", () => {
+  const make = () => new EditorRenderer({ prompt: "> ", continuationPrompt: "  " })
+
+  it("paints a tab as spaces up to the next 8-cell stop of the content", () => {
+    const buf = new EditorBuffer()
+    buf.insert("ab\tc")
+    const out = make().render(buf, { columns: 40 })
+    expect(out.lines).toEqual([`> ab${" ".repeat(6)}c`])
+    // prompt 2 + "ab" 2 + tab 6 + "c" 1
+    expect(out.cursor).toEqual({ row: 0, col: 11 })
+  })
+
+  it("counts tab stops from the start of the content, not from the prompt", () => {
+    const r = new EditorRenderer({ prompt: "ASK > ", continuationPrompt: "  " })
+    const buf = new EditorBuffer()
+    buf.insert("     1\tone")
+    buf.newline()
+    buf.insert("    10\tten")
+    const out = r.render(buf, { columns: 40 })
+    expect(out.lines).toEqual(["ASK >      1  one", "      10  ten"])
+  })
+
+  it("never emits a raw tab, with or without columns", () => {
+    const buf = new EditorBuffer()
+    buf.insert("\ta\t\tb")
+    for (const columns of [undefined, 12, 80]) {
+      const out = make().render(buf, { columns })
+      expect(out.lines.join("\n")).not.toContain("\t")
+    }
+  })
+
+  it("counts tab cells when it wraps, and splits a tab across rows", () => {
+    const buf = new EditorBuffer()
+    // content cells: "abcdef" 6, tab 2 (to stop 8), "gh" 2 = 10; + prompt 2 = 12.
+    buf.insert("abcdef\tgh")
+    const r = make()
+    const out = r.render(buf, { columns: 9 })
+    // Row 0 holds prompt + "abcdef" + 1 tab cell (9 cells). Row 1 holds the
+    // other tab cell + "gh".
+    expect(out.lines).toEqual(["> abcdef ", " gh"])
+    expect(out.cursor).toEqual({ row: 1, col: 3 })
+    expect(r.measureRows(buf, 9)).toBe(2)
+  })
+
+  it("puts the cursor before and after a tab at the right cells", () => {
+    const buf = new EditorBuffer()
+    buf.insert("a\tb")
+    buf.col = 1
+    expect(make().render(buf, { columns: 40 }).cursor).toEqual({ row: 0, col: 3 })
+    buf.col = 2
+    expect(make().render(buf, { columns: 40 }).cursor).toEqual({ row: 0, col: 10 })
+    // Legacy no-columns layout agrees.
+    expect(make().render(buf).cursor).toEqual({ row: 0, col: 10 })
+  })
+
+  it("visual position helpers use the same tab cells as render", () => {
+    // prompt 2 + "abcdef" 6 + tab 2 + "gh" 2 = 12 cells at cols 9 → 2 rows.
+    expect(computeCursorVisualPos("abcdef\tgh", 9, 2, 9)).toEqual({
+      visualRow: 1,
+      visualCol: 3,
+      rowsInLine: 2,
+    })
+    // Row 1, cell 1 is just after the tab (col 7); cell 0 is inside it.
+    expect(findColAtVisualPos("abcdef\tgh", 1, 1, 2, 9)).toBe(7)
+    expect(findColAtVisualPos("abcdef\tgh", 1, 0, 2, 9)).toBe(6)
+  })
+
+  it("show-hidden paints one arrow for a tab and keeps its width", () => {
+    const r = new EditorRenderer({ prompt: "> ", continuationPrompt: "  ", showHidden: true })
+    const buf = new EditorBuffer()
+    buf.insert("ab\tc")
+    const out = r.render(buf, { columns: 40 })
+    expect(out.lines).toEqual([`> ab\x1b[2m\u2192\x1b[22m${" ".repeat(5)}c`])
+    expect(out.cursor).toEqual({ row: 0, col: 11 })
   })
 })
 

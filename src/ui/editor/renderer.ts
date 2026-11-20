@@ -180,47 +180,38 @@ export class EditorRenderer {
       const prompt = isFirstLogical ? this.prompt : this.continuationPrompt
       const promptW = isFirstLogical ? this.promptWidth : this.continuationPromptWidth
       const lineText = buf.lines[logical]
-      const absStart = lineAbsStarts ? lineAbsStarts[logical]! : 0
-      const paint = (text: string, contentStartCp: number): string => {
-        if (!lineAbsStarts || styles.length === 0) return text
-        return applyStylesToText(text, absStart + contentStartCp, styles)
-      }
+      const cells = lineCells(lineText)
+      // Style of each code point of this line, or null when no span covers it.
+      const styleAt = lineAbsStarts
+        ? resolveLineStyles(codePointCount(lineText), lineAbsStarts[logical]!, styles)
+        : null
+      const isNonLastLine = logical < totalRows - 1
 
       if (!wrap) {
-        // show-hidden + styles: paint SGR around plain text, then swap
-        // space/tab code points for dim glyphs (markHidden leaves ESC runs
-        // alone). Cursor math still uses plain buf.col / displayWidth.
-        let displayText: string
-        if (this.showHidden) {
-          displayText =
-            markHidden(paint(lineText, 0)) + (logical < totalRows - 1 ? HIDDEN_NEWLINE : "")
-        } else {
-          displayText = paint(lineText, 0)
-        }
-        lines.push(prompt + displayText)
+        // One row for the logical line. A tab is painted as spaces here too,
+        // so the cursor column counts the same cells the terminal shows.
+        lines.push(
+          prompt +
+            paintCells(cells, styleAt, this.showHidden) +
+            (this.showHidden && isNonLastLine ? HIDDEN_NEWLINE : ""),
+        )
         if (logical === buf.row) {
           cursorRow = i
-          cursorCol = promptW + buf.col
+          cursorCol = promptW + buf.col + tabExtraCells(lineText, buf.col)
           cursorPlaced = true
         }
         continue
       }
 
       const startPhysical = lines.length
-      // wrapContent returns plain chunks; track code-point offsets so styles
-      // re-apply across wrap boundaries (each chunk paints its own SGR runs).
-      const chunks = wrapContent(lineText, cols, promptW)
-      let contentCp = 0
-      const isNonLastLine = logical < totalRows - 1
+      // Each chunk is a run of cells for one physical row. A cell keeps the
+      // index of its code point, so styles re-apply across wrap boundaries.
+      const chunks = wrapCells(cells, cols, promptW)
       for (let k = 0; k < chunks.length; k++) {
-        const chunk = chunks[k]!
-        let painted = paint(chunk, contentCp)
-        if (this.showHidden) {
-          painted =
-            markHidden(painted) + (isNonLastLine && k === chunks.length - 1 ? HIDDEN_NEWLINE : "")
-        }
+        const painted =
+          paintCells(chunks[k]!, styleAt, this.showHidden) +
+          (this.showHidden && isNonLastLine && k === chunks.length - 1 ? HIDDEN_NEWLINE : "")
         lines.push((k === 0 ? prompt : "") + painted)
-        contentCp += codePointCount(chunk)
       }
 
       if (logical === buf.row) {
@@ -274,7 +265,7 @@ export class EditorRenderer {
     let total = 0
     for (let i = 0; i < buf.lines.length; i++) {
       const promptW = i === 0 ? this.promptWidth : this.continuationPromptWidth
-      const w = promptW + displayWidth(buf.lines[i])
+      const w = promptW + editorLineWidth(buf.lines[i])
       let rows = wrapRows(w, columns)
       // Phantom row when the cursor sits at end of an exact-fill line —
       // must match the renderer's `lines.push("")` branch above.
@@ -287,10 +278,6 @@ export class EditorRenderer {
   }
 }
 
-/**
- * Display width of the first `charCount` code points of `text`. `charCount`
- * is in code-point units (matching {@link EditorBuffer}'s column model).
- */
 /** Number of code points in `text` (matches EditorBuffer's column model). */
 function codePointCount(text: string): number {
   let n = 0
@@ -303,17 +290,79 @@ function codePointCount(text: string): number {
   return n
 }
 
+/**
+ * Cells between tab stops in the editor. The renderer paints a tab as spaces
+ * up to the next stop, counted from the start of the line content (after the
+ * prompt), so the same text has the same shape on every row.
+ *
+ * The terminal never gets a raw tab from the editor. A terminal moves a tab
+ * to ITS next stop, counted from the left edge of the screen, so the width of
+ * a raw tab depends on the prompt and on the wrap position, and no width
+ * table can give it. Rows with a raw tab were wider on screen than the
+ * renderer measured (`codePointWidth` gives a tab 0 cells), the terminal
+ * wrapped them, and the compositor erase stopped short: each repaint left one
+ * more copy of the frame on screen (user report Nov 20 2026, a paste of
+ * `cat -n` text).
+ */
+export const EDITOR_TAB_STOP = 8
+
+/** Cells a tab uses when it starts `contentCol` cells into the line content. */
+function tabCells(contentCol: number): number {
+  return EDITOR_TAB_STOP - (contentCol % EDITOR_TAB_STOP)
+}
+
+/**
+ * Display width of the first `charCount` code points of `text`, with each tab
+ * counted as the cells to its next stop. `charCount` is in code-point units
+ * (matching {@link EditorBuffer}'s column model).
+ */
 function displayWidthOfChars(text: string, charCount: number): number {
   let width = 0
   let consumed = 0
   for (let i = 0; i < text.length && consumed < charCount; ) {
     const cp = text.codePointAt(i)
     if (cp === undefined) break
-    width += codePointWidth(cp)
+    width += cp === 0x09 ? tabCells(width) : codePointWidth(cp)
     i += cp > 0xffff ? 2 : 1
     consumed += 1
   }
   return width
+}
+
+/**
+ * Display width, in terminal cells, of one logical editor line as the
+ * renderer paints it: plain text with no ANSI, each tab counted as the cells
+ * to its next stop. Use this, not `displayWidth`, for any wrap math on buffer
+ * text.
+ */
+export function editorLineWidth(text: string): number {
+  return displayWidthOfChars(text, Number.POSITIVE_INFINITY)
+}
+
+/**
+ * Cells that the tabs among the first `charCount` code points add beyond one
+ * cell each. The no-wrap layout counts one cell for each code point, so this
+ * is the correction for its cursor column.
+ */
+function tabExtraCells(text: string, charCount: number): number {
+  if (!text.includes("\t")) return 0
+  let width = 0
+  let extra = 0
+  let consumed = 0
+  for (let i = 0; i < text.length && consumed < charCount; ) {
+    const cp = text.codePointAt(i)
+    if (cp === undefined) break
+    if (cp === 0x09) {
+      const w = tabCells(width)
+      extra += w - 1
+      width += w
+    } else {
+      width += codePointWidth(cp)
+    }
+    i += cp > 0xffff ? 2 : 1
+    consumed += 1
+  }
+  return extra
 }
 
 /**
@@ -344,7 +393,7 @@ export function computeCursorVisualPos(
   }
   const colCells = displayWidthOfChars(text, col)
   const totalCells = promptW + colCells
-  const lineWidth = promptW + displayWidth(text)
+  const lineWidth = promptW + editorLineWidth(text)
   // Use the same wrap math as the renderer. Both `cursorRowOffset` and
   // `cursorVisualCol` (from term-width.ts) park the exact-fill cursor at
   // the end of the current row; we follow the same convention so the
@@ -394,7 +443,7 @@ export function findColAtVisualPos(
     const cp = text.codePointAt(i)
     if (cp === undefined) break
     const ch = String.fromCodePoint(cp)
-    const w = codePointWidth(cp)
+    const w = cp === 0x09 ? tabCells(cells) : codePointWidth(cp)
     // If consuming this char would put us past the target, stop here.
     // Tie-break: when `cells + w === targetContentCells` we consume (the
     // cursor sits AFTER the char, which is how all other editors render
@@ -408,34 +457,71 @@ export function findColAtVisualPos(
 }
 
 /**
- * Split plain `text` into chunks such that each chunk's display width fits
- * within the available cells of its physical row. The first chunk is sized
- * for `cols - firstPromptW` cells (because the prompt occupies the head of
- * the first physical row); subsequent chunks get the full `cols` width.
- *
- * Always returns at least one chunk (possibly empty) so the caller can
- * still emit the prompt-only row for empty buffers.
+ * One painted unit of a logical line. Most code points give one cell entry of
+ * their display width (0 for a combining mark, 2 for a wide glyph). A tab
+ * gives one entry of width 1 for each cell to its next stop, so a wrap can
+ * fall inside it.
  */
-function wrapContent(text: string, cols: number, firstPromptW: number): string[] {
-  const result: string[] = []
-  const firstCap = Math.max(1, cols - firstPromptW)
-  let cap = firstCap
-  let cur = ""
-  let curW = 0
+interface LineCell {
+  /** Text to paint: the code point, or one space for a cell of a tab. */
+  text: string
+  /** Index of the source code point in the logical line. */
+  cp: number
+  /** Display width in terminal cells. */
+  width: number
+  /** `head` for the first cell of a tab, `fill` for its other cells. */
+  tab?: "head" | "fill"
+}
+
+/** Split a logical line into {@link LineCell}s, with tabs expanded. */
+function lineCells(text: string): LineCell[] {
+  const cells: LineCell[] = []
+  let col = 0
+  let index = 0
   for (let i = 0; i < text.length; ) {
     const cp = text.codePointAt(i)
     if (cp === undefined) break
     const ch = String.fromCodePoint(cp)
-    const w = codePointWidth(cp)
     i += ch.length
-    if (curW + w > cap) {
+    if (cp === 0x09) {
+      const n = tabCells(col)
+      for (let k = 0; k < n; k++) {
+        cells.push({ text: " ", cp: index, width: 1, tab: k === 0 ? "head" : "fill" })
+      }
+      col += n
+    } else {
+      const width = codePointWidth(cp)
+      cells.push({ text: ch, cp: index, width })
+      col += width
+    }
+    index += 1
+  }
+  return cells
+}
+
+/**
+ * Split `cells` into chunks such that each chunk's display width fits within
+ * the available cells of its physical row. The first chunk is sized for
+ * `cols - firstPromptW` cells (because the prompt occupies the head of the
+ * first physical row); subsequent chunks get the full `cols` width.
+ *
+ * Always returns at least one chunk (possibly empty) so the caller can
+ * still emit the prompt-only row for empty buffers.
+ */
+function wrapCells(cells: readonly LineCell[], cols: number, firstPromptW: number): LineCell[][] {
+  const result: LineCell[][] = []
+  let cap = Math.max(1, cols - firstPromptW)
+  let cur: LineCell[] = []
+  let curW = 0
+  for (const cell of cells) {
+    if (curW + cell.width > cap) {
       result.push(cur)
-      cur = ""
+      cur = []
       curW = 0
       cap = cols
     }
-    cur += ch
-    curW += w
+    cur.push(cell)
+    curW += cell.width
   }
   if (result.length === 0 || cur.length > 0) result.push(cur)
   return result
@@ -457,50 +543,68 @@ function buildLineAbsStarts(lines: readonly string[]): number[] {
 }
 
 /**
- * Paint SGR open/close around runs of `text` whose absolute code-point range
- * (starting at `absStart`) intersects any of `styles`. Last-wins when spans
- * overlap. Resets with `\x1b[0m` after each styled run so subsequent plain
- * text is unstyled. Empty text is returned unchanged.
- *
- * Styles never change display width: only ANSI is inserted.
+ * Style of each of the `count` code points of a logical line that starts at
+ * absolute offset `absStart`, or null where no span covers it. Later spans
+ * win when spans overlap. Returns null when no span touches the line.
  */
-function applyStylesToText(
-  text: string,
+function resolveLineStyles(
+  count: number,
   absStart: number,
   styles: readonly BufferStyleSpan[],
-): string {
-  if (text.length === 0 || styles.length === 0) return text
-  // Resolve which style (if any) covers each code point. Later spans win.
-  const cps: string[] = []
-  for (let i = 0; i < text.length; ) {
-    const cp = text.codePointAt(i)!
-    const ch = String.fromCodePoint(cp)
-    cps.push(ch)
-    i += ch.length
-  }
-  const n = cps.length
-  const styleAt: (string | null)[] = new Array(n).fill(null)
+): (string | null)[] | null {
+  if (count === 0 || styles.length === 0) return null
+  let styleAt: (string | null)[] | null = null
   for (const span of styles) {
     if (typeof span.start !== "number" || typeof span.end !== "number") continue
     if (typeof span.style !== "string" || span.style.length === 0) continue
     if (!(span.end > span.start)) continue
     const from = Math.max(0, span.start - absStart)
-    const to = Math.min(n, span.end - absStart)
+    const to = Math.min(count, span.end - absStart)
     if (from >= to) continue
+    styleAt ??= new Array<string | null>(count).fill(null)
     for (let i = from; i < to; i++) styleAt[i] = span.style
   }
+  return styleAt
+}
+
+/**
+ * Text for one physical row of `cells`.
+ *
+ * Runs of cells with the same style get its SGR open and a `\x1b[0m` reset,
+ * so the plain text after a run is unstyled. Styles never change display
+ * width: only ANSI is inserted.
+ *
+ * With `showHidden`, a space becomes a faint `·` (U+00B7) and the first cell
+ * of a tab a faint `→` (U+2192); the other cells of the tab stay blank. Each
+ * glyph uses one cell, the same as the cell it replaces, so cursor positions
+ * stay valid.
+ */
+function paintCells(
+  cells: readonly LineCell[],
+  styleAt: readonly (string | null)[] | null,
+  showHidden: boolean,
+): string {
   let out = ""
   let i = 0
-  while (i < n) {
-    const s = styleAt[i]
-    let j = i + 1
-    while (j < n && styleAt[j] === s) j++
-    const run = cps.slice(i, j).join("")
-    if (s) out += s + run + "\x1b[0m"
-    else out += run
+  while (i < cells.length) {
+    const style = styleAt ? (styleAt[cells[i]!.cp] ?? null) : null
+    let run = ""
+    let j = i
+    while (j < cells.length && (styleAt ? (styleAt[cells[j]!.cp] ?? null) : null) === style) {
+      run += cellText(cells[j]!, showHidden)
+      j++
+    }
+    out += style ? `${style}${run}\x1b[0m` : run
     i = j
   }
   return out
+}
+
+function cellText(cell: LineCell, showHidden: boolean): string {
+  if (!showHidden) return cell.text
+  if (cell.tab === "head") return HIDDEN_TAB
+  if (cell.tab === "fill") return " "
+  return cell.text === " " ? HIDDEN_SPACE : cell.text
 }
 
 /**
@@ -509,35 +613,8 @@ function applyStylesToText(
  */
 const HIDDEN_NEWLINE = c.dim("\u21b5")
 
-/**
- * Replace invisible characters with faint visual indicator glyphs.
- *
- * | Character | Replacement | Meaning            |
- * |-----------|-------------|-------------------- |
- * | SPACE     | `·`         | U+00B7 MIDDLE DOT  |
- * | TAB       | `→`         | U+2192 RIGHTWARDS ARROW |
- *
- * ANSI escape sequences already present in the text are passed through
- * untouched (the renderer normally passes plain user input here, but
- * callers should be aware).
- *
- * Width contract: each substituted glyph occupies exactly one terminal
- * cell — the same as the original character — so cursor positions
- * computed from the untransformed text remain valid.
- */
-function markHidden(text: string): string {
-  let out = ""
-  for (let i = 0; i < text.length; ) {
-    const cp = text.codePointAt(i)!
-    const ch = String.fromCodePoint(cp)
-    i += ch.length
-    if (ch === " ") {
-      out += c.dim("\u00b7") // · MIDDLE DOT
-    } else if (ch === "\t") {
-      out += c.dim("\u2192") // → RIGHTWARDS ARROW
-    } else {
-      out += ch
-    }
-  }
-  return out
-}
+/** Faint `·` (U+00B7 MIDDLE DOT) for a space in show-hidden mode. */
+const HIDDEN_SPACE = c.dim("\u00b7")
+
+/** Faint `→` (U+2192 RIGHTWARDS ARROW) for the first cell of a tab in show-hidden mode. */
+const HIDDEN_TAB = c.dim("\u2192")
