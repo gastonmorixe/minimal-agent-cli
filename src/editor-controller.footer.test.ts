@@ -139,6 +139,21 @@ describe("EditorController — footer layers (Bug 2801)", () => {
   // private fields, no implementation-detail probing. The bug repro is
   // the first test; the rest pin the new API and z-order invariants.
 
+  it("status, decoration and footer rows never carry a raw tab", () => {
+    // The terminal moves a tab to its next tab stop, but the width math counts
+    // 0 cells for it: a row with a raw tab can wrap and desync the erase.
+    const { ctrl, compositor } = make({ columns: 40 })
+    ctrl.start()
+    ctrl.setStatus("run\tls")
+    ctrl.setDecorationLines(["queued:\thi"])
+    ctrl.setFooterLines(["a\tb\tc"])
+    const last = compositor.last()!
+    expect(last.lines.join("\n")).not.toContain("\t")
+    expect(last.lines).toContain("queued: hi")
+    expect(last.lines).toContain("a b c")
+    ctrl.stop()
+  })
+
   it("Bug 2801 (regression): ESC-dismissing the armed footer restores the underlying base footer", () => {
     const { ctrl, stdin, compositor } = make({ armedTickMs: 0, bareEscapeMs: 0 })
     ctrl.start()

@@ -353,6 +353,17 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Fixed
 
+- 2026-11-20: **A paste with tab characters no longer stacks copies of the
+  prompt frame.** Text such as `cat -n` output (a line number, a tab, the
+  line) left one more `❯ ─── ^ N more lines` row on screen at each repaint.
+  The editor counted 0 cells for a tab, but the terminal moves a tab to its
+  next tab stop. The row was then wider on screen than measured, it wrapped,
+  and the live-area erase stopped one row short. Now the editor paints a tab
+  as spaces up to the next 8-cell stop, counted from the start of the line
+  content, and the cursor, the row count and the up/down arrows use the same
+  width. The buffer keeps the tab, so the submitted text does not change.
+  Show-hidden mode paints one `→` in the first cell of a tab. Status,
+  decoration and footer rows get one space for each tab.
 - 2026-11-18: `compile:dev` and `compile:release` failed at e2e check 9
   with `SpawnAgent: no child request reached the mock model`, and wrote no
   binary. The binary was correct. The mock model found the child request by
