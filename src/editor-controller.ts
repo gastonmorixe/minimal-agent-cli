@@ -91,6 +91,18 @@ export {
  * hooks below restore terminal state if we're killed by a signal.
  */
 const activeControllers = new Set<EditorController>()
+
+/** True when two status row lists have the same rows. */
+function statusRowsEqual(a: readonly string[] | null, b: readonly string[] | null): boolean {
+  if (a === b) return true
+  if (a === null || b === null || a.length !== b.length) return false
+  return a.every((row, idx) => row === b[idx])
+}
+
+/** The status band: each row clamped to the live width. At least one row. */
+function statusBand(rows: readonly string[], clamp: (line: string) => string): string[] {
+  return rows.length === 0 ? [""] : rows.map(clamp)
+}
 let cleanupHooksInstalled = false
 function installCleanupHooksOnce(): void {
   if (cleanupHooksInstalled) return
@@ -876,12 +888,30 @@ export class EditorController extends EventEmitter {
    * the live area grows by one row so the spinner/status doesn't fight the
    * prompt for screen real estate.
    */
-  setStatus(text: string | null): void {
-    const next = text == null ? null : text
-    if (next != null && next.length > 0) this.statusRowReserved = true
-    if (this.statusLine === next) return
-    this.statusLine = next
+  setStatus(text: string | readonly string[] | null): void {
+    // A string is one row. An array is the rows of the live tool tree.
+    const next: readonly string[] | null =
+      text == null ? null : typeof text === "string" ? [text] : [...text]
+    const filled = next != null && next.some((row) => row.length > 0)
+    if (filled) this.statusRowReserved = true
+    if (statusRowsEqual(this.statusLines, next)) return
+    this.statusLines = next
     this.repaint()
+  }
+
+  /**
+   * Start one frame: the compositor holds the scrollback bytes that follow.
+   * {@link endFrame} paints them with the live area, in one write. The live
+   * tool tree uses it, so the row of an ended call goes away in the same
+   * frame as the block of that call reaches the scrollback.
+   */
+  beginFrame(): void {
+    if (this.started) this.compositor.beginStreamHold?.()
+  }
+
+  /** End the frame of {@link beginFrame}: paint the held bytes and the live area. */
+  endFrame(): void {
+    if (this.started) this.repaint()
   }
 
   /**
@@ -926,7 +956,8 @@ export class EditorController extends EventEmitter {
     }, this.resizeDebounceMs)
   }
 
-  private statusLine: string | null = null
+  /** The status rows. One row for a spinner status; more for the tool tree. */
+  private statusLines: readonly string[] | null = null
   private statusRowReserved = false
   /**
    * Decoration rows rendered between the status row and the editor prompt.
@@ -1318,12 +1349,14 @@ export class EditorController extends EventEmitter {
     // Do not reserve the status band at cold idle. Once a status has
     // appeared, keep the band as blank rows when idle so status clear does
     // not move the prompt.
-    const statusFilled = this.statusLine != null && this.statusLine.length > 0
+    const statusFilled = this.statusLines != null && this.statusLines.some((row) => row.length > 0)
     const statusReserved = statusFilled || this.statusRowReserved
+    // Rows of the status band: the tool tree has many, other statuses one.
+    const statusBandRows = statusReserved ? Math.max(1, this.statusLines?.length ?? 0) : 0
     // One blank row between the status band and the editor keeps busy
     // state readable without moving the prompt again at end of turn.
     const statusGapRows = statusReserved ? 1 : 0
-    const statusRows = (statusReserved ? 1 : 0) + decorationRows
+    const statusRows = statusBandRows + decorationRows
     // A blank row between editor content and the footer when both are
     // present, so footer lines (quota, ambient status, etc.) don't visually
     // butt against the prompt's `❯ ` row.
@@ -1355,15 +1388,14 @@ export class EditorController extends EventEmitter {
     // emitted it via `editor.footer.set`). Park the cursor at the top-left so
     // the terminal doesn't blink it inside the hidden prompt.
     if (this.overlayOwner !== null) {
-      const rawStatusOwned = this.statusLine ?? ""
+      const rawStatusOwned = this.statusLines ?? [""]
       // Budget cols-1 (when cols>1) as belt-and-suspenders against
       // DECAWM wrap-pending after a full-width status cell. Typical
       // terminals clear pending wrap on the EL that drawLiveSeq emits
       // next, so this is defensive rather than the sole load-bearing
       // fix (MA-481485). Primary fix is repaint suppression while
       // resizeDebounceTimer is armed, plus compositor stream hold.
-      const statusLineOwned = clampLiveLine(rawStatusOwned)
-      const ownedHead: string[] = statusReserved ? [statusLineOwned] : []
+      const ownedHead: string[] = statusReserved ? statusBand(rawStatusOwned, clampLiveLine) : []
       const ownedGap: string[] = statusGapRows > 0 ? Array(statusGapRows).fill("") : []
       const ownedFooter = composedFooter.length > 0 ? [...composedFooter] : []
       const ownedLines = [...ownedHead, ...decorationClamped, ...ownedGap, ...ownedFooter]
@@ -1481,15 +1513,14 @@ export class EditorController extends EventEmitter {
       }
     }
 
-    const rawStatus = this.statusLine ?? ""
     // See overlay path / clampLiveLine above: defensive cols-1 budget (MA-481485).
-    const statusLine = clampLiveLine(rawStatus)
+    const statusBandLines = statusBand(this.statusLines ?? [""], clampLiveLine)
 
     let finalLines: string[]
     let finalCursor: { row: number; col: number }
 
     // Layout (top → bottom):
-    //   [statusLine]              ← 0 or 1 row (only when status is FILLED)
+    //   [...statusLines]          ← 0 rows, 1 row, or the tool tree rows
     //   [...decorationLines]      ← 0..N rows (queue display, etc.)
     //   ["", ""]                  ← 0 or 2 rows (blank gap, only when status filled)
     //   [indicatorLine?]          ← 0..1 row (scroll indicator, if needed)
@@ -1503,7 +1534,7 @@ export class EditorController extends EventEmitter {
     // Cursor offset = (statusRows = statusFilled?1:0 + decorationRows)
     //               + statusGapRows + indicatorOffset.
     const decoration = decorationClamped
-    const head: string[] = statusReserved ? [statusLine] : []
+    const head: string[] = statusReserved ? statusBandLines : []
     const gap: string[] = statusGapRows > 0 ? Array(statusGapRows).fill("") : []
     const footerWithSpacer = composedFooter.length > 0 ? ["", ...composedFooter] : []
     const baseOffset = statusRows + statusGapRows

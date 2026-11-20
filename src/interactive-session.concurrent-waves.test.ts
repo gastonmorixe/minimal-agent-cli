@@ -6,8 +6,8 @@
  * in one batch; call 1 waits longer, so it ends last.
  *
  * The transcript must show call 2's block first, then call 1's block, with
- * no row of one block inside the other. The status row must show the group
- * row "Running 2 tools" while both calls run.
+ * no row of one block inside the other. The tool call tracker (the live tool tree) must see
+ * both calls run at the same time.
  */
 
 import { afterEach, describe, expect, it } from "bun:test"
@@ -113,6 +113,25 @@ function scriptedSend(): BuildAgentCoreDeps["sendFn"] {
   }
 }
 
+/** Record the most calls that were open, and the most that ran, at one time. */
+function trackRunning(session: InteractiveSession): {
+  maxRunning: number
+  maxOpen: number
+  /** The most calls that were queued (not started) at one time. */
+  maxQueued: number
+} {
+  const seen = { maxRunning: 0, maxOpen: 0, maxQueued: 0 }
+  const tracker = session.toolCallTracker()
+  tracker.subscribe(() => {
+    const open = tracker.openCalls()
+    const running = open.filter((call) => call.state === "running").length
+    seen.maxRunning = Math.max(seen.maxRunning, running)
+    seen.maxOpen = Math.max(seen.maxOpen, open.length)
+    seen.maxQueued = Math.max(seen.maxQueued, open.length - running)
+  })
+  return seen
+}
+
 describe("InteractiveSession: concurrent tool calls with real core waves", () => {
   it("shows call 2's block first, then call 1's block, and one group status row", async () => {
     const loader = await PluginLoader.load({
@@ -141,6 +160,7 @@ describe("InteractiveSession: concurrent tool calls with real core waves", () =>
       ...textCoreDeps(),
     })
 
+    const seen = trackRunning(session)
     const gen = session.run("go")
     while (!(await gen.next()).done) {}
 
@@ -155,10 +175,13 @@ describe("InteractiveSession: concurrent tool calls with real core waves", () =>
       "  ╰ body of ONE",
     ])
 
-    // The status row showed the group while both calls ran.
-    expect(labels.some((label) => label.startsWith("Running 2 tools"))).toBe(true)
-    expect(labels).toContain(`Running 2 tools · ${TOOL} ×2`)
-    // The run end leaves no tool row.
+    // The tool tree saw both calls run at the same time, and queued first.
+    expect(seen.maxRunning).toBe(2)
+    expect(seen.maxOpen).toBe(2)
+    // `item_started` reached the REPL before any call ran: both were queued.
+    expect(seen.maxQueued).toBe(2)
+    // The run end leaves no open call and no tool row.
+    expect(session.toolCallTracker().snapshot().running).toEqual([])
     expect(bus.current()).toBeNull()
   })
 
@@ -189,6 +212,7 @@ describe("InteractiveSession: concurrent tool calls with real core waves", () =>
       ...textCoreDeps(),
     })
 
+    const seen = trackRunning(session)
     const gen = session.run("go")
     while (!(await gen.next()).done) {}
 
@@ -200,7 +224,8 @@ describe("InteractiveSession: concurrent tool calls with real core waves", () =>
       "  │",
       "  ╰ body of TWO",
     ])
-    expect(labels.some((label) => label.startsWith("Running 2 tools"))).toBe(false)
+    // Cap 1: the calls never overlap, and the tool row is the plain one.
+    expect(seen.maxRunning).toBe(1)
     expect(labels).toContain(`Running ${TOOL}`)
   })
 })

@@ -154,46 +154,6 @@ export class RateWindow {
 }
 
 /**
- * The notification id of the tool group row: one row for the tool calls
- * that run at the same time (D11). The CLI status port sets it.
- */
-export const TOOL_GROUP_NOTIFICATION_ID = "tool.group"
-
-/**
- * The category of a `tool.running` row that a tool group row became when
- * its count dropped back to 1 (D11, rule 3). The row text and the icon are
- * the same as today (the icon comes from the `tool.running` id). The
- * category only tells the renderer to read the start time of that call
- * from `activity.startedAt`, because the entry can be older than the call.
- */
-export const TOOL_PINNED_CATEGORY = "tool.pinned"
-
-/**
- * The fixed start time of a status entry, or `null` when the renderer
- * counts from the time it first sees the entry. The tool group row gives
- * its start in `activity.startedAt`: the start of the oldest call that
- * still runs. That call can change while the row stays the same entry.
- * A row with the {@link TOOL_PINNED_CATEGORY} category does the same.
- *
- * The {@link EntryClock} does not record a pinned entry: the start comes
- * from the entry each time, so the clock has nothing to keep.
- */
-export function pinnedEntryStart(status: {
-  notificationId?: string
-  category?: string
-  activity?: StatusActivity
-}): number | null {
-  if (
-    status.notificationId !== TOOL_GROUP_NOTIFICATION_ID &&
-    status.category !== TOOL_PINNED_CATEGORY
-  ) {
-    return null
-  }
-  const startedAt = status.activity?.startedAt
-  return startedAt !== undefined && Number.isFinite(startedAt) && startedAt > 0 ? startedAt : null
-}
-
-/**
  * Elapsed-time start per status entry. A row that comes back on top (the
  * turn's "Thinking" after a request or tool clears) resumes its own count
  * instead of restarting at 0 s.

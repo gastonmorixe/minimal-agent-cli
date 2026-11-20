@@ -230,15 +230,15 @@ export async function runReplLiveArea(
   if (opts && "statusRenderer" in opts) {
     statusRenderer = opts.statusRenderer ?? null
   } else {
-    const { LiveAreaStatusController } = await import("./ui/status/live-area-controller.ts")
+    const { createLiveAreaStatus } = await import("./ui/status/live-area-status-factory.ts")
     if (typeof editor.setStatus !== "function") {
       throw new Error("runRepl: editor.setStatus is required when statusRenderer is omitted")
     }
-    const sink: { setStatus(text: string | null): void } = {
-      setStatus: (t) => editor.setStatus?.(t),
-    }
-    statusRenderer = new LiveAreaStatusController(statusBus, sink, {
+    statusRenderer = createLiveAreaStatus({
+      bus: statusBus,
+      editor,
       spinner: opts.spinner,
+      tracker: agent.toolCallTracker?.() ?? null,
     })
   }
   const loader = agent.pluginLoader()
