@@ -15,6 +15,7 @@ import {
   formatActivityInfix,
   formatElapsedSuffix,
   LABEL_BYTES_RE,
+  pinnedEntryStart,
   RateWindow,
 } from "./format.ts"
 
@@ -151,7 +152,13 @@ export class StatusRenderer {
       return
     }
 
-    if (status.id !== this.statusId) {
+    // The tool group row (D11) gives its own start: the oldest call that
+    // still runs. Other rows count from the time they are first seen.
+    const pinned = pinnedEntryStart(status)
+    if (pinned !== null) {
+      this.statusId = status.id
+      this.statusStartedAt = pinned
+    } else if (status.id !== this.statusId) {
       this.statusId = status.id
       this.statusStartedAt = this.clock.startOf(status.id, this.now())
     }

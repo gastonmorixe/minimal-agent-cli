@@ -147,6 +147,17 @@ describe("prepareEntrypointArgs", () => {
     expect(h.writes.join("")).toStartWith("error: ")
   })
 
+  it("resolves the tool concurrency cap once, and the env wins", () => {
+    const h = makeHarness()
+    const prepared = prepareEntrypointArgs({
+      rawArgv: ["--debug"],
+      env: { MINIMAL_AGENT_MAX_CONCURRENT_TOOL_CALLS: "3" },
+      cwd: "/tmp",
+      ...h.deps,
+    })
+    expect(prepared.maxConcurrentToolCalls).toBe(3)
+  })
+
   it("auth-status plan --all is not a help request (normal plan)", () => {
     const h = makeHarness()
     const prepared = prepareEntrypointArgs({

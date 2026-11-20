@@ -302,6 +302,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     dumpFormatArg,
     dumpPaths,
   } = opts
+  // The cache flags and the concurrency cap (resolved once, entry-args.ts) for all 3 routes.
+  const coreFlags = { ...cacheFlags, maxConcurrentToolCalls: entry.maxConcurrentToolCalls }
   failure.args = args
   failure.outputFormat = outputFormat
   failure.outputSchemaPath = outputSchemaPath
@@ -1063,7 +1065,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         serviceTier,
         thinkingDisplay,
         cacheTtl,
-        ...cacheFlags,
+        ...coreFlags,
         loader,
         modeManager,
         toolNamePolicy: opts.cliToolFilter,
@@ -1122,7 +1124,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     serviceTier,
     thinkingDisplay,
     cacheTtl,
-    ...cacheFlags,
+    ...coreFlags,
     loader: hasPlugins ? loader : null,
     modeManager,
     toolNamePolicy: opts.cliToolFilter,
@@ -1296,7 +1298,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
                 serviceTier,
                 thinkingDisplay,
                 cacheTtl,
-                ...cacheFlags,
+                ...coreFlags,
                 initialMessages,
                 ...(roundCheckpoint ? { initialCheckpoint: roundCheckpoint } : {}),
                 loader: hasPlugins ? loader : null,
