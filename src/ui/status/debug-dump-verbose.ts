@@ -30,6 +30,7 @@ import type {
   DumpPart,
   DumpSectionName,
 } from "../../logging/request-dump-model.ts"
+import { cellWidths, paramCells } from "../../logging/tool-schema.ts"
 import { c } from "../style/ansi.ts"
 import {
   blockRef,
@@ -357,7 +358,35 @@ function renderSystem(part: DumpPart, opts: VerboseRenderOptions): string[] {
   return out
 }
 
-/** One tool part: the owner ref, then the description lines. */
+/**
+ * The parameter table of one tool: a dim `params` gutter row, then one row
+ * per parameter with aligned columns. Name in cyan, type dim, `required` in
+ * bold yellow, description at normal intensity.
+ */
+function paramLines(part: DumpPart, wrapWidth: number | undefined): string[] {
+  const params = part.params ?? []
+  if (params.length === 0) return []
+  const cells = paramCells(params).map((x) => ({
+    name: stripControls(x.name),
+    type: stripControls(x.type),
+    req: x.req,
+    desc: stripControls(x.desc),
+  }))
+  const w = cellWidths(cells)
+  const bar = c.dim(" ┆ ")
+  const lead = `${SUB_INDENT}${c.dim("params")}`
+  const out = [`${lead}${c.dim(" ┆")}`]
+  const pad = `${SUB_INDENT}      `
+  for (const x of cells) {
+    const req =
+      x.req === "required" ? c.bold(c.yellow(x.req.padEnd(w.req))) : c.dim(x.req.padEnd(w.req))
+    const line = `${pad}${bar}${c.cyan(x.name.padEnd(w.name))}  ${c.dim(x.type.padEnd(w.type))}  ${req}${x.desc === "" ? "" : `  ${x.desc}`}`
+    out.push(wrapWidth === undefined ? line : truncateDisplayWidth(line, wrapWidth, "…"))
+  }
+  return out
+}
+
+/** One tool part: the owner ref, the description lines, then the parameter table. */
 function renderTool(part: DumpPart, opts: VerboseRenderOptions): string[] {
   // Stripped once, then used for both the header and the owner lookup: a
   // control byte must not change which plugin the name resolves to either.
@@ -368,6 +397,7 @@ function renderTool(part: DumpPart, opts: VerboseRenderOptions): string[] {
     refLine(toolRef(label, opts.origins), opts.wrapWidth),
     ...gutterLines(part.lines, digits, opts.wrapWidth),
     ...elidedLines(part.elided ?? [], digits, opts.wrapWidth),
+    ...paramLines(part, opts.wrapWidth),
   ]
 }
 

@@ -5,8 +5,12 @@
   [2mmax_tokens:[22m 8192
   [2mrequest_type:[22m conversation
   [1mBody:[22m
+    [33mheaders[39m: [2m[2 header(s)][22m
+      [36mauthorization[39m  [2m[3mBearer <redacted:10 chars>[23m[22m
+      [36mcontent-type [39m  application/json
     [33mtools[39m: [2m[2 tool(s)][22m
       [35mRead[39m: [2mRead a file. ⏎ Returns its text.[22m
+        [2mparams:[22m [2m(file_path?: string)[22m
       [35mEcho[39m: [2mEcho the input back.[22m
     [33msystem[39m: [2m[2 block(s)][22m
       [35mblock 0[39m: [2mYou are a test agent.[22m

@@ -31,11 +31,19 @@
 
 import { displayWidth, truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import {
+  type DumpKvRow,
+  type DumpKvSection,
+  keyWidth,
+  kvUnit,
+} from "../../logging/request-dump-kv.ts"
+import {
   type DumpPart,
   type DumpSectionName,
   type DumpView,
+  oneLine,
   PREVIEW_CAP,
 } from "../../logging/request-dump-model.ts"
+import { paramSummary } from "../../logging/tool-schema.ts"
 import { c } from "../style/ansi.ts"
 import { truncHint } from "../style/truncate-hint.ts"
 import {
@@ -177,7 +185,8 @@ export function renderDumpBlock(
     out.push(`${prefix}${fitBody(value, room, undefined)}`)
   }
 
-  if (view.sections.length > 0) out.push(`  ${c.bold("Body:")}`)
+  if (view.sections.length > 0 || view.kv.length > 0) out.push(`  ${c.bold("Body:")}`)
+  for (const section of view.kv) out.push(...renderKvSection(section, w, verbose.enabled === true))
 
   for (const section of view.sections) {
     const count = ` ${c.dim(`[${section.parts.length} ${unitFor(section.name)}]`)}`
@@ -188,9 +197,53 @@ export function renderDumpBlock(
     }
     section.parts.forEach((part, i) => {
       out.push(renderRow(part, w, i + 1))
+      const summary = paramSummary(part.params ?? [])
+      if (summary !== "") out.push(fitLine(`        ${c.dim("params:")} `, summary, w))
     })
   }
 
+  return out
+}
+
+/** Paint a value: dim italic when core masked it, normal otherwise. */
+function paintValue(r: DumpKvRow, text: string): string {
+  return r.redacted ? c.dim(c.italic(text)) : text
+}
+
+/**
+ * Render one `headers` or `body` section: aligned rows, the key in the
+ * accent color (cyan, like tool parameter names). Compact: a one-line value
+ * cut at the preview cap and clipped to `width`. Verbose: the full value, and
+ * an object value as pretty JSON lines behind the dim `┆` gutter.
+ */
+export function renderKvSection(
+  section: DumpKvSection,
+  width: number | undefined,
+  verbose: boolean,
+): string[] {
+  const out = [
+    `    ${c.yellow(section.name)}: ${c.dim(`[${section.rows.length} ${kvUnit(section.name)}]`)}`,
+  ]
+  const w = keyWidth(section)
+  for (const r of section.rows) {
+    const key = stripControls(r.key)
+    const prefix = `      ${c.cyan(key.padEnd(w))}  `
+    if (!verbose) {
+      const room = width === undefined ? undefined : width - displayWidth(prefix)
+      if (room !== undefined && room <= 0) {
+        out.push(truncateDisplayWidth(prefix, width ?? 0))
+        continue
+      }
+      out.push(`${prefix}${paintValue(r, fitBody(oneLine(r.value), room, PREVIEW_CAP))}`)
+      continue
+    }
+    if (r.pretty === undefined) {
+      out.push(`${prefix}${paintValue(r, stripControls(r.value))}`)
+      continue
+    }
+    out.push(`      ${c.cyan(key)}`)
+    for (const line of r.pretty) out.push(`        ${c.dim("┆")} ${stripControls(line)}`)
+  }
   return out
 }
 

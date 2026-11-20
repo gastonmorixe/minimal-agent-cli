@@ -195,6 +195,7 @@ describe("verbose dump: elided lines", () => {
   const capped = (shown: number, hidden: number): DumpView => ({
     model: "m",
     fields: [],
+    kv: [],
     sections: [
       {
         name: "tools",

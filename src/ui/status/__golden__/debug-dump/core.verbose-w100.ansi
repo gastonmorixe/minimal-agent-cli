@@ -5,11 +5,16 @@
   [2mmax_tokens:[22m 8192
   [2mrequest_type:[22m conversation
   [1mBody:[22m
+    [33mheaders[39m: [2m[2 header(s)][22m
+      [36mauthorization[39m  [2m[3mBearer <redacted:10 chars>[23m[22m
+      [36mcontent-type [39m  application/json
     [33mtools[39m: [2m[2 tool(s)][22m
       [35mRead[39m
          [2m↳[22m core[2m · [22m[33mbuilt-in[39m
          [2m1[22m[2m │ [22mRead a file.
          [2m2[22m[2m │ [22m  Returns its text.
+         [2mparams[22m[2m ┆[22m
+               [2m ┆ [22m[36mfile_path?[39m  [2mstring[22m  [2moptional[22m
       [35mEcho[39m
          [2m↳[22m [36mma-skills-plugin[39m[2m · [22m[2mplugins/ma-skills-plugin[22m
          [2m1[22m[2m │ [22mEcho the input back.

@@ -16,6 +16,8 @@
 import type { RequestSnapshot } from "@minimal-agent/core/host/request-inspector"
 
 import { truncHint } from "../ui/style/truncate-hint.ts"
+import { type DumpKvSection, kvSections } from "./request-dump-kv.ts"
+import { schemaParams, type ToolParam } from "./tool-schema.ts"
 
 /** The content of one snapshot message (deep-readonly, as the snapshot gives it). */
 type SnapshotContent = RequestSnapshot["messages"][number]["content"]
@@ -92,6 +94,8 @@ export interface DumpPart {
   readonly lines: readonly DumpLine[]
   /** Capped blocks. Absent when no block hit the cap. */
   readonly elided?: readonly DumpElided[]
+  /** Parameters of the tool `input_schema` (tools only, both modes). Absent when none. */
+  readonly params?: readonly ToolParam[]
 }
 
 /** One body section with its parts. */
@@ -108,6 +112,8 @@ export interface DumpView {
   readonly model: string | undefined
   /** Header fields as `[key, one-line value]`, in display order. */
   readonly fields: ReadonlyArray<readonly [string, string]>
+  /** HTTP headers and other body fields, drawn before `tools`. Empty when the snapshot has none. */
+  readonly kv: readonly DumpKvSection[]
   /** Body sections. Order: tools, system, messages. */
   readonly sections: readonly DumpSection[]
 }
@@ -381,7 +387,7 @@ export function dumpView(req: RequestSnapshot, opts: DumpViewOptions): DumpView 
       name: "tools",
       parts: req.tools.map((t, i) => {
         const text = t.description ?? ""
-        return part(
+        const p = part(
           "tools",
           i,
           t.name,
@@ -389,6 +395,8 @@ export function dumpView(req: RequestSnapshot, opts: DumpViewOptions): DumpView 
           oneLine(text),
           opts.lines ? textDetail(text) : undefined,
         )
+        const params = schemaParams(t.input_schema)
+        return params.length > 0 ? { ...p, params } : p
       }),
     })
   }
@@ -422,5 +430,5 @@ export function dumpView(req: RequestSnapshot, opts: DumpViewOptions): DumpView 
       ),
     ),
   })
-  return { model: req.model, fields: headerFields(req), sections }
+  return { model: req.model, fields: headerFields(req), kv: kvSections(req), sections }
 }
