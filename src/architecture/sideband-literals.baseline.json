@@ -1,0 +1,118 @@
+{
+  "code": {
+    "src/cli/registry/commands.ts": {
+      "bracket-notice": 1
+    },
+    "src/commands/compact-stream.ts": {
+      "bracket-notice": 2
+    },
+    "src/commands/compact.ts": {
+      "bracket-notice": 1
+    },
+    "src/commands/embedded-payload-scrub-port.ts": {
+      "tag-literal": 2,
+      "tag-regex": 1
+    },
+    "src/commands/target-commands.ts": {
+      "bracket-notice": 4
+    },
+    "src/session-replay-derivers.ts": {
+      "tag-literal": 2,
+      "bracket-notice": 2
+    },
+    "src/session-replay.ts": {
+      "tag-regex": 1,
+      "tag-search": 1,
+      "bracket-notice": 2
+    },
+    "src/ui/status/debug-dump-origins.ts": {
+      "tag-regex": 2
+    },
+    "src/ui/status/debug-dump-verbose.ts": {
+      "tag-literal": 1
+    },
+    "src/ui/status/debug-dump.fixtures.ts": {
+      "tag-literal": 4
+    },
+    "src/ui/status/debug-dump.golden.fixtures.ts": {
+      "tag-literal": 4
+    },
+    "src/ui/tool-transcript/diagnostics-panel.ts": {
+      "tag-literal": 1
+    },
+    "src/ui/tool-transcript/format.ts": {
+      "tag-literal": 3,
+      "bracket-notice": 2
+    },
+    "src/ui/tool-transcript/tool-view.ts": {
+      "tag-search": 1,
+      "bracket-notice": 2
+    }
+  },
+  "tests": {
+    "src/commands/session-dump.test.ts": {
+      "tag-literal": 1
+    },
+    "src/e2e/subagent-startup-profile.e2e.test.ts": {
+      "tag-literal": 1
+    },
+    "src/e2e/truncation-tmux.test.ts": {
+      "bracket-notice": 3
+    },
+    "src/editor-controller.test.ts": {
+      "bracket-notice": 2
+    },
+    "src/interactive-session.test.ts": {
+      "bracket-notice": 1
+    },
+    "src/sdk-adapters/golden-parity.test.ts": {
+      "tag-literal": 1
+    },
+    "src/sdk-adapters/plugin-tool-e2e.test.ts": {
+      "tag-literal": 1
+    },
+    "src/session-replay-derivers.test.ts": {
+      "tag-literal": 4,
+      "bracket-notice": 3
+    },
+    "src/session-replay.outcome-compat.test.ts": {
+      "bracket-notice": 1
+    },
+    "src/session-replay.test.ts": {
+      "tag-literal": 48
+    },
+    "src/ui/status/debug-dump-live.test.ts": {
+      "tag-literal": 1
+    },
+    "src/ui/status/debug-dump-origins.test.ts": {
+      "tag-literal": 6
+    },
+    "src/ui/status/debug-dump-verbose.test.ts": {
+      "tag-literal": 10,
+      "tag-search": 2
+    },
+    "src/ui/status/debug-dump.e2e-core.test.ts": {
+      "tag-literal": 2
+    },
+    "src/ui/status/debug-dump.golden.test.ts": {
+      "tag-literal": 2
+    },
+    "src/ui/tool-transcript/diagnostics-render.test.ts": {
+      "tag-literal": 2,
+      "tag-search": 2
+    },
+    "src/ui/tool-transcript/diagnostics-seam.integration.test.ts": {
+      "tag-literal": 1
+    },
+    "src/ui/tool-transcript/format.outcome-cut.test.ts": {
+      "tag-literal": 3,
+      "bracket-notice": 8
+    },
+    "src/ui/tool-transcript/format.test.ts": {
+      "bracket-notice": 3
+    },
+    "src/ui/tool-transcript/tool-view.wave.test.ts": {
+      "bracket-notice": 1
+    }
+  }
+}
