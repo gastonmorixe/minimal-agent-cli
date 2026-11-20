@@ -1,0 +1,8 @@
+{
+  "id": "bg-wait-fixture",
+  "name": "LLM Provider: Background Wait Fixture",
+  "version": "0.1.0",
+  "description": "Test-only provider for the headless background-wait e2e test. It scripts each round from the request.",
+  "entry": "./index.ts",
+  "export": "bgWaitFixtureProviderPlugin"
+}
