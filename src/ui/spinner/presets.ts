@@ -47,7 +47,10 @@ export const DEFAULT_NERD_ICON: IconSpec = ICON_DOT_SMALL
  *
  * - `host.countdown` (the host countdown row of `src/host-countdown.ts`)
  *   maps to `ICON_PAUSE` (`⏸`), not to the `DEFAULT_NERD_ICON` (`·`)
- *   fallback.
+ *   fallback. A live countdown row has the id `host.countdown:<request id>`
+ *   (one row for each request), which is not in this map. The row gets
+ *   `ICON_PAUSE` through its category `countdown` in
+ *   `DEFAULT_ICON_BY_CATEGORY`.
  *
  * - `auth.refresh` is the only remaining NF-PUA dependency
  *   (`NF_LOCK` = U+F033E). It renders correctly on Nerd Font Mono setups

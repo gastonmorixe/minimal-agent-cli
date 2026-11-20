@@ -14,11 +14,16 @@ import { describe, expect, it } from "bun:test"
 
 import { StatusBus } from "@minimal-agent/core/host/status-bus"
 import {
+  countdownNotificationId,
   countdownRowText,
   createHostCountdown,
+  HOST_COUNTDOWN_CATEGORY,
   HOST_COUNTDOWN_NOTIFICATION_ID,
 } from "./host-countdown.ts"
 import { InputCaptureStack } from "./input/input-capture-stack.ts"
+import { BlinkingNerdSpinner } from "./ui/spinner/blinking-nerd.ts"
+import { ICON_PAUSE } from "./ui/spinner/library/icons.ts"
+import { DEFAULT_ICON_BY_CATEGORY } from "./ui/spinner/presets.ts"
 
 const CAPTURE_ID = `${HOST_COUNTDOWN_NOTIFICATION_ID}:test.wait`
 
@@ -137,5 +142,55 @@ describe("host countdown: results", () => {
     expect(stack.dispatch("Escape")).toBe(true)
     expect(await wait).toBe("skipped")
     expect(stack.depth()).toBe(0)
+  })
+})
+
+describe("host countdown: one row for each request", () => {
+  it("the notification id has the request id", () => {
+    expect(countdownNotificationId("a.b")).toBe("host.countdown:a.b")
+  })
+
+  it("the row has the request id and the countdown category", async () => {
+    const { statusBus, countdown } = setup()
+    const wait = countdown({ id: "test.wait", label: "Wait", ms: 20 })
+    await tick(5)
+    expect(statusBus.currentStatus()).toMatchObject({
+      notificationId: CAPTURE_ID,
+      category: HOST_COUNTDOWN_CATEGORY,
+    })
+    expect(await wait).toBe("elapsed")
+  })
+
+  it("two countdowns at the same time: the end of one keeps the row of the other", async () => {
+    const { statusBus, stack, countdown } = setup()
+    const ctrlA = new AbortController()
+    const a = countdown({ id: "a", label: "First", ms: 10_000, signal: ctrlA.signal })
+    const ctrlB = new AbortController()
+    const b = countdown({ id: "b", label: "Second", ms: 10_000, signal: ctrlB.signal })
+    await tick(5)
+    expect(stack.depth()).toBe(2)
+    expect(statusBus.currentStatus()?.notificationId).toBe("host.countdown:b")
+    ctrlB.abort()
+    expect(await b).toBe("aborted")
+    expect(statusBus.currentStatus()?.notificationId).toBe("host.countdown:a")
+    expect(statusBus.current()).toContain("First")
+    expect(stack.topId()).toBe("host.countdown:a")
+    ctrlA.abort()
+    expect(await a).toBe("aborted")
+    expect(statusBus.current()).toBe(null)
+    expect(stack.depth()).toBe(0)
+  })
+
+  it("the spinner still finds the pause glyph by the category", () => {
+    expect(DEFAULT_ICON_BY_CATEGORY[HOST_COUNTDOWN_CATEGORY]).toBe(ICON_PAUSE)
+    const spinner = new BlinkingNerdSpinner()
+    const resolve = (n: { notificationId?: string; category?: string }) =>
+      (spinner as unknown as { resolveIcon(c: unknown): unknown }).resolveIcon({
+        notification: n,
+        theme: {},
+      })
+    expect(
+      resolve({ notificationId: countdownNotificationId("x"), category: HOST_COUNTDOWN_CATEGORY }),
+    ).toBe(ICON_PAUSE)
   })
 })
