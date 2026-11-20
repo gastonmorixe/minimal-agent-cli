@@ -11,6 +11,8 @@
  * ```
  *
  * - One running call, nothing queued: one row, no tree.
+ * - A `Bash` call also shows its time limit: `· 10s / 2m`, or `· timeout 2m`
+ *   in its first second. The limit comes from core (`resolveBashTimeout`).
  * - The header counts from the oldest call that still runs.
  * - The dot of a row blinks `●` / `○`, one frame per second. Its phase is
  *   fixed when the call starts (see `tool-calls.ts`). In truecolor the `●`
@@ -22,6 +24,7 @@
  * @module ui/status/tool-tree
  */
 
+import { resolveBashTimeout } from "@minimal-agent/core/host/tool-catalog"
 import { stripAnsi, truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import { effectiveDisplayWidth } from "../../terminal/nerd-glyph-width.ts"
 import { ansiStyle } from "../../terminal-kit/ansi.ts"
@@ -162,6 +165,33 @@ export function formatToolTime(ms: number): string {
   const minutes = Math.floor(total / 60)
   if (minutes < 60) return `${minutes}m${String(total % 60).padStart(2, "0")}s`
   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`
+}
+
+/**
+ * Format a time limit: `200ms`, `45s`, `2m`, `1m30s`. As
+ * {@link formatToolTime}, but without a zero last part (`2m`, not `2m00s`),
+ * and in ms below one second.
+ */
+export function formatToolLimit(ms: number): string {
+  if (ms < 1000) return `${Math.max(0, Math.round(ms))}ms`
+  return formatToolTime(ms).replace(/(?<=[hm])00[ms]$/, "")
+}
+
+/**
+ * The time limit of a call in ms, or `null` when the tool has none to show.
+ * Only `Bash` has one. Core owns the rules (default, maximum).
+ */
+function limitMsOf(call: LiveToolCall): number | null {
+  return call.name === "Bash" ? resolveBashTimeout(call.input.timeout).timeoutMs : null
+}
+
+/**
+ * The time text of a call with a time limit: `10s / 2m`, or `timeout 2m`
+ * when `showElapsed` is false or in the first second.
+ */
+function limitTimeText(ms: number, limitMs: number, showElapsed: boolean): string {
+  const limit = formatToolLimit(limitMs)
+  return showElapsed && ms >= 1000 ? `${formatToolTime(ms)} / ${limit}` : `timeout ${limit}`
 }
 
 /**
@@ -335,18 +365,31 @@ function headerRow(input: ToolTreeInput, items: readonly Item[]): string {
   return `${dot} Running ${toolsWord(running.length)}${wait}${time}`
 }
 
-/** `● Running ⤓ Fetch  target · 3s`: the form for exactly one call. */
+/**
+ * `● Running ⤓ Fetch  target · 3s`: the form for exactly one call. A call
+ * with a time limit shows it: `● Running » Bash  target · 10s / 2m`. When the
+ * row has no room for the limit, the suffix is the elapsed time only.
+ */
 function singleRow(input: ToolTreeInput, item: Item, budget: number): string {
-  const time = timeSuffix(input.now - item.call.startedAt)
+  const ms = input.now - item.call.startedAt
   const verb = input.paused ? ansiStyle.dim("Paused") : "Running"
   const head = `${dotOf(item, input)} ${verb} ${item.look.paint(item.look.icon)} ${item.look.paint(item.call.name)}`
-  const used = effectiveDisplayWidth(stripAnsi(head)) + effectiveDisplayWidth(stripAnsi(time))
+  const headW = effectiveDisplayWidth(stripAnsi(head))
+  const limitMs = limitMsOf(item.call)
+  const withLimit = limitMs === null ? "" : ` · ${limitTimeText(ms, limitMs, true)}`
+  const time =
+    withLimit && headW + withLimit.length <= budget ? ansiStyle.dim(withLimit) : timeSuffix(ms)
+  const used = headW + effectiveDisplayWidth(stripAnsi(time))
   const room = budget - used - 2
   const target = item.target && room >= 4 ? `  ${cutMiddle(item.target, room)}` : ""
   return `${head}${target}${time}`
 }
 
-/** The full rows: `├ ● ⤓ Fetch  target     12s`. */
+/**
+ * The full rows: `├ ● ⤓ Fetch  target     12s`. A row with a time limit
+ * always shows it: `├ ● » Bash   target     12s / 2m`, or `timeout 2m` in its
+ * first second and while paused.
+ */
 function callRows(
   input: ToolTreeInput,
   items: readonly Item[],
@@ -366,7 +409,11 @@ function callRows(
     const namePad = " ".repeat(nameW - effectiveDisplayWidth(name))
     const rowMs = input.now - item.call.startedAt
     const showTime = !input.paused && Math.abs(headerMs - rowMs) >= ROW_TIME_MIN_DIFF_MS
-    const time = showTime ? formatToolTime(rowMs) : ""
+    const plainTime = showTime ? formatToolTime(rowMs) : ""
+    const limitMs = limitMsOf(item.call)
+    const withLimit = limitMs === null ? "" : limitTimeText(rowMs, limitMs, !input.paused)
+    // The limit needs room next to a short target. If not, only the time.
+    const time = withLimit && budget - prefix - (withLimit.length + 2) >= 4 ? withLimit : plainTime
     const timeW = time ? time.length + 2 : 0
     const room = Math.max(0, budget - prefix - timeW)
     const target = cutMiddle(item.target, room)
