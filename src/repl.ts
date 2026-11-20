@@ -59,6 +59,11 @@ type MaybePromise<T> = T | Promise<T>
 
 export interface ReplAgentLike {
   pluginLoader(): PluginLoader | null
+  /**
+   * Optional. The open tool calls of the run. With it, the live-area REPL
+   * shows them as the live tool tree in the status slot.
+   */
+  toolCallTracker?(): import("./ui/status/tool-calls.ts").ToolCallTracker
   /** Optional: mode manager for prompt/status/cycling integration. */
   modes?(): ModeManager | null
   /** Optional: convenience for the active mode (if any). */
@@ -231,7 +236,11 @@ export interface ReplEditor {
   on(event: "quit", listener: (reason: "confirmed" | "escape-hatch") => void): unknown
   off?(event: "submit" | "cancel" | "quit", listener: (...args: unknown[]) => void): unknown
   /** Called by the live-area status controller to push the spinner row. */
-  setStatus?(text: string | null): void
+  setStatus?(text: string | readonly string[] | null): void
+  /** Optional. Hold scrollback writes until {@link endFrame}, then paint both at once. */
+  beginFrame?(): void
+  /** Optional. End the frame of {@link beginFrame}. */
+  endFrame?(): void
   /** Called after terminal resize so live-area rows can reflow immediately. */
   notifyResize?(): void
   /**

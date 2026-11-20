@@ -60,6 +60,7 @@ import { turnNoticePlainText } from "./startup/turn-notice-text.ts"
 import { TERMINAL_TOOL_ENV, terminalColumns } from "./terminal/terminal-tool-env.ts"
 import { type StepLive, TurnRenderPump } from "./turn-render-pump.ts"
 import type { CodeHighlighter } from "./ui/formatter/mdstream-code-highlighter.ts"
+import { ToolCallTracker } from "./ui/status/tool-calls.ts"
 import type { ToolTimeTracker } from "./ui/tool-transcript/tool-time.ts"
 import { createReplToolView } from "./ui/tool-transcript/tool-view.ts"
 
@@ -178,6 +179,22 @@ class RunPortState {
    * once, when the session owns its status port. A caller port: no-op.
    */
   resetToolRows: () => void = () => {}
+  /**
+   * The open tool calls of the run: the one source of truth for the live
+   * tool tree (`ui/status/tool-tree.ts`). The REPL reads it for the status
+   * rows. The concurrency cap is set once, from the session deps.
+   */
+  readonly toolCalls = new ToolCallTracker()
+
+  /**
+   * Run `step` in turn order: after the rows and text that the log emitted
+   * before it. With no run in progress, at once. The tool view uses it so
+   * the row of an ended call goes away right after its block (one frame).
+   */
+  inOrder(step: () => void): void {
+    if (this.pump) this.pump.step(step)
+    else step()
+  }
 
   /** The `inputQueue` port: reads the queue of the run in progress. */
   readonly inputQueuePort: InputQueuePort = {
@@ -292,7 +309,15 @@ async function openInteractiveSession(
     columns: terminalColumns,
     // Header paths show relative to the start cwd, as the rest of this file does.
     cwd: process.cwd(),
+    // The live tool tree: a row goes away in the same frame as its block.
+    calls: {
+      started: (tool, concurrent) =>
+        runPorts.toolCalls.start(tool.id, tool.name, tool.input, concurrent),
+      beforeBlock: () => runPorts.inOrder(() => runPorts.toolCalls.holdFrame()),
+      afterBlock: (id) => runPorts.inOrder(() => runPorts.toolCalls.end(id)),
+    },
   })
+  runPorts.toolCalls.setConcurrencyCap(deps.maxConcurrentToolCalls)
   runPorts.flushToolRows = () => toolView.flushPending()
   const toolExecutor = new ToolExecutorAdapter({
     loader: deps.loader,
@@ -459,6 +484,11 @@ export class InteractiveSession implements ReplAgentLike {
     return this.loader
   }
 
+  /** The open tool calls of the run, for the live tool tree of the REPL. */
+  toolCallTracker(): ToolCallTracker {
+    return this.runPorts.toolCalls
+  }
+
   modes(): ModeManager | null {
     return this.modeManager
   }
@@ -543,6 +573,12 @@ export class InteractiveSession implements ReplAgentLike {
       (entry) => {
         if (entry.ch !== "event") return
         const event = entry.data
+        // The model asked for a tool call: it waits for a run slot (the
+        // live tool tree shows it as queued). The burst comes at the end of
+        // a round, before any call runs.
+        if (event.type === "item_started" && event.itemType === "tool_use") {
+          this.runPorts.toolCalls.queue(event.id, event.toolName ?? "tool", event.input ?? {})
+        }
         if (event.type === "text_delta") pump.text(event.text)
         else if (event.type === "retry-boundary") pump.text(retryBoundaryText(event))
         else if (onEvent) pump.step((live) => onEvent(event, live))
@@ -608,6 +644,7 @@ export class InteractiveSession implements ReplAgentLike {
       // still shows its kept rows, before the run gives back the transcript.
       this.runPorts.flushToolRows()
       this.runPorts.resetToolRows()
+      this.runPorts.toolCalls.reset()
       this.runPorts.inputQueue = null
       this.runPorts.reflection = null
       this.runPorts.pump = null

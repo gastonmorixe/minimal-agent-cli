@@ -61,6 +61,19 @@ const ESC = String.fromCodePoint(0x1b)
  */
 const STREAM_PENDING_LINE_MAX = 4_096
 
+/**
+ * The host side of the live tool tree (`ui/status/tool-tree.ts`). The view
+ * tells it when a call starts and when its block reaches the scrollback.
+ */
+export interface ToolViewCalls {
+  /** The call started. `concurrent` is true for a call in a wave. */
+  started(tool: ToolUseBlock, concurrent: boolean): void
+  /** The block of an ended call is about to be written. */
+  beforeBlock(): void
+  /** The block of the call `id` was written. Its row goes away now. */
+  afterBlock(id: string): void
+}
+
 /** What the REPL tool view needs from its host. */
 export interface ReplToolViewOptions {
   /** Transcript sink: one call per scrollback row. */
@@ -81,6 +94,11 @@ export interface ReplToolViewOptions {
    * uses `process.cwd()`.
    */
   cwd?: string
+  /**
+   * The live tool tree. When set, a call row goes away in the same frame
+   * as the block of that call reaches the scrollback.
+   */
+  calls?: ToolViewCalls
 }
 
 /** The live state of one tool call. */
@@ -198,6 +216,16 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
     for (const item of rows) {
       if (typeof item === "string") writeTranscript(item)
       else for (const row of item()) writeTranscript(row)
+    }
+  }
+
+  /** The call ended: write its kept block, and drop its live row in the same frame. */
+  const endCall = (tool: ToolUseBlock, state: CallState): void => {
+    opts.calls?.beforeBlock()
+    try {
+      flushBlock(state)
+    } finally {
+      opts.calls?.afterBlock(tool.id)
     }
   }
 
@@ -451,21 +479,22 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
           for (const row of formatRefusalRows(event.message, event.refusedBy)) {
             emitRow(state, row)
           }
-          flushBlock(state)
+          endCall(tool, state)
           calls.delete(tool.id)
           return
         case "input_error":
           writeHeader(tool, state)
-          flushBlock(state)
+          endCall(tool, state)
           calls.delete(tool.id)
           return
         case "mode":
           writeHeader(tool, state)
           emitRow(state, formatModeCloseRow(event.label))
-          flushBlock(state)
+          endCall(tool, state)
           calls.delete(tool.id)
           return
         case "started":
+          opts.calls?.started(tool, isConcurrentStart(event))
           // A call in a wave keeps its rows until it ends (D11). Bash stays
           // live: its rows stream as the command runs (X4).
           if (isConcurrentStart(event) && tool.name !== "Bash") {
@@ -493,7 +522,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
           try {
             await onOutcome(tool, state, event.outcome)
           } finally {
-            flushBlock(state)
+            endCall(tool, state)
             calls.delete(tool.id)
           }
           return

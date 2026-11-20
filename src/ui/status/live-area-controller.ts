@@ -27,13 +27,37 @@ import {
   formatActivityInfix,
   formatElapsedSuffix,
   LABEL_BYTES_RE,
-  pinnedEntryStart,
   RateWindow,
 } from "./format.ts"
 import type { StatusSpinnerTheme } from "./line-renderer.ts"
+import type { ToolCallTracker } from "./tool-calls.ts"
+import { renderToolTree, supportsTruecolor } from "./tool-tree.ts"
 
 interface EditorStatusSink {
-  setStatus(text: string | null): void
+  setStatus(text: string | readonly string[] | null): void
+}
+
+/** The notification id of the bus row that a tool call opens (`statusRowFor`). */
+const TOOL_ROW_NOTIFICATION_ID = "tool.running"
+
+/**
+ * The live tool tree of the status slot. With it, the controller shows the
+ * open tool calls of the tracker as rows (see `./tool-tree.ts`), and no bus
+ * row of a tool call. Without it, a tool call shows as one bus row.
+ */
+export interface LiveToolTreeOptions {
+  /** The open tool calls: the one source of truth. */
+  tracker: ToolCallTracker
+  /** The CLI tool presentation map: icon and color of each tool. */
+  presentation: ReadonlyMap<string, import("../tool-transcript/format.ts").ToolPresentation>
+  /** The dir that paths are shown relative to. Default: `process.cwd()`. */
+  cwd?: string
+  /** The terminal width. Default: `process.stdout.columns`, else 80. */
+  columns?: () => number
+  /** The terminal height. Default: `process.stdout.rows`, else 24. */
+  rows?: () => number
+  /** Fade the `●` in truecolor. Default: from `COLORTERM`. */
+  fade?: boolean
 }
 
 /**
@@ -48,6 +72,8 @@ export interface LiveAreaStatusOptions {
   spinnerTheme?: StatusSpinnerTheme
   spinnerSwitchGraceMs?: number
   now?: () => number
+  /** Show the open tool calls as a live tree. See {@link LiveToolTreeOptions}. */
+  toolTree?: LiveToolTreeOptions
 }
 
 /**
@@ -63,6 +89,13 @@ export class LiveAreaStatusController implements StatusController {
   private readonly maxFps: number
   private readonly spinnerManager: SpinnerManager<StatusSpinnerTheme>
   private readonly now: () => number
+  private readonly tree: LiveToolTreeOptions | null
+  private readonly treeFade: boolean
+  private unsubscribeTree: (() => void) | null = null
+  /** The time the tree showed when a modal opened. The tree is frozen at it. */
+  private pausedAt = 0
+  /** The label a modal pinned. It shows while no tool call runs. */
+  private pausedLabel: string | null = null
   private baseTheme: StatusSpinnerTheme
   private unsubscribe: (() => void) | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -115,6 +148,8 @@ export class LiveAreaStatusController implements StatusController {
     this.maxFps = opts.maxFps ?? 8
     this.baseTheme = opts.spinnerTheme ?? {}
     this.now = opts.now ?? (() => Date.now())
+    this.tree = opts.toolTree ?? null
+    this.treeFade = opts.toolTree?.fade ?? supportsTruecolor(process.env)
     this.spinnerManager = new SpinnerManager<StatusSpinnerTheme>({
       spinner: opts.spinner ?? new BlinkingNerdSpinner(),
       theme: this.baseTheme,
@@ -127,6 +162,7 @@ export class LiveAreaStatusController implements StatusController {
   start(): void {
     if (this.unsubscribe) return
     this.unsubscribe = this.bus.subscribe(() => this.onBusUpdate())
+    this.unsubscribeTree = this.tree?.tracker.subscribe(() => this.onToolCallsChanged()) ?? null
     this.onBusUpdate()
   }
 
@@ -136,6 +172,8 @@ export class LiveAreaStatusController implements StatusController {
       this.unsubscribe()
       this.unsubscribe = null
     }
+    this.unsubscribeTree?.()
+    this.unsubscribeTree = null
     this.spinnerManager.unmount()
     this.editor.setStatus(null)
     this.label = null
@@ -169,23 +207,77 @@ export class LiveAreaStatusController implements StatusController {
    */
   pauseForOverlay(label: string | null): void {
     this.overlayPaused = true
+    this.pausedAt = this.now()
+    this.pausedLabel = label
     this.stopTimer()
-    this.editor.setStatus(label)
+    // Open tool calls show as a paused tree: dim `○`, no blink, frozen time.
+    if (!this.paintTree()) this.editor.setStatus(label)
   }
 
   /** Re-sync the activity row from the bus after an overlay closes. */
   resumeFromOverlay(): void {
     if (!this.overlayPaused) return
     this.overlayPaused = false
+    this.pausedLabel = null
     this.onBusUpdate()
+  }
+
+  /** True when the tree has at least one running call to show. */
+  private treeActive(): boolean {
+    return this.tree?.tracker.hasRunning() === true
+  }
+
+  /**
+   * Paint the tool tree. Returns false when no call runs, so the caller
+   * paints the bus status. While a modal is open the tree is paused: dim
+   * `○`, no blink, the time of the moment the modal opened.
+   */
+  private paintTree(): boolean {
+    const tree = this.tree
+    if (!tree || !tree.tracker.hasRunning()) return false
+    const rows = renderToolTree({
+      snapshot: tree.tracker.snapshot(),
+      now: this.overlayPaused ? this.pausedAt : this.now(),
+      columns: tree.columns?.() ?? process.stdout.columns ?? 80,
+      rows: tree.rows?.() ?? process.stdout.rows ?? 24,
+      paused: this.overlayPaused,
+      fade: this.treeFade,
+      presentation: tree.presentation,
+      cwd: tree.cwd ?? process.cwd(),
+      ...(process.env.HOME ? { home: process.env.HOME } : {}),
+    })
+    this.editor.setStatus(rows)
+    return true
+  }
+
+  /** The open tool calls changed: a call queued, started or ended. */
+  private onToolCallsChanged(): void {
+    if (this.overlayPaused) {
+      // A modal is open. Show the change, but keep the pause: no timer.
+      if (!this.paintTree()) this.editor.setStatus(this.pausedLabel)
+      return
+    }
+    this.onBusUpdate()
+  }
+
+  /** The top bus status, without the row of a tool call when the tree shows calls. */
+  private visibleStatus(): StatusSnapshot | null {
+    const status = this.bus.currentStatus()
+    if (this.tree && status?.notificationId === TOOL_ROW_NOTIFICATION_ID) return null
+    return status
   }
 
   private onBusUpdate(): void {
     // While an overlay (modal) is up the agent is blocked; ignore bus churn so
     // the pinned paused-row isn't clobbered by a late spinner/status update.
     if (this.overlayPaused) return
-    const status = this.bus.currentStatus()
+    const status = this.visibleStatus()
     this.label = status?.label ?? null
+    if (this.paintTree()) {
+      // The open tool calls own the slot. The bus row waits under them.
+      this.scheduleNextTick()
+      return
+    }
     if (!status) {
       this.spinnerManager.unmount()
       this.stopTimer()
@@ -196,14 +288,9 @@ export class LiveAreaStatusController implements StatusController {
       this.rateWindow.reset()
       return
     }
-    // Per-entry start time: see `statusId` / `clock` above.
-    // The tool group row (D11) gives its own start: the oldest call that
-    // still runs. Other rows count from the time they are first seen.
-    const pinned = pinnedEntryStart(status)
-    if (pinned !== null) {
-      this.statusId = status.id
-      this.statusStartedAt = pinned
-    } else if (status.id !== this.statusId) {
+    // Per-entry start time: see `statusId` / `clock` above. A row counts
+    // from the time it is first seen.
+    if (status.id !== this.statusId) {
       this.statusId = status.id
       this.statusStartedAt = this.clock.startOf(status.id, this.now())
     }
@@ -219,6 +306,7 @@ export class LiveAreaStatusController implements StatusController {
 
   private paint(): void {
     if (this.overlayPaused) return
+    if (this.paintTree()) return
     if (!this.label) {
       this.editor.setStatus(null)
       return
@@ -254,7 +342,7 @@ export class LiveAreaStatusController implements StatusController {
     // `(N KB)` / `(N MB)` so we don't double-render the byte counter
     // (today's `Calling Write: streaming input (10 B)` pattern from
     // client.ts uses this).
-    const status = this.bus.currentStatus()
+    const status = this.visibleStatus()
     // Core reports the open content block as a fact; the words are ours.
     const label = displayLabelFor(this.label, status?.activity)
     const labelHasBytes = LABEL_BYTES_RE.test(label)
@@ -276,11 +364,18 @@ export class LiveAreaStatusController implements StatusController {
   }
 
   private scheduleNextTick(): void {
-    if (this.timer || !this.label || this.maxFps <= 0) return
-    const effectiveFps = this.spinnerManager.effectiveFps(this.maxFps) ?? this.maxFps
+    const treeActive = this.treeActive()
+    if (this.timer || (!this.label && !treeActive) || this.maxFps <= 0) return
+    const effectiveFps = treeActive
+      ? this.maxFps
+      : (this.spinnerManager.effectiveFps(this.maxFps) ?? this.maxFps)
     const delayMs = Math.max(16, Math.round(1000 / effectiveFps))
     this.timer = setTimeout(() => {
       this.timer = null
+      if (this.paintTree()) {
+        this.scheduleNextTick()
+        return
+      }
       if (!this.label) return
       this.spinnerGlyph = this.nextGlyph()
       this.paint()

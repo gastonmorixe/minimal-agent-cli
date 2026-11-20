@@ -344,6 +344,21 @@ describe("EditorController — status row", () => {
     ctrl.stop()
   })
 
+  it("setStatus(rows) shows each row, then the blank gap, then the editor", () => {
+    const { ctrl, compositor } = make()
+    ctrl.start()
+    ctrl.setStatus(["head", "├ one", "╰ two"])
+    expect(compositor.last().lines).toEqual(["head", "├ one", "╰ two", "", "> "])
+    expect(compositor.last().cursor).toEqual({ row: 4, col: 2 })
+    // Fewer rows: the band shrinks to the rows given.
+    ctrl.setStatus(["only"])
+    expect(compositor.last().lines).toEqual(["only", "", "> "])
+    // Back to no status: one reserved blank row stays, as for a text status.
+    ctrl.setStatus(null)
+    expect(compositor.last().lines).toEqual(["", "", "> "])
+    ctrl.stop()
+  })
+
   it("setStatus(null) keeps the reserved status band after first use", () => {
     const { ctrl, compositor } = make()
     ctrl.start()

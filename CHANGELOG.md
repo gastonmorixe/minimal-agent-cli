@@ -21,6 +21,42 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Changed
 
+- 2026-11-20: **Live tool tree: every running tool call shows in the live
+  area.** Replaces the one group row `Running N tools · Fetch ×7 · (12s)`.
+  Terms: `GLOSSARY.md` (tool call, batch, wave, concurrency cap).
+  - Header: `● Running N tools · K queued · 12s`. `· K queued` shows only when
+    K > 0. The time counts from the oldest call that still runs.
+  - Rows: `├ ● ⤓ Fetch  npr.org/sections/news`, in call order, the last with
+    `╰`. Icon and color come from `src/plugins-ui/tool-presentation.ts`.
+    Targets are short: no `https://`, no `www.`, no trailing `/`, paths
+    relative to the cwd, `"pattern" in path` for `Grep`, long text cut in the
+    middle with `…`. A row shows its own time (`12s`, `1m04s`) only when it
+    differs from the header time by 2 s or more.
+  - Blink: `●` and `○` change every second (a 2 s cycle). Each row takes the
+    opposite phase of the row above it when it starts, and keeps it until
+    its call ends. In truecolor the `●` fades from the tool color to dim in
+    5 steps; in 16 colors only the glyph changes. The terminal blink code is
+    not used.
+  - Limit: at most 10 rows, and fewer when the header and rows would take
+    more than half the terminal height. The other calls go side by side on
+    the last row in short form, in at most 2 lines, cut with `…`.
+  - Queued calls (the concurrency cap is full) show as a dim `◌` on that
+    side-by-side row, and move up into the list when they start. The CLI
+    reads them from the `item_started` events of a round.
+  - One call: `● Running ⤓ Fetch  npr.org/sections/news · 3s`, with no tree.
+  - A modal pauses the tree: `○ Paused · N tools · 12s`, dim `○`, no blink.
+  - The row of a call goes away in the same frame as its block reaches the
+    scrollback (`EditorController.beginFrame` / `endFrame`).
+  - The stray `·` before the first timer tick is gone.
+  - Code: `src/ui/status/tool-calls.ts` (`ToolCallTracker`, the one source of
+    truth for the open calls), `src/ui/status/tool-tree.ts` (pure rendering),
+    `LiveAreaStatusController` option `toolTree`. `EditorController.setStatus`
+    takes a string or a list of rows. `createStatusPort` no longer groups
+    calls, no longer takes `{ now }`, and `toolGroupLabel`,
+    `TOOL_GROUP_NOTIFICATION_ID`, `TOOL_PINNED_CATEGORY` and
+    `pinnedEntryStart` are removed. The test `tool-group-status.test.ts`
+    that pinned the old group row is replaced by `tool-tree.test.ts`.
+
 - 2026-11-20: **The cache-break row has the warning color for every break.**
   Before, an expected break (for example `ttl expired`) had a sky `◇` and
   `cache` label, which looked cyan, and only an actionable break was gold.
