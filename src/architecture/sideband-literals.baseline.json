@@ -9,44 +9,14 @@
     "src/commands/compact.ts": {
       "bracket-notice": 1
     },
-    "src/commands/embedded-payload-scrub-port.ts": {
-      "tag-literal": 2,
-      "tag-regex": 1
-    },
     "src/commands/target-commands.ts": {
       "bracket-notice": 4
-    },
-    "src/session-replay-derivers.ts": {
-      "tag-literal": 2,
-      "bracket-notice": 2
-    },
-    "src/session-replay.ts": {
-      "tag-regex": 1,
-      "tag-search": 1,
-      "bracket-notice": 2
-    },
-    "src/ui/status/debug-dump-origins.ts": {
-      "tag-regex": 2
-    },
-    "src/ui/status/debug-dump-verbose.ts": {
-      "tag-literal": 1
     },
     "src/ui/status/debug-dump.fixtures.ts": {
       "tag-literal": 4
     },
     "src/ui/status/debug-dump.golden.fixtures.ts": {
       "tag-literal": 4
-    },
-    "src/ui/tool-transcript/diagnostics-panel.ts": {
-      "tag-literal": 1
-    },
-    "src/ui/tool-transcript/format.ts": {
-      "tag-literal": 3,
-      "bracket-notice": 2
-    },
-    "src/ui/tool-transcript/tool-view.ts": {
-      "tag-search": 1,
-      "bracket-notice": 2
     }
   },
   "tests": {

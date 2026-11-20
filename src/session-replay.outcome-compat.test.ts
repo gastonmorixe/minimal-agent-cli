@@ -16,6 +16,7 @@ import type { ToolResultBlock } from "@minimal-agent/core/sdk/messages"
 
 import { replayToScrollback } from "./session-replay.ts"
 import { loadResumeState } from "./startup/resume-load.ts"
+import { testSideband } from "./test-utils/sideband-fixture.ts"
 
 const ANSI_RE = new RegExp(`${String.fromCodePoint(0x1b)}\\[[0-9;?]*[ -/]*[@-~]`, "g")
 const stripAnsi = (s: string): string => s.replace(ANSI_RE, "")
@@ -96,7 +97,7 @@ async function resumeView(withOutcome: boolean) {
   process.env.MINIMAL_AGENT_HOME = home
   const sid = withOutcome ? "t7-new" : "t7-old"
   writeSession(join(home, "sessions"), sid, withOutcome)
-  const state = loadResumeState(sid, process.env)
+  const state = loadResumeState(sid, process.env, testSideband)
   let out = ""
   await replayToScrollback(
     state.displayMessages,
@@ -106,6 +107,7 @@ async function resumeView(withOutcome: boolean) {
       toolStartTimes: state.toolStartTimes,
       userTimestamps: state.userTimestamps,
       toolPresentation: new Map(),
+      sideband: testSideband,
     },
   )
   return { state, out, sid }
@@ -197,7 +199,7 @@ describe("M3-5: the Read highlight cut reads the stored outcome", () => {
     await replayToScrollback(
       messages as never,
       { write: (s: string) => (out += s) },
-      { toolPresentation: new Map(), codeHighlighter: highlighter },
+      { toolPresentation: new Map(), codeHighlighter: highlighter, sideband: testSideband },
     )
     return out
   }

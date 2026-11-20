@@ -11,6 +11,7 @@ import { describe, expect, it } from "bun:test"
 
 import type { Finding } from "@minimal-agent/core/sdk/tool-lifecycle"
 
+import { testSideband as sb, sidebandFixturePresent } from "../../test-utils/sideband-fixture.ts"
 import { formatDiagnosticsAnnotation, formatToolPreview, renderFindingsPanel } from "./format.ts"
 
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "")
@@ -110,44 +111,54 @@ describe("renderFindingsPanel", () => {
   })
 })
 
-describe("formatDiagnosticsAnnotation", () => {
+describe.skipIf(!sidebandFixturePresent())("formatDiagnosticsAnnotation", () => {
   it("returns empty string for no notes", () => {
-    expect(formatDiagnosticsAnnotation([])).toBe("")
+    expect(formatDiagnosticsAnnotation([], undefined, sb)).toBe("")
   })
 
   it("wraps notes in a <ma::agent::diagnostics> block", () => {
-    const out = formatDiagnosticsAnnotation([
-      "12:5 error TS2322 Type 'string' not assignable to 'number'.",
-      "7:1 warning no-unused-vars 'x' is never used.",
-    ])
+    const out = formatDiagnosticsAnnotation(
+      [
+        "12:5 error TS2322 Type 'string' not assignable to 'number'.",
+        "7:1 warning no-unused-vars 'x' is never used.",
+      ],
+      undefined,
+      sb,
+    )
     expect(out.startsWith("\n\n<ma::agent::diagnostics")).toBe(true)
     expect(out.includes("</ma::agent::diagnostics>")).toBe(true)
     expect(out).toContain("TS2322")
   })
 
   it("includes scope='ad-hoc' attribute when scope is ad-hoc", () => {
-    const out = formatDiagnosticsAnnotation(["12:5 error TS2322 nope"], "ad-hoc")
+    const out = formatDiagnosticsAnnotation(["12:5 error TS2322 nope"], "ad-hoc", sb)
     expect(out).toContain('scope="ad-hoc"')
   })
 
   it("omits scope attribute when scope is absent", () => {
-    const out = formatDiagnosticsAnnotation(["12:5 error TS2322 nope"])
+    const out = formatDiagnosticsAnnotation(["12:5 error TS2322 nope"], undefined, sb)
     expect(out).not.toContain("scope=")
   })
 
   it("omits scope attribute when scope is project", () => {
-    const out = formatDiagnosticsAnnotation(["12:5 error TS2322 nope"], "project")
+    const out = formatDiagnosticsAnnotation(["12:5 error TS2322 nope"], "project", sb)
     expect(out).not.toContain("scope=")
   })
 })
 
-describe("audience split: the annotation is stripped from the human preview", () => {
-  it("formatToolPreview removes a trailing <ma::agent::diagnostics> block", () => {
-    const body = "File edited: /x.ts (1 replacement(s))"
-    const content = body + formatDiagnosticsAnnotation(["12:5 error TS2322 nope"])
-    const lines = formatToolPreview(content, false, undefined, { tool: "Edit" }).map(stripAnsi)
-    const joined = lines.join("\n")
-    expect(joined).not.toContain("ma::agent::diagnostics")
-    expect(joined).not.toContain("TS2322")
-  })
-})
+describe.skipIf(!sidebandFixturePresent())(
+  "audience split: the annotation is stripped from the human preview",
+  () => {
+    it("formatToolPreview removes a trailing <ma::agent::diagnostics> block", () => {
+      const body = "File edited: /x.ts (1 replacement(s))"
+      const content = body + formatDiagnosticsAnnotation(["12:5 error TS2322 nope"], undefined, sb)
+      const lines = formatToolPreview(content, false, undefined, {
+        tool: "Edit",
+        sideband: sb,
+      }).map(stripAnsi)
+      const joined = lines.join("\n")
+      expect(joined).not.toContain("ma::agent::diagnostics")
+      expect(joined).not.toContain("TS2322")
+    })
+  },
+)

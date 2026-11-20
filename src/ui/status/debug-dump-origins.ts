@@ -13,6 +13,7 @@
  * @module ui/status/debug-dump-origins
  */
 
+import { NO_SIDEBAND, type SidebandApi, type SidebandNode } from "@minimal-agent/core/host/sideband"
 import { BUILTIN_TOOL_NAMES } from "@minimal-agent/core/host/tool-catalog"
 import type { DumpBlockRef } from "../../logging/request-dump-model.ts"
 
@@ -71,6 +72,26 @@ export interface DumpOriginSource {
   describeSystemBlock?(text: string): readonly SystemSlotSpan[] | undefined
   /** The loader's afterInstructions text, used to anchor fragment spans. */
   afterInstructionsText?(): string | null | undefined
+  /** The loader's sideband API: it finds the system section tags and the attachments. */
+  sideband?(): DumpSideband
+}
+
+/**
+ * The sideband slice that the dump uses: read the tags (`find`), list the
+ * kinds, get the end part of a kind (`render`), and name a kind for a label.
+ */
+export type DumpSideband = Pick<SidebandApi, "find" | "name" | "render" | "kinds">
+
+/**
+ * The sideband API of `src`, or `NO_SIDEBAND` when it has none (then no
+ * section tag and no attachment is found).
+ */
+export function dumpSideband(src: DumpOriginSource | undefined): DumpSideband {
+  const sb =
+    src !== undefined && typeof src.sideband === "function"
+      ? safe(() => src.sideband?.())
+      : undefined
+  return sb ?? NO_SIDEBAND
 }
 
 /** One origin reference line. */
@@ -93,7 +114,13 @@ export type OriginRef =
   | { readonly kind: "plugin-tool"; readonly pluginId: string; readonly packageDir: string }
   | { readonly kind: "unrecorded" }
   | { readonly kind: "msg-text" }
-  | { readonly kind: "msg-attachment"; readonly name: string }
+  | {
+      readonly kind: "msg-attachment"
+      /** The sideband kind. */
+      readonly name: string
+      /** The prompt-text name of the kind (`sb.name`), shown as the tag label. */
+      readonly tag: string
+    }
   | { readonly kind: "msg-tool-use"; readonly toolName?: string; readonly toolUseId?: string }
   | {
       readonly kind: "msg-tool-result"
@@ -130,16 +157,73 @@ function lineAt(starts: readonly number[], offset: number): number {
   return line
 }
 
-/** A `<ma::sys::ROLE name="X">` open-tag line. */
-const SYS_TAG = /^<ma::sys::([a-z]+) name="([^"]*)">$/
+/** The end part of each kind, by sideband object (`null`: the kind has none). */
+const CLOSE_PARTS = new WeakMap<object, Map<string, string | null>>()
 
-/** Reverse the loader's tag attribute escape. `&amp;` goes last. */
-const unescapeAttr = (s: string): string =>
-  s
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&amp;", "&")
+/** The end part that the codec writes for `kind`, or `null`. Never throws. */
+function closePartOf(sb: DumpSideband, kind: string): string | null {
+  let byKind = CLOSE_PARTS.get(sb)
+  if (byKind === undefined) {
+    byKind = new Map()
+    CLOSE_PARTS.set(sb, byKind)
+  }
+  const known = byKind.get(kind)
+  if (known !== undefined) return known
+  let part: string | null = null
+  try {
+    const text = sb.render(kind, { body: "x" })
+    const close = sb.find(text, { kinds: [kind] })[0]?.close
+    if (close !== undefined) part = text.slice(close.start, close.end)
+  } catch {
+    part = null
+  }
+  byKind.set(kind, part)
+  return part
+}
+
+/**
+ * The node of one of `kinds` that starts at offset 0 of `line`. A dump
+ * line can hold only the start part of a node (its end is on a later line,
+ * or after the shown-line cap), so the end part of the kind is added after
+ * the line before the codec reads it. The node offsets refer to `line`.
+ */
+function nodeAtLineStart(
+  line: string,
+  sb: DumpSideband,
+  kinds: readonly string[],
+): SidebandNode | undefined {
+  if (line.length === 0) return undefined
+  for (const kind of kinds) {
+    const close = closePartOf(sb, kind)
+    const text = close === null ? line : `${line}\n${close}`
+    const n = sb.find(text, { kinds: [kind] })[0]
+    if (n !== undefined && n.span.start === 0) return n
+  }
+  return undefined
+}
+
+/**
+ * The system section open tags of `lines` that fill one whole line: a
+ * paired node of a system kind with only a `name` attribute. Each gives
+ * its 0-based line, its role (the kind) and its decoded name. The codec
+ * reads the tag and decodes the name.
+ */
+function sectionOpenLines(
+  lines: readonly string[],
+  sb: DumpSideband,
+): { line: number; role: string; name: string }[] {
+  const kinds = sb.kinds({ placement: "system" }).map((k) => k.kind)
+  const out: { line: number; role: string; name: string }[] = []
+  if (kinds.length === 0) return out
+  lines.forEach((line, i) => {
+    const n = nodeAtLineStart(line, sb, kinds)
+    if (n === undefined || n.selfClosing || n.open?.end !== line.length) return
+    const keys = Object.keys(n.attrs)
+    if (keys.length !== 1 || n.attrs.name === undefined) return
+    out.push({ line: i, role: n.kind, name: n.attrs.name })
+  })
+  return out
+}
 
 /** Refs from the loader's afterInstructions fragment spans. */
 function fragmentRefs(
@@ -208,7 +292,11 @@ function providerPreambleRef(s: SystemSlotSpan, src: DumpOriginSource | undefine
  * @param src - Origin data, or undefined.
  * @returns Refs sorted by line (stable).
  */
-export function systemRefs(text: string, src: DumpOriginSource | undefined): PlacedRef[] {
+export function systemRefs(
+  text: string,
+  src: DumpOriginSource | undefined,
+  sb: DumpSideband = dumpSideband(src),
+): PlacedRef[] {
   const lines = text.split("\n")
   const starts: number[] = []
   let off = 0
@@ -237,16 +325,13 @@ export function systemRefs(text: string, src: DumpOriginSource | undefined): Pla
   const prov = provenanceOf(src)
   if (src !== undefined) refs.push(...fragmentRefs(text, starts, src, prov))
 
-  for (let i = 0; i < lines.length; i++) {
-    const m = SYS_TAG.exec(lines[i])
-    if (m === null) continue
-    const name = unescapeAttr(m[2])
-    const hit = prov?.sessionContext.find((s) => s.role === m[1] && s.name === name)
+  for (const sec of sectionOpenLines(lines, sb)) {
+    const hit = prov?.sessionContext.find((s) => s.role === sec.role && s.name === sec.name)
     refs.push({
-      atLine: i + 1,
+      atLine: sec.line + 1,
       ref: {
         kind: "plugin-section",
-        tag: lines[i],
+        tag: lines[sec.line] as string,
         ...(hit === undefined ? {} : { pluginId: hit.pluginId, packageDir: hit.packageDir }),
       },
     })
@@ -284,24 +369,29 @@ export function toolRef(name: string, src: DumpOriginSource | undefined): Origin
   return CORE_TOOLS.has(name) ? { kind: "core-tool" } : { kind: "unrecorded" }
 }
 
-/** A `<ma::agent::NAME` attachment opener at the start of a text block. */
-const ATTACHMENT = /^<ma::agent::([a-z0-9-]+)/
-
 /**
  * The reference of one message content block.
+ *
+ * A text block is an attachment when its first line starts with a node of
+ * a harness kind for the turn or a tool result (direction `to-model`, not
+ * `system`) in its current wire name. Its `name` is the kind.
  *
  * @param b - The block row data.
  * @param toolNames - `tool_use` id to tool name, from blocks seen earlier in the same dump.
  * @param firstLine - The first source line of the block, if any.
+ * @param sb - The sideband reader. Default: `NO_SIDEBAND` (no attachment found).
  */
 export function blockRef(
   b: DumpBlockRef,
   toolNames: ReadonlyMap<string, string>,
   firstLine?: string,
+  sb: DumpSideband = NO_SIDEBAND,
 ): OriginRef {
   if (b.blockType === "text") {
-    const m = firstLine === undefined ? null : ATTACHMENT.exec(firstLine)
-    return m === null ? { kind: "msg-text" } : { kind: "msg-attachment", name: m[1] }
+    const n = firstLine === undefined ? undefined : attachmentAt(firstLine, sb)
+    return n === undefined
+      ? { kind: "msg-text" }
+      : { kind: "msg-attachment", name: n.kind, tag: sb.name(n.kind) }
   }
   if (b.blockType === "tool_use") {
     return {
@@ -319,4 +409,21 @@ export function blockRef(
     }
   }
   return { kind: "msg-other", blockType: b.blockType }
+}
+
+/** The attachment kinds of `sb`: to-model kinds that are not system sections. */
+function attachmentKinds(sb: DumpSideband): string[] {
+  return sb
+    .kinds({ direction: "to-model" })
+    .filter((k) => k.placement !== "system")
+    .map((k) => k.kind)
+}
+
+/** The attachment node at the start of `line`, in its current wire name, or undefined. */
+function attachmentAt(line: string, sb: DumpSideband): SidebandNode | undefined {
+  const kinds = attachmentKinds(sb)
+  if (kinds.length === 0) return undefined
+  const n = nodeAtLineStart(line, sb, kinds)
+  // An old wire name (a bare or older form) is not shown as an attachment.
+  return n !== undefined && n.legacyQname === sb.name(n.kind) ? n : undefined
 }

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Test fixture: a short stub for every required text contract, so a CLI spawn test boots with no sibling plugins repo.",
   "required": true,
-  "provides": ["prompts.template"],
+  "provides": ["prompts.template", "sideband.kinds.core"],
   "capabilities": [],
   "systemPromptBase": {
     "id": "stub",
@@ -12,6 +12,17 @@
     "identity": true,
     "slots": ["instructions", "toolOutputConventions"]
   },
+  "sideband": [
+    {
+      "kind": "policy",
+      "direction": "to-model",
+      "placement": "tool-result",
+      "attrs": {},
+      "body": "text",
+      "trust": "harness",
+      "summary": "Test stub: the policy tag of a hook note (core renders it, design step 6)."
+    }
+  ],
   "toolText": [
     {
       "id": "tools",

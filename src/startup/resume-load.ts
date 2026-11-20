@@ -18,6 +18,7 @@ import {
   lastTurnRoundCheckpoint,
   loadSession,
 } from "@minimal-agent/core/host/session-restore"
+import type { SidebandReader } from "@minimal-agent/core/host/sideband"
 import { resolveSessionsDir } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import type { Message, ToolUseBlock } from "@minimal-agent/core/sdk/messages"
 import { toolDisplaysFromRecords, userTimestampsFromRecords } from "../session-replay.ts"
@@ -92,9 +93,14 @@ export function unfinishedTurnHint(checkpoint: RoundCheckpoint): string {
  *
  * @param resumeSid - the resolved session id.
  * @param env - environment for the sessions directory lookup.
+ * @param sideband - the sideband reader of the loader, for the Task display cut.
  * @returns the resume state. Throws when the session cannot be read.
  */
-export function loadResumeState(resumeSid: string, env: NodeJS.ProcessEnv): ResumeState {
+export function loadResumeState(
+  resumeSid: string,
+  env: NodeJS.ProcessEnv,
+  sideband?: SidebandReader,
+): ResumeState {
   const loaded = loadSession(resumeSid)
   const initialMessages = loaded.messages
   const pendingDraft = loaded.pendingDraft
@@ -146,7 +152,10 @@ export function loadResumeState(resumeSid: string, env: NodeJS.ProcessEnv): Resu
     pendingDraft,
     toolStartTimes,
     userTimestamps: userTimestampsFromRecords(loaded.records),
-    toolDisplays: toolDisplaysFromRecords(loaded.records, { sidecarTasks }),
+    toolDisplays: toolDisplaysFromRecords(loaded.records, {
+      sidecarTasks,
+      ...(sideband === undefined ? {} : { sideband }),
+    }),
     roundCheckpoint,
     banner,
   }

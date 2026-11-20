@@ -10,6 +10,7 @@
  */
 
 import { homedir } from "node:os"
+import { NO_SIDEBAND, type SidebandReader } from "@minimal-agent/core/host/sideband"
 import {
   globPathFromInput,
   globPatternFromInput,
@@ -995,49 +996,20 @@ export const TOOL_PREVIEW_LINES: Record<string, number> = {
 export const TOOL_PREVIEW_LINES_DEFAULT = 10
 
 /**
- * Four flavors of model-only annotation can ride at the end of
- * `tool_result.content`:
+ * Model-only annotations ride at the end of `tool_result.content` (the
+ * truncation notice, the streak note, the preview hint, diagnostics, the
+ * active-mode stamp, the raw-output pointer). The sideband codec owns their
+ * wire forms, also the old bracket notices. `sb.trailing` gives the start of
+ * the annotation region: it uses the codec hint (a few `lastIndexOf` calls
+ * from the end), and parses only the tail after it.
  *
- *  - `\n\n[truncated: ...]`              : universal API-cap notice
- *    (see `tools/truncation.ts`).
- *  - `\n\n[note: ...]`                   : streak tracker note
- *    (see `tools/feedback-tracker.ts`).
- *  - `\n\n<ma::agent::output-preview …>…</ma::agent::output-preview>` : TUI elision hint
- *    (this file).
- *  - `\n\n<ma::agent::mode-active id="…" since="…" />`    : active-mode stamp
- *    (this file). Always last : it's the freshest signal the model
- *    should re-read at the very tail of each tool_result.
+ * Exported for the per-frame micro-benchmark (`format.annotation-perf.test.ts`).
  *
- * Order at end of content is fixed (above). `findAnnotationStart`
- * returns the index of the EARLIEST true annotation (= start of the
- * annotation region) so callers can slice the body cleanly. Using
- * per-pattern `lastIndexOf` (not a single regex with `.match()`)
- * hardens against the case where the body itself legitimately
- * contains the prefix (e.g. a `Read` of a log that happens to
- * include the string `[truncated:`) : the last occurrence is the
- * real annotation, body-internal occurrences are earlier.
- *
- * Convention note: `[truncated:]` and `[note:]` are legacy
- * bracket-string shapes. New annotations use the `<ma::…>` XML-like
- * namespace (TODOS.md#T-ca2ce1). When the legacy ones are eventually
- * retrofitted (cross-version replay-breaking change), this collapses
- * to a single `<ma::…>` test.
+ * @returns The start of the region, or `-1` when there is none.
  */
-const ANNOTATION_PREFIXES = [
-  "\n\n[truncated:",
-  "\n\n[note:",
-  "\n\n<ma::agent::output-preview",
-  "\n\n<ma::agent::diagnostics",
-  "\n\n<ma::agent::mode-active",
-] as const
-
-function findAnnotationStart(content: string): number {
-  let earliest = -1
-  for (const p of ANNOTATION_PREFIXES) {
-    const i = content.lastIndexOf(p)
-    if (i >= 0 && (earliest < 0 || i < earliest)) earliest = i
-  }
-  return earliest
+export function findAnnotationStart(content: string, sb: SidebandReader): number {
+  const { bodyEnd } = sb.trailing(content)
+  return bodyEnd < content.length ? bodyEnd : -1
 }
 
 /**
@@ -1056,7 +1028,7 @@ export function validBodyEnd(content: string, bodyEnd: unknown): number | undefi
 }
 
 /**
- * Compute the TUI vs body line gap for the `<ma::agent::output-preview>` annotation.
+ * Compute the TUI vs body line gap for the output-preview annotation.
  * Returns `null` when the body fits in the per-tool budget or there's no
  * body at all.
  *
@@ -1070,8 +1042,9 @@ export function validBodyEnd(content: string, bodyEnd: unknown): number | undefi
 export function computeTuiElision(
   content: string,
   tool: string,
+  sb: SidebandReader,
 ): { shown: number; total: number } | null {
-  const idx = findAnnotationStart(content)
+  const idx = findAnnotationStart(content, sb)
   const body = idx >= 0 ? content.slice(0, idx) : content
   if (!body) return null
   // Allocation-free line count (see countLines). This runs on the model's
@@ -1415,9 +1388,15 @@ export function formatToolPreview(
     ansiContent?: boolean
     /**
      * Offset in `content` where the body ends (`ToolViewOutcome.outcome.bodyEnd`).
-     * A bad value is ignored and the annotation regex cuts the body.
+     * A bad value is ignored and the sideband codec cuts the body.
      */
     bodyEnd?: number
+    /**
+     * The sideband reader of the session (the loader's, or
+     * `loadSidebandOnly()`). It finds the annotation region when `bodyEnd`
+     * is missing. Omitted: `NO_SIDEBAND`, which finds no annotation.
+     */
+    sideband?: SidebandReader
   },
 ): string[] {
   // If the tool provided a pre-rendered display string (e.g. ANSI-colored
@@ -1481,17 +1460,14 @@ export function formatToolPreview(
   const color = isError ? c.red : opts?.ansiContent ? (line: string) => line : c.dim
 
   // 1. Strip ALL model-only trailing annotations from what we display to
-  //    the human. Three flavors today : `[truncated: ...]`, `[note: ...]`,
-  //    `<ma::agent::output-preview ...>...</ma::agent::output-preview>` (see
-  //    `findAnnotationStart`). They live at end-of-content separated by
-  //    `\n\n` and stack in a fixed order, so the earliest of their
-  //    last-occurrences is the start of the annotation region and we slice
-  //    from there. The structured `info` (when supplied) carries the same
-  //    truncation numbers in machine form : we render those as the
-  //    bare-facts footer instead.
-  //    A valid `opts.bodyEnd` (from the core outcome) is the cut; the regex
-  //    stays as the fallback.
-  const noticeIdx = validBodyEnd(content, opts?.bodyEnd) ?? findAnnotationStart(content)
+  //    the human (see `findAnnotationStart`). The structured `info` (when
+  //    supplied) carries the same truncation numbers in machine form : we
+  //    render those as the bare-facts footer instead.
+  //    A valid `opts.bodyEnd` (from the core outcome) is the cut; the
+  //    sideband codec stays as the fallback.
+  const noticeIdx =
+    validBodyEnd(content, opts?.bodyEnd) ??
+    findAnnotationStart(content, opts?.sideband ?? NO_SIDEBAND)
   let body = noticeIdx >= 0 ? content.slice(0, noticeIdx) : content
 
   // 2. Per-line width clamp (display-width-aware so wide chars / emoji /

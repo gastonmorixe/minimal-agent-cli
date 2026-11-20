@@ -11,6 +11,7 @@
 import { inspectSessionArtifacts } from "@minimal-agent/core/host/session-artifacts"
 import { resolveSessionTarget } from "@minimal-agent/core/host/session-index"
 import { createSessionsReadApi } from "@minimal-agent/core/host/sessions-read"
+import { loadSidebandOnly, type SidebandOnlyOptions } from "@minimal-agent/core/host/sideband"
 import { writeStdoutSafely } from "../infra/safe-stdout.ts"
 import { formatSessionArtifacts } from "./session-artifacts-format.ts"
 import { formatSessionAsMarkdown, formatSessionAsXml } from "./session-dump.ts"
@@ -20,6 +21,11 @@ export interface DumpCommandInput {
   format: string
   paths?: boolean
   cwd: string
+  /**
+   * The plugin roots for the sideband-only boot (no handler import). The
+   * codec renders the data-URI stubs. Omitted: core discovery defaults.
+   */
+  pluginRoots?: SidebandOnlyOptions["roots"]
 }
 
 /** Thrown for user-facing `dump` failures (bad target, no sessions); the CLI prints the message without a stack. */
@@ -42,7 +48,11 @@ export async function runDumpCommand(input: DumpCommandInput): Promise<void> {
     throw new DumpCommandError(`no session file on disk for sid ${JSON.stringify(sid)}`)
   }
   if (input.paths) await writeStdoutSafely(formatSessionArtifacts(inspectSessionArtifacts(sid)))
+  // `dump` has no plugin loader: boot the sideband codec and kinds only, once.
+  const sb = await loadSidebandOnly(
+    input.pluginRoots === undefined ? {} : { roots: input.pluginRoots },
+  )
   await writeStdoutSafely(
-    input.format === "xml" ? formatSessionAsXml(data) : formatSessionAsMarkdown(data),
+    input.format === "xml" ? formatSessionAsXml(data, sb) : formatSessionAsMarkdown(data, sb),
   )
 }

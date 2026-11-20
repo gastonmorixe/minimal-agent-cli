@@ -24,8 +24,11 @@ import type { VerboseRenderOptions } from "./debug-dump-verbose.ts"
 const strip = (s: string): string => stripSizeLabels(s.replace(/\x1b\[[0-9;]*m/g, ""))
 
 /** Render a view in verbose form. */
+import { testSideband } from "../../test-utils/sideband-fixture.ts"
+
 function verbose(view: DumpView, opts: VerboseRenderOptions = {}): string[] {
-  return renderDumpBlock(view, undefined, { ...opts, enabled: true })
+  // The host always has a codec: the real one of the sibling checkout.
+  return renderDumpBlock(view, undefined, { sideband: testSideband, ...opts, enabled: true })
 }
 
 /** A request with one tool whose description is `text`. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import type { Message } from "@minimal-agent/core/sdk/messages"
 import { buildResumeHeader, replayToScrollback, stringifyUserText } from "./session-replay.ts"
+import { testSideband } from "./test-utils/sideband-fixture.ts"
 import { ToolTimeTracker } from "./ui/tool-transcript/tool-time.ts"
 
 class CaptureSink {
@@ -41,7 +42,7 @@ describe("replayToScrollback", () => {
       { role: "assistant", content: [{ type: "text", text: "hello there" }] },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     const plain = stripAnsi(sink.out)
     expect(plain).toContain("❯ hi")
     expect(plain).toContain("hello there")
@@ -54,7 +55,7 @@ describe("replayToScrollback", () => {
       { role: "assistant", content: [{ type: "text", text: "hello" }] },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { userTimestamps: [at, null] })
+    await replayToScrollback(messages, sink, { sideband: testSideband, userTimestamps: [at, null] })
     const plain = stripAnsi(sink.out)
     const stamp = [
       new Intl.DateTimeFormat(undefined, { dateStyle: "short" }).format(at),
@@ -71,6 +72,7 @@ describe("replayToScrollback", () => {
     ]
     const sink = new CaptureSink()
     await replayToScrollback(messages, sink, {
+      sideband: testSideband,
       userTimestamps: [at, null],
       scrollbackSubmittedAt: "inline-locale",
     })
@@ -88,6 +90,7 @@ describe("replayToScrollback", () => {
     const messages: Message[] = [{ role: "user", content: [{ type: "text", text: "hi" }] }]
     const sink = new CaptureSink()
     await replayToScrollback(messages, sink, {
+      sideband: testSideband,
       userTimestamps: [at],
       scrollbackSubmittedAt: "off",
     })
@@ -112,7 +115,7 @@ describe("replayToScrollback", () => {
       { role: "assistant", content: [{ type: "text", text: "done" }] },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     const plain = stripAnsi(sink.out)
     expect(plain).toContain("Bash")
     expect(plain).toContain("$ ls")
@@ -134,7 +137,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     expect(stripAnsi(sink.out)).toContain("(no result on disk)")
   })
 
@@ -164,7 +167,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { modeManager })
+    await replayToScrollback(messages, sink, { sideband: testSideband, modeManager })
     const plain = stripAnsi(sink.out)
     // The activation tag itself never reaches the rendered output.
     expect(plain).not.toContain("<mode-change")
@@ -197,7 +200,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { modeManager })
+    await replayToScrollback(messages, sink, { sideband: testSideband, modeManager })
     const plain = stripAnsi(sink.out)
     expect(plain).not.toContain("<mode-change")
     expect(plain).toContain("ASK ❯ ask question")
@@ -226,7 +229,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { modeManager })
+    await replayToScrollback(messages, sink, { sideband: testSideband, modeManager })
     const plain = stripAnsi(sink.out)
     // The mid-loop user message (tool_result + mode-change) renders no
     // own header line, but its mode-change side effect carries forward.
@@ -248,7 +251,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     const plain = stripAnsi(sink.out)
     // Activation tag is still stripped (it's a transport detail)…
     expect(plain).not.toContain("<mode-change")
@@ -281,7 +284,7 @@ describe("replayToScrollback", () => {
       { role: "assistant", content: [{ type: "text", text: "ok" }] },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     const plain = stripAnsi(sink.out)
     // The attachment must not appear, neither the opener nor any
     // of its body lines.
@@ -308,7 +311,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     const plain = stripAnsi(sink.out)
     expect(plain).not.toContain("<ma::plugin::memory::short-term")
     expect(plain).not.toContain("hypothesis: wrap bug")
@@ -333,7 +336,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     const plain = stripAnsi(sink.out)
     expect(plain).not.toContain("<memory-saved")
     expect(plain).not.toContain("tests live in src")
@@ -363,7 +366,7 @@ describe("replayToScrollback", () => {
       { role: "assistant", content: [{ type: "text", text: "still on track" }] },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     const plain = stripAnsi(sink.out)
     // Neither the tag nor the prose body sneaks into the scrollback.
     expect(plain).not.toContain("<ma::agent::example-notice")
@@ -403,7 +406,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     const plain = stripAnsi(sink.out)
     expect(plain).not.toContain("<mode-change")
     expect(plain).not.toContain("<ma::plugin::memory::short-term")
@@ -457,7 +460,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     const plain = stripAnsi(sink.out)
     expect(plain).not.toContain("<ma::agent::tasks")
     expect(plain).not.toContain("#abc123")
@@ -489,7 +492,10 @@ describe("replayToScrollback", () => {
       { role: "assistant", content: [{ type: "text", text: "**hello** there" }] },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { formatterCmd: FAKE_FORMATTER_CMD })
+    await replayToScrollback(messages, sink, {
+      sideband: testSideband,
+      formatterCmd: FAKE_FORMATTER_CMD,
+    })
     expect(sink.out).toContain("FMT[**hello** there]")
     // User prompt line is NOT piped through the formatter — only
     // assistant text/thinking. The raw user text must be present.
@@ -512,7 +518,10 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { formatterCmd: FAKE_FORMATTER_CMD })
+    await replayToScrollback(messages, sink, {
+      sideband: testSideband,
+      formatterCmd: FAKE_FORMATTER_CMD,
+    })
     expect(sink.out).toContain("FMT[first]")
     expect(sink.out).toContain("FMT[second]")
     expect(sink.out).not.toContain("FMT[firstsecond]")
@@ -531,7 +540,10 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { formatterCmd: FAKE_FORMATTER_CMD })
+    await replayToScrollback(messages, sink, {
+      sideband: testSideband,
+      formatterCmd: FAKE_FORMATTER_CMD,
+    })
     expect(sink.out).toContain("FMT[let me see]")
     // Thinking output is wrapped in faint+italic ANSI (faintThinkingChunk).
     // `\x1b[2m` = faint, `\x1b[3m` = italic. Sanity-check the wrap is
@@ -554,7 +566,10 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { formatterCmd: FAKE_FORMATTER_CMD })
+    await replayToScrollback(messages, sink, {
+      sideband: testSideband,
+      formatterCmd: FAKE_FORMATTER_CMD,
+    })
     expect(sink.out).toContain("FMT[after]")
     expect(sink.out).not.toContain("FMT[]")
   })
@@ -574,7 +589,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink)
+    await replayToScrollback(messages, sink, { sideband: testSideband })
     expect(sink.out).toContain("**raw** markdown")
     expect(sink.out).not.toContain("FMT[")
   })
@@ -620,6 +635,7 @@ describe("replayToScrollback", () => {
     ])
     const sink = new CaptureSink()
     await replayToScrollback(messages, sink, {
+      sideband: testSideband,
       toolTimeTracker: tracker,
       toolStartTimes: startTimes,
     })
@@ -647,6 +663,7 @@ describe("replayToScrollback", () => {
     ]
     const sink = new CaptureSink()
     await replayToScrollback(messages, sink, {
+      sideband: testSideband,
       // tracker provided but no startTimes → still no hint, no crash
       toolTimeTracker: new ToolTimeTracker(),
     })
@@ -681,6 +698,7 @@ describe("replayToScrollback", () => {
     const knownMs = new Date(2026, 5, 1, 10, 0, 0).getTime() // Jun 1 10:00:00
     const sink = new CaptureSink()
     await replayToScrollback(messages, sink, {
+      sideband: testSideband,
       toolTimeTracker: new ToolTimeTracker(),
       toolStartTimes: new Map([["tu_known", knownMs]]),
     })
@@ -709,7 +727,11 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { modeManager, userTimestamps: [at] })
+    await replayToScrollback(messages, sink, {
+      sideband: testSideband,
+      modeManager,
+      userTimestamps: [at],
+    })
     const plain = stripAnsi(sink.out)
     // The chip is emitted ABOVE the prompt arrow with `mode <from> → <to>`.
     expect(plain).toContain("mode")
@@ -752,6 +774,7 @@ describe("replayToScrollback", () => {
     const at = new Date(2026, 4, 22, 17, 52)
     const sink = new CaptureSink()
     await replayToScrollback(messages, sink, {
+      sideband: testSideband,
       modeManager,
       // Index 2 is the synthetic tool_result+mode-change user message.
       userTimestamps: [null, null, at, null],
@@ -773,7 +796,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { userTimestamps: [null] })
+    await replayToScrollback(messages, sink, { sideband: testSideband, userTimestamps: [null] })
     const plain = stripAnsi(sink.out)
     expect(plain).toContain("default → ASK")
     // 1970-01-01 is the documented "we lost the timestamp" marker.
@@ -792,7 +815,7 @@ describe("replayToScrollback", () => {
       },
     ]
     const sink = new CaptureSink()
-    await replayToScrollback(messages, sink, { userTimestamps: [at] })
+    await replayToScrollback(messages, sink, { sideband: testSideband, userTimestamps: [at] })
     const plain = stripAnsi(sink.out)
     // No modeManager → label is uppercased id, no color, but chip still renders.
     expect(plain).toContain("mode")

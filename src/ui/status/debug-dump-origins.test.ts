@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "bun:test"
 import { join } from "node:path"
+import { testSideband } from "../../test-utils/sideband-fixture.ts"
 import { blockRef, type DumpOriginSource, systemRefs, toolRef } from "./debug-dump-origins.ts"
 
 const DIR = join(process.cwd(), "plugins", "ma-x-plugin")
@@ -29,7 +30,7 @@ describe("systemRefs", () => {
         },
       ],
     }
-    expect(systemRefs(text, src)).toEqual([
+    expect(systemRefs(text, src, testSideband)).toEqual([
       { atLine: 1, ref: { kind: "core-slot", slot: "instructions", overridden: false } },
       { atLine: 6, ref: { kind: "core-slot", slot: "toolOutputConventions", overridden: true } },
     ])
@@ -49,7 +50,7 @@ describe("systemRefs", () => {
         },
       ],
     }
-    expect(systemRefs(text, src)).toEqual([
+    expect(systemRefs(text, src, testSideband)).toEqual([
       {
         atLine: 1,
         ref: {
@@ -99,7 +100,7 @@ describe("systemRefs", () => {
         ],
       }),
     }
-    const refs = systemRefs(text, src).filter((r) => r.ref.kind === "plugin-section")
+    const refs = systemRefs(text, src, testSideband).filter((r) => r.ref.kind === "plugin-section")
     expect(refs.map((r) => [r.atLine, r.ref.kind === "plugin-section" && r.ref.pluginId])).toEqual([
       [1, "p1"],
       [5, "p2"],
@@ -121,7 +122,7 @@ describe("systemRefs", () => {
         sessionContext: [],
       }),
     }
-    expect(systemRefs(text, src)).toEqual([
+    expect(systemRefs(text, src, testSideband)).toEqual([
       { atLine: 1, ref: { kind: "unrecorded" } },
       {
         atLine: 4,
@@ -180,9 +181,12 @@ describe("blockRef", () => {
 
   it("names text, attachments, tool_use, tool_result and other blocks", () => {
     expect(blockRef({ block: 0, blockType: "text" }, names, "hi")).toEqual({ kind: "msg-text" })
-    expect(blockRef({ block: 0, blockType: "text" }, names, '<ma::agent::tasks x="1">')).toEqual({
+    expect(
+      blockRef({ block: 0, blockType: "text" }, names, '<ma::agent::tasks x="1">', testSideband),
+    ).toEqual({
       kind: "msg-attachment",
       name: "tasks",
+      tag: "ma::agent::tasks",
     })
     expect(
       blockRef({ block: 0, blockType: "tool_use", toolUseId: "t1", toolName: "Bash" }, names),

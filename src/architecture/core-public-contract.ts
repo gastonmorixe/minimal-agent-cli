@@ -20,6 +20,8 @@ export const CORE_PUBLIC_CONTRACT = {
     "./host/status-bus",
     "./host/system-block-origins",
     "./host/request-inspector",
+    // The sideband API of a loader, and the sideband-only boot (design step 13).
+    "./host/sideband",
     "./plugin-api",
   ],
   events: ["AgentEvent", "EventSink"],

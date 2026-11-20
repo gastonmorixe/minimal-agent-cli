@@ -19,6 +19,7 @@ import { createRuntime } from "@minimal-agent/core"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import type { ToolExecResult, ToolRegistry } from "@minimal-agent/core/sdk/ports"
 import type { ReplAgentLike } from "../repl.ts"
+import { testSideband } from "../test-utils/sideband-fixture.ts"
 import type { TestSendResult as StreamedResponse } from "../test-utils/transport-types.ts"
 
 import {
@@ -218,6 +219,8 @@ describe("runNonInteractivePrompt stream-json: SIGTERM wrap-up", () => {
         },
       },
       sendFn: sendFn as never,
+      // Core renders the `wrap-up` note with the session sideband API (step 6).
+      sideband: testSideband,
       id: "sid-wrap",
     })
     const out: string[] = []

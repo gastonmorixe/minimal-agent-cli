@@ -15,6 +15,7 @@
  * @module ui/tool-transcript/tool-view
  */
 
+import { NO_SIDEBAND, type SidebandReader } from "@minimal-agent/core/host/sideband"
 import type {
   ToolViewEvent,
   ToolViewOutcome,
@@ -99,6 +100,21 @@ export interface ReplToolViewOptions {
    * as the block of that call reaches the scrollback.
    */
   calls?: ToolViewCalls
+  /**
+   * The sideband reader of the session (`sidebandOf(loader)`). It cuts the
+   * model-only annotations from a result with no core `bodyEnd`. Omitted:
+   * `NO_SIDEBAND` (no cut).
+   */
+  sideband?: SidebandReader
+}
+
+/**
+ * The start of the annotation region at the end of `content` (`-1` when
+ * there is none), from the sideband codec.
+ */
+function trailingCut(content: string, sb: SidebandReader): number {
+  const { bodyEnd } = sb.trailing(content)
+  return bodyEnd < content.length ? bodyEnd : -1
 }
 
 /** The live state of one tool call. */
@@ -194,6 +210,7 @@ function stripDiffPathPrefix(raw: string): string | undefined {
  * tool rows to `opts.writeTranscript`.
  */
 export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
+  const sideband = opts.sideband ?? NO_SIDEBAND
   const { writeTranscript } = opts
   const calls = new Map<string, CallState>()
 
@@ -396,14 +413,9 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
         // Model-only annotations are plain metadata, not source code. Strip
         // them for the highlighter, then put them back, so the preview's
         // annotation strip still sees the canonical content.
-        // The core `bodyEnd` is the cut. Without it, guess from 3 prefixes.
-        const annotationMatches = [
-          content.indexOf("\n\n<ma::"),
-          content.indexOf("\n\n[truncated:"),
-          content.indexOf("\n\n[note:"),
-        ].filter((index) => index >= 0)
-        const annotationIdx =
-          previewBodyEnd ?? (annotationMatches.length === 0 ? -1 : Math.min(...annotationMatches))
+        // The core `bodyEnd` is the cut. Without it, the sideband codec
+        // finds the annotation region at the end.
+        const annotationIdx = previewBodyEnd ?? trailingCut(content, sideband)
         const readBody = annotationIdx < 0 ? content : content.slice(0, annotationIdx)
         const annotation = annotationIdx < 0 ? "" : content.slice(annotationIdx)
         const highlighted = await highlightReadBody(readBody, language, highlighter)
@@ -450,6 +462,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
       cols: state.cols,
       ansiContent: contentHasAnsi,
       ...(previewBodyEnd === undefined ? {} : { bodyEnd: previewBodyEnd }),
+      sideband,
     })
     const panel =
       outcome.findings.length > 0
