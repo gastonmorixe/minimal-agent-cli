@@ -32,7 +32,9 @@ import {
 import {
   dispatchCommandAndApply as dispatchCommandSubmit,
   type EnqueuePrompt,
+  editorSubmitListener,
   promptSubmittedPayload,
+  type SubmitLine,
 } from "./commands/dispatch-submit.ts"
 import { formatRestoredMessages } from "./editor/queue-restore.ts"
 import type { QueueKeyHandler } from "./editor/types.ts"
@@ -676,7 +678,7 @@ export async function runReplLiveArea(
     // deferred, never blocks this onSubmit path. We emit AFTER the
     // queue push so subscribers observe the same queue ordering the
     // agent will process.
-    // `source` (SPEC §6.1) tells plugins typed text from synthetic text.
+    // `source` (core `PromptSource`; title-plugin SPEC §6.1) tells typed from synthetic text.
     const payload = promptSubmittedPayload(text, opts.sessionId, queue.length - 1, source)
     loader?.bus().emit("prompt.submitted", payload)
   }
@@ -713,7 +715,9 @@ export async function runReplLiveArea(
       submittedAt,
     )
 
-  const onSubmit = (text: string, commitLines: string[] = [], submittedAt?: Date): void => {
+  // `source` is "user" for the editor (via `editorSubmitListener`) and "inject"
+  // for a `prompt.inject` emit. It goes only to the plain prompt path.
+  const onSubmit: SubmitLine = (text, commitLines = [], submittedAt, source = "user") => {
     if (!text.trim()) return
     // Host-owned `/compact` fallback when the command is not in the
     // registry (plugins disabled / registerHostCommand never ran). When
@@ -761,7 +765,7 @@ export async function runReplLiveArea(
         return
       }
     }
-    enqueuePrompt(text, commitLines, submittedAt, "user")
+    enqueuePrompt(text, commitLines, submittedAt, source)
   }
   const onCancel = (reason?: string): void => {
     cancelled = true
@@ -771,7 +775,9 @@ export async function runReplLiveArea(
     wakeWaiter()
   }
 
-  editor.on("submit", onSubmit)
+  // The editor path only: it emits `editor.submitted` (history) with the raw
+  // typed line, before command dispatch. Inject/recovery never pass here.
+  editor.on("submit", editorSubmitListener(loader?.bus() ?? null, opts.sessionId, onSubmit))
   editor.on("cancel", onCancel)
 
   // Out-of-band prompt injection. Any plugin (notably `schedule`'s
@@ -791,8 +797,9 @@ export async function runReplLiveArea(
       .bus()
       .on<{ text?: unknown; source?: unknown }>("prompt.inject", (ctx) => {
         const text = typeof ctx.payload?.text === "string" ? ctx.payload.text : ""
-        // onSubmit already drops blank/whitespace-only text.
-        onSubmit(text)
+        // onSubmit already drops blank/whitespace-only text. Each inject is
+        // "inject": the free-form plugin `source` does not go into PromptSource.
+        onSubmit(text, [], undefined, "inject")
       })
 
     // Async, between-turns USER notification (a framed scrollback toast),

@@ -21,6 +21,8 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- Plugin bus: `editor.submitted` is emitted for each typed editor line, and a
+  `prompt.inject` prompt now has `prompt.submitted` `source` "inject".
 - `--debug` request dump: each part shows a faint size label (`1.2 kB · ~310
   tok`): UTF-8 bytes of the wire text and approximate tokens from
   `@minimal-agent/core/host/token-estimate`. It applies to header and body
@@ -31,6 +33,12 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Fixed
 
+- `prompt.inject` now sends `prompt.submitted` with `source: "inject"` (was
+  `"user"`). Intercom, background-job, sub-agent, cron and cloud wakes then do
+  not look like typed text, so the title plugin makes no title from them. A
+  typed line still sends `"user"`. An injected `/cmd` line still goes to the
+  command path, and a blank inject still makes no prompt. The plugin
+  `source` text (for example `cron:abc`) does not go into `PromptSource`.
 - `--debug --verbose`: the tool params table cut the description with `…`,
   and a long enum type left only some cells for it. Now nothing is cut: the
   description word-wraps in its column, a long type wraps at `|` in a column
