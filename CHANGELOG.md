@@ -21,6 +21,17 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- `--debug --verbose` request dump: each annotation at the end of a
+  `tool_result` (output preview, raw output footer, active-mode stamp,
+  diagnostics, and plugin kinds) gets its own reference line before its
+  first line, for example `↳ annotation · <ma::agent::output-preview> ·
+  shown 10 · total 14 · tool Bash`. The data comes from the persisted
+  outcome of the block (`block.outcome`, checked by `viewPersistedOutcome`).
+  With no valid record, the sideband codec reads the tags at the end of the
+  text, and the line ends with `from text`. An annotation that the line cap
+  hid gets its line at the end of the block, marked `not shown`. New
+  `DumpBlockRef.annotations` (`DumpAnnotation`), `DumpViewOptions.sideband`,
+  and the `msg-annotation` origin ref.
 - Plugin bus: `editor.submitted` is emitted for each typed editor line, and a
   `prompt.inject` prompt now has `prompt.submitted` `source` "inject".
 - `--debug` request dump: each part shows a faint size label (`1.2 kB · ~310

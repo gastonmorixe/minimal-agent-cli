@@ -15,7 +15,7 @@
 
 import { NO_SIDEBAND, type SidebandApi, type SidebandNode } from "@minimal-agent/core/host/sideband"
 import { BUILTIN_TOOL_NAMES } from "@minimal-agent/core/host/tool-catalog"
-import type { DumpBlockRef } from "../../logging/request-dump-model.ts"
+import type { DumpAnnotation, DumpBlockRef } from "../../logging/request-dump-model.ts"
 
 /** A core system prompt slot (mirror of core `SystemSlotId`). */
 export type SystemSlotId =
@@ -80,7 +80,7 @@ export interface DumpOriginSource {
  * The sideband slice that the dump uses: read the tags (`find`), list the
  * kinds, get the end part of a kind (`render`), and name a kind for a label.
  */
-export type DumpSideband = Pick<SidebandApi, "find" | "name" | "render" | "kinds">
+export type DumpSideband = Pick<SidebandApi, "find" | "name" | "render" | "kinds" | "trailing">
 
 /**
  * The sideband API of `src`, or `NO_SIDEBAND` when it has none (then no
@@ -129,6 +129,17 @@ export type OriginRef =
       readonly isError: boolean
     }
   | { readonly kind: "msg-other"; readonly blockType: string }
+  | {
+      readonly kind: "msg-annotation"
+      /** The prompt-text name of the kind (`sb.name`), shown as the tag label. */
+      readonly tag: string
+      /** The attributes, in record or wire order. */
+      readonly attrs: Readonly<Record<string, string | number | boolean>>
+      /** `record`: from the persisted outcome. `text`: the codec read the text. */
+      readonly source: "record" | "text"
+      /** False when the line cap hid the first line of the annotation. */
+      readonly shown: boolean
+    }
 
 /** A reference placed before a 1-based source line. */
 export interface PlacedRef {
@@ -409,6 +420,23 @@ export function blockRef(
     }
   }
   return { kind: "msg-other", blockType: b.blockType }
+}
+
+/**
+ * The reference of one `tool_result` annotation. The label is the prompt-text
+ * name of the kind (`sb.name`). An unknown kind keeps its kind name.
+ *
+ * @param a - The annotation of the dump model.
+ * @param sb - The sideband reader.
+ */
+export function annotationRef(a: DumpAnnotation, sb: DumpSideband = NO_SIDEBAND): OriginRef {
+  return {
+    kind: "msg-annotation",
+    tag: safe(() => sb.name(a.kind)) ?? a.kind,
+    attrs: a.attrs,
+    source: a.source,
+    shown: a.shown,
+  }
 }
 
 /** The attachment kinds of `sb`: to-model kinds that are not system sections. */

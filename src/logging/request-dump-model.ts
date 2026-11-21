@@ -14,6 +14,8 @@
  */
 
 import type { RequestSnapshot } from "@minimal-agent/core/host/request-inspector"
+import type { SidebandApi } from "@minimal-agent/core/host/sideband"
+import { viewPersistedOutcome } from "@minimal-agent/core/plugin-api"
 
 import { truncHint } from "../ui/style/truncate-hint.ts"
 import { type DumpKvSection, kvSections } from "./request-dump-kv.ts"
@@ -59,7 +61,34 @@ export interface DumpBlockRef {
   readonly isError?: boolean
   /** Size of the block JSON. */
   readonly size?: DumpSize
+  /** The annotations at the end of a `tool_result` (verbose only). Absent when none. */
+  readonly annotations?: readonly DumpAnnotation[]
 }
+
+/**
+ * One annotation at the end of a `tool_result` text: for example the output
+ * preview, the raw output footer or the active-mode stamp.
+ *
+ * `source` tells where the data came from. `record`: the persisted outcome
+ * of the block (`block.outcome`), checked against the text by core's
+ * `viewPersistedOutcome`. `text`: the block had no valid record, so the
+ * sideband codec read the tags at the end of the text (`trailing`).
+ */
+export interface DumpAnnotation {
+  /** The annotation kind (a sideband kind name). */
+  readonly kind: string
+  /** The attributes, in record or wire order. */
+  readonly attrs: Readonly<Record<string, string | number | boolean>>
+  /** 1-based part line where the annotation starts. */
+  readonly line: number
+  /** False when the {@link MAX_LINE_ROWS} cap hid that line. */
+  readonly shown: boolean
+  /** Where the data came from. */
+  readonly source: "record" | "text"
+}
+
+/** The sideband slice that the dump model uses: the reader of the end tags. */
+export type DumpTrailingReader = Pick<SidebandApi, "trailing">
 
 /** One raw source line of a verbose part. `text` is the line, verbatim. */
 export interface DumpLine {
@@ -135,6 +164,11 @@ export interface DumpViewOptions {
   readonly lines: boolean
   /** Event time (epoch ms) for the header. */
   readonly ts?: number
+  /**
+   * The codec reader for a `tool_result` that has no valid outcome record.
+   * Omitted: only the records give annotations.
+   */
+  readonly sideband?: DumpTrailingReader
 }
 
 /**
@@ -323,16 +357,126 @@ function pushLines(out: Detail, text: string, from: number, block: number | unde
   return from + split.length
 }
 
+/** One annotation span of a block text: kind, attrs and the start offset. */
+interface AnnotationSpan {
+  readonly kind: string
+  readonly attrs: Readonly<Record<string, string | number | boolean>>
+  readonly start: number
+}
+
+/**
+ * The annotation spans at the end of one `tool_result` text.
+ *
+ * The persisted outcome wins: core checks it against the text
+ * (`viewPersistedOutcome`), so its spans are exact. A valid record with no
+ * span means "all body", also when the body ends with a tag-like text. With
+ * no valid record, the codec reads the tags at the end of the text. Never
+ * throws: a bad record or a codec error gives no span.
+ *
+ * Offsets: core reads the first text block of the content. The dump text
+ * starts with that block, so the offsets are also offsets into `text`.
+ */
+function annotationSpans(
+  b: SnapshotBlock & { type: "tool_result" },
+  text: string,
+  sb: DumpTrailingReader | undefined,
+): { spans: AnnotationSpan[]; source: DumpAnnotation["source"] } {
+  try {
+    const view = viewPersistedOutcome(b.content, (b as { outcome?: unknown }).outcome)
+    if (view !== undefined) {
+      return {
+        source: "record",
+        spans: view.annotations.map((a) => ({
+          kind: a.kind,
+          attrs: a.attrs ?? {},
+          start: a.start,
+        })),
+      }
+    }
+    if (sb === undefined) return { source: "text", spans: [] }
+    return {
+      source: "text",
+      spans: fullTrailing(text, sb).map((n) => ({
+        kind: n.kind,
+        attrs: n.attrs,
+        start: n.span.start,
+      })),
+    }
+  } catch {
+    return { source: "text", spans: [] }
+  }
+}
+
+/** Most `trailing` calls of {@link fullTrailing} (a guard, not a text budget). */
+const MAX_TRAILING_PASSES = 16
+
+/** The nodes that `trailing` gives. */
+type TrailingNodes = ReturnType<DumpTrailingReader["trailing"]>["nodes"]
+
+/**
+ * All the nodes of the end region of `text`.
+ *
+ * One `trailing` call can give only the last part of the region: the fast
+ * hint of the codec knows only some kinds (for example not `raw-output`), so
+ * a region `raw-output` + `output-preview` gives only the preview (the core
+ * `trailing` doc names this limit). So call `trailing` again on the text
+ * before the region until it finds no node. Each pass ends before the last
+ * one, so the loop always stops.
+ */
+function fullTrailing(text: string, sb: DumpTrailingReader): TrailingNodes {
+  const out: TrailingNodes = []
+  let end = text.length
+  for (let pass = 0; pass < MAX_TRAILING_PASSES && end > 0; pass++) {
+    const r = sb.trailing(text.slice(0, end))
+    if (r.nodes.length === 0 || r.bodyEnd >= end) break
+    out.unshift(...r.nodes)
+    end = r.bodyEnd
+  }
+  return out
+}
+
+/** Count of `\n` in `text` before `end`. */
+function newlinesBefore(text: string, end: number): number {
+  let n = 0
+  for (let i = text.indexOf("\n"); i !== -1 && i < end; i = text.indexOf("\n", i + 1)) n++
+  return n
+}
+
+/** The annotations of one `tool_result`, with part line numbers. */
+function blockAnnotations(
+  b: SnapshotBlock & { type: "tool_result" },
+  text: string,
+  firstLine: number,
+  sb: DumpTrailingReader | undefined,
+): DumpAnnotation[] {
+  const { spans, source } = annotationSpans(b, text, sb)
+  return spans.map((s) => {
+    const row = newlinesBefore(text, s.start)
+    return {
+      kind: s.kind,
+      attrs: s.attrs,
+      line: firstLine + row,
+      shown: row < MAX_LINE_ROWS,
+      source,
+    }
+  })
+}
+
 /** The verbose data of one message: its blocks, and the lines of each block. */
-function messageDetail(content: SnapshotContent): Detail {
+function messageDetail(content: SnapshotContent, sb: DumpTrailingReader | undefined): Detail {
   const blocks: readonly SnapshotBlock[] =
     typeof content === "string" ? [{ type: "text", text: content }] : content
   const out: Detail = { blocks: [], lines: [], elided: [] }
   let line = 1
   for (let j = 0; j < blocks.length; j++) {
     const b = blocks[j]
-    out.blocks.push(blockRef(b, j))
+    const ref = blockRef(b, j)
     const text = blockSourceText(b)
+    const anns =
+      b.type === "tool_result" && text !== undefined && text.length > 0
+        ? blockAnnotations(b, text, line, sb)
+        : []
+    out.blocks.push(anns.length > 0 ? { ...ref, annotations: anns } : ref)
     if (text !== undefined) line = pushLines(out, text, line, j)
   }
   return out
@@ -455,7 +599,7 @@ export function dumpView(req: RequestSnapshot, opts: DumpViewOptions): DumpView 
           m.role,
           cachedMessages.has(i),
           oneLine(previewContent(m.content)),
-          opts.lines ? messageDetail(m.content) : undefined,
+          opts.lines ? messageDetail(m.content, opts.sideband) : undefined,
         )
         const blocks =
           typeof m.content === "string"
