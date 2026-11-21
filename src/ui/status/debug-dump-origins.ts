@@ -120,6 +120,8 @@ export type OriginRef =
       readonly name: string
       /** The prompt-text name of the kind (`sb.name`), shown as the tag label. */
       readonly tag: string
+      /** The writer of the block, from the mark `sideband.origin`. Absent when unknown. */
+      readonly origin?: string
     }
   | { readonly kind: "msg-tool-use"; readonly toolName?: string; readonly toolUseId?: string }
   | {
@@ -400,9 +402,13 @@ export function blockRef(
 ): OriginRef {
   if (b.blockType === "text") {
     const n = firstLine === undefined ? undefined : attachmentAt(firstLine, sb)
-    return n === undefined
-      ? { kind: "msg-text" }
-      : { kind: "msg-attachment", name: n.kind, tag: sb.name(n.kind) }
+    if (n === undefined) return { kind: "msg-text" }
+    return {
+      kind: "msg-attachment",
+      name: n.kind,
+      tag: sb.name(n.kind),
+      ...(b.origin === undefined ? {} : { origin: b.origin }),
+    }
   }
   if (b.blockType === "tool_use") {
     return {

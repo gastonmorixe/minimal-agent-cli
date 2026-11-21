@@ -174,7 +174,11 @@ function refFields(ref: OriginRef): string {
     case "msg-text":
       return c.yellow("text")
     case "msg-attachment":
-      return [c.yellow("attachment"), c.magenta(stripControls(`<${ref.tag}>`))].join(DOT)
+      return [
+        c.yellow("attachment"),
+        c.magenta(stripControls(`<${ref.tag}>`)),
+        ...(ref.origin === undefined ? [] : [c.cyan(stripControls(ref.origin))]),
+      ].join(DOT)
     case "msg-tool-use":
       return [
         c.yellow("tool_use"),
