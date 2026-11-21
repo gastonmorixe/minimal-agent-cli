@@ -20,7 +20,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
-
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { clearModelRegistry, clearProviderRegistry } from "@minimal-agent/core/host/model-registry"
 import { NetworkClient, NetworkResponse } from "@minimal-agent/core/host/network"
@@ -31,8 +30,8 @@ import {
   registerTestProvider,
   sseBodyFromEvents,
 } from "@minimal-agent/core/testing/provider-fixture"
-
 import { type DumpView, dumpView } from "../../logging/request-dump-model.ts"
+import { stripSizeLabels } from "../../logging/request-dump-size.fixtures.ts"
 import { renderDumpBlock } from "./debug-dump.ts"
 import { attachLiveAreaRequestDump } from "./debug-dump-live.ts"
 
@@ -143,7 +142,7 @@ function buildCore(): AgentCore {
 }
 
 /** Strip SGR escapes. */
-const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
+const strip = (s: string): string => stripSizeLabels(s.replace(/\x1b\[[0-9;]*m/g, ""))
 
 /**
  * Run one turn with `DEBUG` and `VERBOSE` UNSET and collect one view per
@@ -175,7 +174,7 @@ async function runTurn(verbose: boolean): Promise<DumpView[]> {
 
 /** The gutter number of a verbose line, or undefined. */
 const gutter = (line: string): number | undefined => {
-  const m = /^ {9} *(\d+) │/.exec(line)
+  const m = /^ {2}│ {7} *(\d+) │/.exec(line)
   return m === null ? undefined : Number(m[1])
 }
 
@@ -216,16 +215,16 @@ describe("request dump: real core producer to CLI renderer", () => {
 
     // (a) Real line breaks, no collapse marker.
     expect(out).not.toContain("⏎")
-    expect(lines).toContain("         1 │ fix this:")
-    expect(lines).toContain("         2 │     indented line")
+    expect(lines).toContain("  │          1 │ fix this:")
+    expect(lines).toContain("  │          2 │     indented line")
 
     // (b) The gutter restarts at 1 after each part header.
-    const headers = lines.filter((l) => /^ {6}\S/.test(l))
+    const headers = lines.filter((l) => /^ {2}│ {7}\S/.test(l))
     expect(headers.length).toBeGreaterThanOrEqual(7)
     let after = false
     let firsts = 0
     for (const l of lines) {
-      if (/^ {6}\S/.test(l)) {
+      if (/^ {2}│ {7}\S/.test(l)) {
         after = true
         continue
       }
@@ -240,14 +239,14 @@ describe("request dump: real core producer to CLI renderer", () => {
     expect(firsts).toBe(7)
 
     // (c) Indentation after the gutter is kept, also in the system block.
-    expect(lines).toContain("         3 │     cwd=/work/repo")
-    expect(lines).toContain("         5 │")
-    expect(lines).toContain("         2 │   Returns its text.")
+    expect(lines).toContain("  │          3 │     cwd=/work/repo")
+    expect(lines).toContain("  │          5 │")
+    expect(lines).toContain("  │          2 │   Returns its text.")
 
     // (d) Message numbers.
-    expect(lines).toContain("      #1 user")
-    expect(lines).toContain("      #2 assistant")
-    expect(lines.some((l) => l.startsWith("      #3 user"))).toBe(true)
+    expect(lines).toContain("  │       #1 user")
+    expect(lines).toContain("  │       #2 assistant")
+    expect(lines.some((l) => l.startsWith("  │       #3 user"))).toBe(true)
 
     // (e) The tool_result names the tool from the tool_use.
     expect(out).toContain("↳ tool_use · Read · #toolu_e2e_a1b2c3")
@@ -262,7 +261,7 @@ describe("request dump: real core producer to CLI renderer", () => {
       origins: { loadedPackages: () => [] },
       wrapWidth: WIDTH,
     })
-    expect(direct.map(strip)).toContain("      #1 user")
+    expect(direct.map(strip)).toContain("  │       #1 user")
 
     const dir = process.env.MA_DUMP_SAMPLE_DIR
     if (dir) writeFileSync(join(dir, "sample-verbose.txt"), `${out}\n`)
@@ -275,10 +274,10 @@ describe("request dump: real core producer to CLI renderer", () => {
     const out = lines.join("\n")
 
     expect(lines.some((l) => gutter(l) !== undefined)).toBe(false)
-    expect(out).not.toContain(" │ ")
-    expect(lines.some((l) => l.startsWith("      #1 user"))).toBe(true)
-    expect(lines.some((l) => l.startsWith("      #2 assistant"))).toBe(true)
-    expect(lines.some((l) => l.startsWith("      #3 user"))).toBe(true)
+    expect(out).not.toMatch(/\d │ /)
+    expect(lines.some((l) => l.startsWith("  │       #1 user"))).toBe(true)
+    expect(lines.some((l) => l.startsWith("  │       #2 assistant"))).toBe(true)
+    expect(lines.some((l) => l.startsWith("  │       #3 user"))).toBe(true)
     for (const l of lines) expect(Bun.stringWidth(l)).toBeLessThanOrEqual(WIDTH)
 
     const dir = process.env.MA_DUMP_SAMPLE_DIR

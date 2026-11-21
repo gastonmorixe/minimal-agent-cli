@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, it } from "bun:test"
+import { stripSizeLabels } from "../../logging/request-dump-size.fixtures.ts"
 import { CACHE, type SnapInput, tool, viewOf } from "./debug-dump.fixtures.ts"
 import { renderDumpBlock } from "./debug-dump.ts"
 
@@ -29,7 +30,7 @@ const REQUEST: SnapInput = {
 }
 
 /** Strip SGR so assertions can look for text, not escapes. */
-const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
+const strip = (s: string): string => stripSizeLabels(s.replace(/\x1b\[[0-9;]*m/g, ""))
 
 describe("renderDumpBlock", () => {
   const view = viewOf(REQUEST, false)
@@ -38,7 +39,7 @@ describe("renderDumpBlock", () => {
 
   it("keeps every part of the request visible", () => {
     for (const expected of [
-      "POST claude-opus-4-8",
+      "request  claude-opus-4-8",
       "model:",
       "max_tokens:",
       "Body:",
@@ -57,7 +58,7 @@ describe("renderDumpBlock", () => {
 
   it("colors the header, keys, sections and cache markers", () => {
     const joined = lines.join("\n")
-    expect(joined).toContain("\x1b[1m\x1b[36m") // bold cyan header
+    expect(joined).toContain("\x1b[1m\x1b[38;5;208mrequest") // tool-header label paint
     expect(joined).toContain("\x1b[2mmodel:\x1b[22m") // dim key
     expect(joined).toContain("\x1b[33mmessages\x1b[39m") // yellow section
     expect(joined).toContain("\x1b[32muser\x1b[39m") // green role
@@ -69,14 +70,14 @@ describe("renderDumpBlock", () => {
     const cachedRow = lines.find((l) => l.includes("cached prefix")) ?? ""
     expect(cachedRow).toContain("\x1b[32muser\x1b[39m")
     expect(cachedRow).toContain("\x1b[1m\x1b[92m[← cached prefix ends here]\x1b[39m\x1b[22m")
-    expect(strip(cachedRow)).toBe('      #1 user [← cached prefix ends here]: "hi there"')
+    expect(strip(cachedRow)).toBe('  │       #1 user [← cached prefix ends here]: "hi there"')
   })
 
   it("keeps the system cache marker green, not magenta", () => {
     const blockRow = lines.find((l) => l.includes("block 0")) ?? ""
     expect(blockRow).toContain("\x1b[35mblock 0\x1b[39m")
     expect(blockRow).toContain("\x1b[1m\x1b[92m[cached]\x1b[39m\x1b[22m")
-    expect(strip(blockRow)).toBe("      block 0 [cached]: You are minimal agent.")
+    expect(strip(blockRow)).toBe("  │       block 0 [cached]: You are minimal agent.")
   })
 
   it("draws no marker for a part that is not a breakpoint, whatever its text", () => {
@@ -91,14 +92,14 @@ describe("renderDumpBlock", () => {
       ),
     )
     expect(out.join("\n")).not.toContain("\x1b[92m")
-    expect(out.map(strip)).toContain("      #1 user: x [← cached prefix ends here]: y")
-    expect(out.map(strip)).toContain("      block 0: [cached]")
+    expect(out.map(strip)).toContain("  │       #1 user: x [← cached prefix ends here]: y")
+    expect(out.map(strip)).toContain("  │       block 0: [cached]")
   })
 
   it("renders one line per part plus headers", () => {
-    // blank separator + label + 4 fields + Body + 3 section headers
-    // + 6 rows (2 tools, 2 system blocks, 2 messages)
-    expect(lines).toHaveLength(1 + 1 + 4 + 1 + 3 + 6)
+    // blank separator + header rule + 4 fields + Body + 3 section headers
+    // + 6 rows (2 tools, 2 system blocks, 2 messages) + closing rule
+    expect(lines).toHaveLength(1 + 1 + 4 + 1 + 3 + 6 + 1)
   })
 
   it("counts the parts of each section", () => {
@@ -115,10 +116,10 @@ describe("renderDumpBlock", () => {
         false,
       ),
     ).map(strip)
-    expect(out).toContain("    system: [4 block(s)]")
+    expect(out).toContain("  │     system: [4 block(s)]")
     expect(out.filter((l) => /block \d/.test(l))).toHaveLength(4)
-    expect(out).toContain("      block 1: # Instructions ⏎ - Be concise.")
-    expect(out).toContain("      block 3 [cached]: # Safety ⏎ Checkpoint.")
+    expect(out).toContain("  │       block 1: # Instructions ⏎ - Be concise.")
+    expect(out).toContain("  │       block 3 [cached]: # Safety ⏎ Checkpoint.")
   })
 
   it("caps a compact preview at 80 characters, with one hint, and never prints the rest", () => {
@@ -126,7 +127,7 @@ describe("renderDumpBlock", () => {
     const out = renderDumpBlock(viewOf({ messages: [{ role: "user", content: long }] }, false))
       .map(strip)
       .join("\n")
-    expect(out).toContain(`      #1 user: ${long.slice(0, 80)}...(+${long.length - 80}ch)`)
+    expect(out).toContain(`  │       #1 user: ${long.slice(0, 80)}...(+${long.length - 80}ch)`)
     expect(out).not.toContain(long)
   })
 
@@ -155,7 +156,7 @@ describe("renderDumpBlock", () => {
     expect(block3.match(/\.\.\.\(\+/g)).toHaveLength(1)
     expect(Number(/\(\+(\d+)ch\)$/.exec(block3)?.[1])).toBeGreaterThan(31189)
     expect(Number(/\(\+(\d+)ch\)$/.exec(bash)?.[1])).toBeGreaterThan(2334)
-    expect(lines).toContain("      Write: short")
+    expect(lines).toContain("  │       Write: short")
     expect(lines.some((l) => l.includes("[← cached prefix ends here]"))).toBe(true)
     // No width: nothing is clipped beyond the 80 cap.
     expect(renderDumpBlock(view).map(strip).join("\n")).toContain("s".repeat(60))
@@ -164,9 +165,9 @@ describe("renderDumpBlock", () => {
   it("clips a preview that fits the cap but not the room", () => {
     const text = "y".repeat(70)
     const out = renderDumpBlock(viewOf({ tools: [tool("T", text)] }, false), 40).map(strip)
-    const row = out.find((l) => l.startsWith("      T: ")) ?? ""
+    const row = out.find((l) => l.startsWith("  │       T: ")) ?? ""
     expect(row.length).toBeLessThanOrEqual(40)
-    const kept = /^ {6}T: (y*)\.\.\.\(\+(\d+)ch\)$/.exec(row)
+    const kept = /^ {2}│ {7}T: (y*)\.\.\.\(\+(\d+)ch\)$/.exec(row)
     expect(kept).not.toBeNull()
     expect((kept?.[1].length ?? 0) + Number(kept?.[2])).toBe(70)
   })
@@ -190,13 +191,13 @@ describe("renderDumpBlock", () => {
       system: [{ type: "text", text: "x" }],
     }
     const out = renderDumpBlock(viewOf(req, false)).map(strip)
-    expect(out).toContain("      #1 user: fix this: ⏎ indented line")
-    expect(out).toContain("      #2 assistant: tool_use(Bash#a1b2c3){command}")
+    expect(out).toContain("  │       #1 user: fix this: ⏎ indented line")
+    expect(out).toContain("  │       #2 assistant: tool_use(Bash#a1b2c3){command}")
     expect(out).toContain(
-      '      #3 user [← cached prefix ends here]: tool_result(a1b2c3) "README.md\\nsrc"',
+      '  │       #3 user [← cached prefix ends here]: tool_result(a1b2c3) "README.md\\nsrc"',
     )
     // System and tools rows get no number.
-    expect(out).toContain("      block 0: x")
+    expect(out).toContain("  │       block 0: x")
     // The number counts toward the width fit.
     for (const l of renderDumpBlock(viewOf(req, false), 30).map(strip)) {
       expect(l.length).toBeLessThanOrEqual(30)
@@ -212,19 +213,21 @@ describe("renderDumpBlock", () => {
         enabled: true,
       },
     ).map(strip)
-    expect(out[1]).toBe("--- POST m ---")
-    expect(out.filter((l) => /^ {4}\w+: \[/.test(l))).toEqual([
-      "    system: [1 block(s)]",
-      "    messages: [0 message(s)]",
+    expect(out[1]).toBe("  ╭ ◆ request  m · stream · 0 tools · 0 msgs")
+    expect(out.filter((l) => /^ {2}│ {5}\w+: \[/.test(l))).toEqual([
+      "  │     system: [1 block(s)]",
+      "  │     messages: [0 message(s)]",
     ])
-    expect(out).toContain("         1 │ --- POST x ---")
-    expect(out).toContain("         2 │   Body:")
-    expect(out).toContain("         3 │     tools: [9 tool(s)]")
-    expect(out).toContain("         4 │   model: evil")
+    expect(out).toContain("  │          1 │ --- POST x ---")
+    expect(out).toContain("  │          2 │   Body:")
+    expect(out).toContain("  │          3 │     tools: [9 tool(s)]")
+    expect(out).toContain("  │          4 │   model: evil")
   })
 
   it("names the default model when the request has none", () => {
-    expect(strip(renderDumpBlock(viewOf({}, false))[1] ?? "")).toBe("--- POST (default model) ---")
+    expect(strip(renderDumpBlock(viewOf({}, false))[1] ?? "")).toBe(
+      "  ╭ ◆ request  (default model) · stream · 0 tools · 0 msgs",
+    )
   })
 
   // Regression: the non-verbose path is the DEFAULT mode and it printed every
@@ -241,10 +244,10 @@ describe("renderDumpBlock", () => {
     expect(out).not.toMatch(/[\u0080-\u009f]/)
     expect(out).not.toContain("\u001b[31m1")
     // The strip must not swallow the text around the byte.
-    expect(strip(out)).toContain("--- POST m[31m1 ---")
+    expect(strip(out)).toContain("╭ ◆ request  m[31m1 · ")
     expect(strip(out)).toContain("model: m[31m1")
     expect(strip(out)).toContain("messages: [1 message(s)]")
-    expect(strip(out)).toContain('      #1 user: hi[31mthere"')
+    expect(strip(out)).toContain('  │       #1 user: hi[31mthere"')
     expect(strip(out)).toContain("block 0 [cached]: you")
     expect(strip(out)).toContain("Bash: Run a comm[31mand")
   })
@@ -254,21 +257,22 @@ describe("renderDumpBlock", () => {
   it("renders the frozen compact form", () => {
     expect(renderDumpBlock(view).map(strip)).toEqual([
       "",
-      "--- POST claude-opus-4-8 ---",
-      "  model: claude-opus-4-8",
-      "  stream: true",
-      "  max_tokens: 32000",
-      "  request_type: conversation",
-      "  Body:",
-      "    tools: [2 tool(s)]",
-      "      Bash: Run a command",
-      "      Read: Read a file",
-      "    system: [2 block(s)]",
-      "      block 0 [cached]: You are minimal agent.",
-      "      block 1: Tools are available.",
-      "    messages: [2 message(s)]",
-      '      #1 user [← cached prefix ends here]: "hi there"',
-      "      #2 assistant: hello",
+      "  ╭ ◆ request  claude-opus-4-8 · stream · 2 tools · 2 msgs",
+      "  │   model: claude-opus-4-8",
+      "  │   stream: true",
+      "  │   max_tokens: 32000",
+      "  │   request_type: conversation",
+      "  │   Body:",
+      "  │     tools: [2 tool(s)]",
+      "  │       Bash: Run a command",
+      "  │       Read: Read a file",
+      "  │     system: [2 block(s)]",
+      "  │       block 0 [cached]: You are minimal agent.",
+      "  │       block 1: Tools are available.",
+      "  │     messages: [2 message(s)]",
+      '  │       #1 user [← cached prefix ends here]: "hi there"',
+      "  │       #2 assistant: hello",
+      "  ╰",
     ])
   })
 
@@ -277,9 +281,9 @@ describe("renderDumpBlock", () => {
     const full = viewOf({ tools: [tool("Bash", "Run a command")] }, true)
     for (const opts of [{}, { enabled: false }]) {
       const off = renderDumpBlock(full, undefined, opts).map(strip)
-      expect(off.join("\n")).not.toContain(" │ ")
+      expect(off.join("\n")).not.toMatch(/\d │ /)
       expect(off.join("\n")).not.toContain("↳")
-      expect(off).toContain("      Bash: Run a command")
+      expect(off).toContain("  │       Bash: Run a command")
     }
     expect(renderDumpBlock(full, undefined, { enabled: true }).map(strip).join("\n")).toContain(
       " │ Run a command",

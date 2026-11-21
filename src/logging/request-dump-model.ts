@@ -17,6 +17,7 @@ import type { RequestSnapshot } from "@minimal-agent/core/host/request-inspector
 
 import { truncHint } from "../ui/style/truncate-hint.ts"
 import { type DumpKvSection, kvSections } from "./request-dump-kv.ts"
+import { type DumpSize, dumpEstimator, sizeOf, sumSizes, zeroSize } from "./request-dump-size.ts"
 import { schemaParams, type ToolParam } from "./tool-schema.ts"
 
 /** The content of one snapshot message (deep-readonly, as the snapshot gives it). */
@@ -56,6 +57,8 @@ export interface DumpBlockRef {
   readonly toolName?: string
   /** `tool_result.is_error`. */
   readonly isError?: boolean
+  /** Size of the block JSON. */
+  readonly size?: DumpSize
 }
 
 /** One raw source line of a verbose part. `text` is the line, verbatim. */
@@ -96,6 +99,8 @@ export interface DumpPart {
   readonly elided?: readonly DumpElided[]
   /** Parameters of the tool `input_schema` (tools only, both modes). Absent when none. */
   readonly params?: readonly ToolParam[]
+  /** Size of the wire text of the part. */
+  readonly size?: DumpSize
 }
 
 /** One body section with its parts. */
@@ -104,6 +109,8 @@ export interface DumpSection {
   readonly name: DumpSectionName
   /** Parts, in request order. */
   readonly parts: readonly DumpPart[]
+  /** Sum of the part sizes. */
+  readonly size?: DumpSize
 }
 
 /** The typed view of one request dump. */
@@ -116,12 +123,18 @@ export interface DumpView {
   readonly kv: readonly DumpKvSection[]
   /** Body sections. Order: tools, system, messages. */
   readonly sections: readonly DumpSection[]
+  /** Event time (epoch ms), shown as local `HH:MM:SS` in the header. */
+  readonly ts?: number
+  /** Sum of all section sizes (the request total). */
+  readonly size?: DumpSize
 }
 
 /** Options of {@link dumpView}. */
 export interface DumpViewOptions {
   /** Fill `blocks`, `lines` and `elided` (the verbose view). */
   readonly lines: boolean
+  /** Event time (epoch ms) for the header. */
+  readonly ts?: number
 }
 
 /**
@@ -381,54 +394,86 @@ function headerFields(req: RequestSnapshot): Array<readonly [string, string]> {
  * @returns The view. It holds no reference to the snapshot arrays.
  */
 export function dumpView(req: RequestSnapshot, opts: DumpViewOptions): DumpView {
+  // One estimator lookup for the view. With no estimator, each size has bytes only.
+  const estimate = dumpEstimator(req.model, req.providerId)
+  const zero = zeroSize(estimate)
+  const size = (text: string): DumpSize => sizeOf(estimate, text)
+  const section = (name: DumpSectionName, parts: DumpPart[]): DumpSection => ({
+    name,
+    parts,
+    size: sumSizes([zero, ...parts.map((p) => p.size ?? zero)]),
+  })
   const sections: DumpSection[] = []
   if (req.tools.length > 0) {
-    sections.push({
-      name: "tools",
-      parts: req.tools.map((t, i) => {
-        const text = t.description ?? ""
-        const p = part(
-          "tools",
-          i,
-          t.name,
-          false,
-          oneLine(text),
-          opts.lines ? textDetail(text) : undefined,
-        )
-        const params = schemaParams(t.input_schema)
-        return params.length > 0 ? { ...p, params } : p
-      }),
-    })
+    sections.push(
+      section(
+        "tools",
+        req.tools.map((t, i) => {
+          const text = t.description ?? ""
+          const p = part(
+            "tools",
+            i,
+            t.name,
+            false,
+            oneLine(text),
+            opts.lines ? textDetail(text) : undefined,
+          )
+          const wire = `${t.name}${text}${safeJson(t.input_schema, 0)}`
+          const params = schemaParams(t.input_schema)
+          return { ...p, ...(params.length > 0 ? { params } : {}), size: size(wire) }
+        }),
+      ),
+    )
   }
   if (req.system.length > 0) {
     const cached = new Set(req.cache.system)
-    sections.push({
-      name: "system",
-      parts: req.system.map((b, i) =>
-        part(
-          "system",
-          i,
-          `block ${i}`,
-          cached.has(i),
-          oneLine(b.text),
-          opts.lines ? textDetail(b.text) : undefined,
-        ),
+    sections.push(
+      section(
+        "system",
+        req.system.map((b, i) => ({
+          ...part(
+            "system",
+            i,
+            `block ${i}`,
+            cached.has(i),
+            oneLine(b.text),
+            opts.lines ? textDetail(b.text) : undefined,
+          ),
+          size: size(b.text),
+        })),
       ),
-    })
+    )
   }
   const cachedMessages = new Set(req.cache.messages)
-  sections.push({
-    name: "messages",
-    parts: req.messages.map((m, i) =>
-      part(
-        "messages",
-        i,
-        m.role,
-        cachedMessages.has(i),
-        oneLine(previewContent(m.content)),
-        opts.lines ? messageDetail(m.content) : undefined,
-      ),
+  sections.push(
+    section(
+      "messages",
+      req.messages.map((m, i) => {
+        const p = part(
+          "messages",
+          i,
+          m.role,
+          cachedMessages.has(i),
+          oneLine(previewContent(m.content)),
+          opts.lines ? messageDetail(m.content) : undefined,
+        )
+        const blocks =
+          typeof m.content === "string"
+            ? p.blocks
+            : p.blocks.map((b) => ({
+                ...b,
+                size: size(safeJson((m.content as readonly unknown[])[b.block], 0)),
+              }))
+        return { ...p, blocks, size: size(safeJson(m.content, 0)) }
+      }),
     ),
-  })
-  return { model: req.model, fields: headerFields(req), kv: kvSections(req), sections }
+  )
+  const kv = kvSections(req, size)
+  const total = sumSizes([
+    zero,
+    ...kv.map((k) => k.size ?? zero),
+    ...sections.map((s) => s.size ?? zero),
+  ])
+  const view = { model: req.model, fields: headerFields(req), kv, sections, size: total }
+  return opts.ts === undefined ? view : { ...view, ts: opts.ts }
 }

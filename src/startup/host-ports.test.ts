@@ -24,6 +24,7 @@ import { clearProviderPlugins } from "@minimal-agent/core/host/provider-plugin"
 import { GLOBAL_STATUS_BUS, StatusBus } from "@minimal-agent/core/host/status-bus"
 import type { BuildAgentCoreDeps } from "@minimal-agent/core/host-kit/build-agent-core"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
+import { makeCharRatioEstimator } from "@minimal-agent/core/plugin-api/llm/token-estimate"
 import {
   registerTestProvider,
   sseBodyFromEvents,
@@ -257,7 +258,11 @@ describe("withHostPorts", () => {
 
 describe("REPL turn with the default host ports", () => {
   it("sends llm.outputDelta and llm.outputEnd to a plugin bus listener", async () => {
-    registerTestProvider()
+    // Core sends `llm.outputDelta` only when the model has a token estimator
+    // (core has no ratio). Give the test model an explicit test estimator.
+    registerTestProvider({
+      models: [{ id: "test-model-1", estimateTokens: makeCharRatioEstimator(3.5) }],
+    })
     const seen: SeenEvent[] = []
     const status = recordStatusLabels()
     try {
@@ -284,6 +289,23 @@ describe("REPL turn with the default host ports", () => {
     // The CLI status rows show the request.
     expect(status.labels).toContain("Sending request")
     expect(status.labels).toContain("Receiving stream")
+  }, 15_000)
+
+  it("sends no llm.outputDelta when the model has no token estimator", async () => {
+    registerTestProvider()
+    const seen: SeenEvent[] = []
+    const session = await InteractiveSession.create(
+      sessionDeps(
+        fakeLoader(seen),
+        fakeNetworkClient(() => okResponse("hello from the stream")),
+      ),
+    )
+    const text = await drain(session.run("hi"))
+    expect(text).toContain("hello from the stream")
+    expect(seen.filter((e) => e.event === "llm.outputDelta")).toEqual([])
+    expect(seen.filter((e) => e.event === "llm.outputEnd")).toEqual([
+      { event: "llm.outputEnd", payload: { reason: "stream_end" } },
+    ])
   }, 15_000)
 
   it("shows a Running <tool> status row while a tool runs", async () => {

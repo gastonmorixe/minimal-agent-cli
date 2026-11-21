@@ -214,7 +214,9 @@ minimal-agent --provider generic-endpoint \
 `--auth-type` is `api-key` / `bearer` / `none` / `custom-header` (pair the last
 with `--auth-header`). `--provider-model` overrides the wire model id, and
 `--effort-levels "low,medium,high"` lets `--effort` pass through for a reasoning
-backend. Every flag has a `MINIMAL_AGENT_*` env and config equivalent. A plaintext
+backend. `MINIMAL_AGENT_TOKENIZER` sets the tokenizer family for the token
+estimate (for example `qwen` or `llama3`; see the generic-endpoint plugin
+README). An unknown name stops the start with an error. Every flag has a `MINIMAL_AGENT_*` env and config equivalent. A plaintext
 `http://` endpoint is auto-routed to HTTP/1.1 (the default HTTP/2 transport can't
 talk to a plain HTTP/1.1 server). See
 [`docs/2026-07-09-generic-endpoint-and-surface-codecs.md`](https://github.com/gastonmorixe/minimal-agent-core/blob/main/docs/2026-07-09-generic-endpoint-and-surface-codecs.md).
@@ -477,6 +479,18 @@ when a host subscribes, so a run without `--debug` costs nothing. With
 
 Add `--verbose` to show the full text of each part, with line gutters,
 instead of the 80-character previews.
+
+Each part shows a faint size label, for example `1.2 kB · ~310 tok`: the
+UTF-8 bytes of the text that goes on the wire for that part, and an
+approximate token count from the provider estimator of the model (the
+provider plugin sets it; the CLI reads it with
+`@minimal-agent/core/host/token-estimate`). A model with no estimator shows
+the bytes only, for example `1.2 kB`. This applies to header and body
+rows (key + value), tools (name + description + JSON of `input_schema`),
+system blocks (text), messages (content JSON) and, with `--verbose`, each
+message content block. Each section header shows the section total, and the
+frame header shows the request total. On a narrow row, the label goes away
+to keep room for the preview.
 
 Each tool also shows its parameter schema (from `input_schema`). The default
 form adds one `params:` line, for example

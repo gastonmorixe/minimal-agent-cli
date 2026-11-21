@@ -14,6 +14,9 @@
  * @module logging/request-dump-text
  */
 
+import { stripAllTerminalControls } from "../ui/sanitize-scrollback.ts"
+import { dumpFrameHeader } from "../ui/status/debug-dump.ts"
+import { frameBodyRow, frameCloseRow } from "../ui/tool-transcript/format.ts"
 import { type DumpKvSection, keyWidth, kvUnit } from "./request-dump-kv.ts"
 import {
   clampWithHint,
@@ -24,6 +27,7 @@ import {
   oneLine,
   PREVIEW_CAP,
 } from "./request-dump-model.ts"
+import { type DumpSize, sizeLabel } from "./request-dump-size.ts"
 import { paramSummary, paramTable } from "./tool-schema.ts"
 
 /** Marker after a `messages` role whose last block has `cache_control`. */
@@ -98,7 +102,18 @@ function unitOf(section: DumpSectionName): string {
 }
 
 /** The label of a part row, with its plain-text cache marker. */
+/** ` <size>` after a name, or nothing. */
+const sz = (size: DumpSize | undefined): string => (size === undefined ? "" : ` ${sizeLabel(size)}`)
+
+/** ` · <size>` after a section count, or nothing. */
+const total = (size: DumpSize | undefined): string =>
+  size === undefined ? "" : ` · ${sizeLabel(size)}`
+
 function labelOf(p: DumpPart): string {
+  return `${cacheLabelOf(p)}${sz(p.size)}`
+}
+
+function cacheLabelOf(p: DumpPart): string {
   if (!p.cached) return p.name
   switch (p.section) {
     case "messages":
@@ -190,7 +205,10 @@ function pushPart(out: RequestDumpTextRow[], p: DumpPart, verbose: boolean): voi
     return
   }
   for (const b of p.blocks) {
-    out.push({ text: `        block ${b.block} ${b.blockType}`, data: blockData(p, b) })
+    out.push({
+      text: `        block ${b.block} ${b.blockType}${sz(b.size)}`,
+      data: blockData(p, b),
+    })
     pushDetail(out, p, b.block)
   }
 }
@@ -202,20 +220,24 @@ function pushPart(out: RequestDumpTextRow[], p: DumpPart, verbose: boolean): voi
  * `┆` gutter.
  */
 function pushKv(out: RequestDumpTextRow[], section: DumpKvSection, verbose: boolean): void {
-  out.push({ text: `    ${section.name}: [${section.rows.length} ${kvUnit(section.name)}]` })
+  out.push({
+    text: `    ${section.name}: [${section.rows.length} ${kvUnit(section.name)}]${total(section.size)}`,
+  })
   const w = keyWidth(section)
   for (const r of section.rows) {
     const key = r.key.padEnd(w)
     if (!verbose) {
-      out.push({ text: `      ${key}  ${clampWithHint(oneLine(r.value), PREVIEW_CAP)}` })
+      out.push({
+        text: `      ${key}${sz(r.size)}  ${clampWithHint(oneLine(r.value), PREVIEW_CAP)}`,
+      })
       continue
     }
     const data = { kind: "field", section: section.name, key: r.key } as const
     if (r.pretty === undefined) {
-      out.push({ text: `      ${key}  ${r.value}`, data })
+      out.push({ text: `      ${key}${sz(r.size)}  ${r.value}`, data })
       continue
     }
-    out.push({ text: `      ${r.key}`, data })
+    out.push({ text: `      ${r.key}${sz(r.size)}`, data })
     for (const line of r.pretty) out.push({ text: `        ┆ ${line}`, data })
   }
 }
@@ -229,13 +251,24 @@ function pushKv(out: RequestDumpTextRow[], section: DumpKvSection, verbose: bool
  * @returns The rows, in order.
  */
 export function requestDumpTextRows(view: DumpView, verbose: boolean): RequestDumpTextRow[] {
-  const out: RequestDumpTextRow[] = [{ text: `--- POST ${view.model ?? "(default model)"} ---` }]
+  const out: RequestDumpTextRow[] = [{ text: stripAllTerminalControls(dumpFrameHeader(view)) }]
   for (const [key, value] of view.fields) out.push({ text: `  ${key}: ${value}` })
   out.push({ text: "  Body:" })
   for (const section of view.kv) pushKv(out, section, verbose)
   for (const section of view.sections) {
-    out.push({ text: `    ${section.name}: [${section.parts.length} ${unitOf(section.name)}]` })
+    out.push({
+      text: `    ${section.name}: [${section.parts.length} ${unitOf(section.name)}]${total(section.size)}`,
+    })
     for (const p of section.parts) pushPart(out, p, verbose)
   }
+  // The shared gutter without color, on each labelled row.
+  const gutter = stripAllTerminalControls(frameBodyRow(""))
+  for (let i = 1; i < out.length; i++) {
+    const row = out[i] as RequestDumpTextRow
+    // A verbatim source line (or its elided marker) keeps its exact text.
+    if (row.data?.kind === "line" || row.data?.kind === "elided") continue
+    out[i] = { ...row, text: `${gutter} ${row.text}` }
+  }
+  out.push({ text: stripAllTerminalControls(frameCloseRow()) })
   return out
 }

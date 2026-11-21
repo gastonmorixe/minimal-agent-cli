@@ -47,6 +47,9 @@ describe("formatTokensCell", () => {
     expect(formatTokensCell({ tokens: 4300, estimated: true })).toBe("~4.3k")
     expect(formatTokensCell({ tokens: 4300, estimated: false })).toBe("4.3k")
     expect(formatTokensCell({})).toBe("—")
+    // No estimator for the model: the count is not known, not `~0`.
+    expect(formatTokensCell({ tokens: 0, estimated: true, tokensUnknown: true })).toBe("—")
+    expect(formatTokensCell({ tokens: 120, estimated: true, tokensUnknown: true })).toBe("—")
   })
 })
 

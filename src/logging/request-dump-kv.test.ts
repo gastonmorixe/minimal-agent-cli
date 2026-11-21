@@ -2,10 +2,10 @@
 
 import { describe, expect, it } from "bun:test"
 import type { RequestSnapshot } from "@minimal-agent/core/host/request-inspector"
-
 import { renderDumpBlock } from "../ui/status/debug-dump.ts"
 import { isRedacted, kvSections } from "./request-dump-kv.ts"
 import { dumpView } from "./request-dump-model.ts"
+import { stripRowSizeLabels, stripSizeLabels } from "./request-dump-size.fixtures.ts"
 import { requestDumpTextRows } from "./request-dump-text.ts"
 
 const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
@@ -60,23 +60,29 @@ describe("kvSections", () => {
 
 describe("plain-text rows", () => {
   it("compact: aligned one-line rows before tools, with the cut hint", () => {
-    const rows = requestDumpTextRows(dumpView(snap(), { lines: false }), false).map((r) => r.text)
-    expect(rows).toContain("    headers: [4 header(s)]")
-    expect(rows).toContain("      authorization   Bearer <redacted:10 chars>")
-    expect(rows).toContain('      tool_choice  {"type":"auto","disable_parallel_tool_use":true}')
-    expect(rows.find((r) => r.startsWith("      anthropic-beta"))).toContain("...(+20ch)")
-    expect(rows.indexOf("    body: [3 field(s)]")).toBeLessThan(
-      rows.indexOf("    messages: [0 message(s)]"),
+    const rows = requestDumpTextRows(dumpView(snap(), { lines: false }), false).map((r) =>
+      stripSizeLabels(r.text),
+    )
+    expect(rows).toContain("  │     headers: [4 header(s)]")
+    expect(rows).toContain("  │       authorization   Bearer <redacted:10 chars>")
+    expect(rows).toContain(
+      '  │       tool_choice  {"type":"auto","disable_parallel_tool_use":true}',
+    )
+    expect(rows.find((r) => r.startsWith("  │       anthropic-beta"))).toContain("...(+20ch)")
+    expect(rows.indexOf("  │     body: [3 field(s)]")).toBeLessThan(
+      rows.indexOf("  │     messages: [0 message(s)]"),
     )
   })
 
   it("verbose: full values and pretty JSON behind the gutter", () => {
-    const rows = requestDumpTextRows(dumpView(snap(), { lines: true }), true)
-    const texts = rows.map((r) => r.text)
-    expect(texts.find((r) => r.startsWith("      anthropic-beta"))).toContain("b".repeat(100))
-    expect(texts).toContain("      tool_choice")
-    expect(texts).toContain('        ┆   "type": "auto",')
-    expect(rows.find((r) => r.text === "      tool_choice")?.data).toEqual({
+    const rows = requestDumpTextRows(dumpView(snap(), { lines: true }), true).map(
+      stripRowSizeLabels,
+    )
+    const texts = rows.map((r) => stripSizeLabels(r.text))
+    expect(texts.find((r) => r.startsWith("  │       anthropic-beta"))).toContain("b".repeat(100))
+    expect(texts).toContain("  │       tool_choice")
+    expect(texts).toContain('  │         ┆   "type": "auto",')
+    expect(rows.find((r) => r.text === "  │       tool_choice")?.data).toEqual({
       kind: "field",
       section: "body",
       key: "tool_choice",
@@ -97,6 +103,6 @@ describe("REPL block", () => {
 
   it("verbose: pretty JSON lines with the gutter", () => {
     const lines = renderDumpBlock(dumpView(snap(), { lines: true }), undefined, { enabled: true })
-    expect(lines.map(strip)).toContain('        ┆   "disable_parallel_tool_use": true')
+    expect(lines.map(strip)).toContain('  │         ┆   "disable_parallel_tool_use": true')
   })
 })

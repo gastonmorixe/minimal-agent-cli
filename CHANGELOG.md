@@ -19,6 +19,53 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ## [Unreleased]
 
+### Added
+
+- `--debug` request dump: each part shows a faint size label (`1.2 kB · ~310
+  tok`): UTF-8 bytes of the wire text and approximate tokens from
+  `@minimal-agent/core/host/token-estimate`. It applies to header and body
+  rows, tools, system blocks, messages and (verbose) message content blocks.
+  Each section header shows its total, and the frame header facts show the
+  request total. The plain-text log and stderr rows get the same labels
+  without color. `dumpView` computes the sizes once per view.
+
+### Fixed
+
+- `--debug --verbose`: the tool params table cut the description with `…`,
+  and a long enum type left only some cells for it. Now nothing is cut: the
+  description word-wraps in its column, a long type wraps at `|` in a column
+  capped at about 30% of the room, and a narrow room (description column
+  below 20 cells) uses a stacked form (`name type required`, then the
+  indented description).
+- `--debug --verbose`: wrapped rows broke in the middle of words. Description
+  lines, elided hints, header/body values and `┆` JSON rows now word-wrap at
+  spaces (`hardWrap` has a new `word` mode). Only a word wider than the line
+  is cut. Compact mode and the plain-text log do not change.
+- `--debug --verbose`: a long header value or a pretty-JSON body line (`┆`
+  rows) did not wrap and passed the terminal width. They now hard-wrap to
+  the room after the real prefix width. Part and section title lines clip
+  to the wrap width.
+
+### Changed
+
+- `--debug` request dump: the token count is provider-owned (core change
+  `2026-11-20-provider-owned-token-estimate`). `dumpView` calls
+  `lookupTokenEstimator(req.model, req.providerId)` one time for each view.
+  When the (provider, model) pair has no estimator, each part, each section
+  total and the header total show bytes only (`1.2 kB`, no `~N tok`). The
+  host never uses a fallback ratio. The label format and the dim style do
+  not change. A new golden (`synthetic.compact-w80-no-estimator.ansi`) holds
+  the bytes-only form. The tests register an explicit test estimator
+  (`makeCharRatioEstimator(3.5)`) for the token form.
+- `--debug` request dump: the `--- POST <model> ---` header is gone. Each
+  request is now a tool transcript frame, made by the shared frame helpers:
+  `  ╭ ◆ request  <model> · stream · 12 tools · 34 msgs · 14:43:26`, the body
+  behind the `│` gutter, and the `╰` closer. The header uses the tool header
+  paint and icon; the facts sit at the place of the tool `· time`. On a
+  narrow width the facts go first, then the row clamp clips the model with
+  the `...(+Nch)` hint. Plain-text rows (log, stderr) use the same helpers
+  with the color removed; row 0 stays the header, and verbatim source lines
+  keep their exact text. The view now carries the event time (`ts`).
 ### Removed
 
 - 2026-11-20: **Breaking: the loop-safety flags and the reflection cooldown

@@ -118,6 +118,12 @@ describe("renderUsageReport", () => {
     expect(text).toContain("[E]")
     expect(text).toContain("estimated from transcript")
   })
+
+  it("notes the turns with a token count that is not known (no estimator)", () => {
+    const t = totals({ tokens: 4000, turns: 3, estimatedTurns: 2, unknownTurns: 1 })
+    const text = stripAnsi(renderUsageReport(report({ estimated: true, totals: t })).join("\n"))
+    expect(text).toContain("1 not known (no estimator)")
+  })
 })
 
 describe("renderUsageOverlay", () => {

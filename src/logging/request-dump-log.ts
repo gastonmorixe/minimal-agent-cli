@@ -44,7 +44,10 @@ export interface RequestDumpLogOptions {
  * @param verbose - Verbose rows.
  */
 export function emitRequestDump(event: RequestWillSendEvent, verbose: boolean): void {
-  const rows = requestDumpTextRows(dumpView(event.request, { lines: verbose }), verbose)
+  const rows = requestDumpTextRows(
+    dumpView(event.request, { lines: verbose, ts: event.ts }),
+    verbose,
+  )
   const last = rows.length - 1
   for (let i = 0; i < rows.length; i++) {
     const data = {

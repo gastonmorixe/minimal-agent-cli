@@ -62,6 +62,8 @@ export interface SessionListItem {
   tokens?: number
   /** True when `tokens` is an estimate (the cell gets a `~`). */
   estimated?: boolean
+  /** True when the token count is not known (no estimator): the cell shows `—`. */
+  tokensUnknown?: boolean
   costUsd?: number
   /** Short model label (the full id stays in `--json`). */
   model: string
@@ -183,8 +185,14 @@ const GLYPH: Record<SessionListStatus, CommandTableSpan> = {
   unknown: { text: "·", color: "dim" },
 }
 
-/** Token cell: `~` before an estimate, `—` when not known. */
-export function formatTokensCell(item: Pick<SessionListItem, "tokens" | "estimated">): string {
+/**
+ * Token cell: `~` before an estimate, `—` when not known (no summary, or a
+ * turn with no estimator for its model: `tokensUnknown`).
+ */
+export function formatTokensCell(
+  item: Pick<SessionListItem, "tokens" | "estimated" | "tokensUnknown">,
+): string {
+  if (item.tokensUnknown === true) return MISSING_VALUE
   if (item.tokens === undefined || !Number.isFinite(item.tokens)) return MISSING_VALUE
   return `${item.estimated ? "~" : ""}${formatTokenCount(item.tokens)}`
 }

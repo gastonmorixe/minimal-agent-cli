@@ -23,6 +23,7 @@ import {
   type RequestInspector,
 } from "@minimal-agent/core/host/request-inspector"
 import { attachRequestDumpLog } from "../../logging/request-dump-log.ts"
+import { stripSizeLabels } from "../../logging/request-dump-size.fixtures.ts"
 import { fakeOrigins, type SnapInput, snapOf, VERBOSE_REQUEST } from "./debug-dump.fixtures.ts"
 import {
   attachLiveAreaRequestDump,
@@ -35,7 +36,7 @@ import {
 import { ScrollbackDiagnosticSink } from "./scrollback.ts"
 
 /** Strip SGR so assertions can look for text, not escapes. */
-const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
+const strip = (s: string): string => stripSizeLabels(s.replace(/\x1b\[[0-9;]*m/g, ""))
 
 /** A diagnostics handle that drops everything. */
 const NO_DIAG: RequestDiagnostics = {
@@ -117,7 +118,7 @@ describe("attachRequestDumpRenderer", () => {
     publish(inspector, { model: "m1", tools: [{ name: "T", description: "d" }] })
     expect(writes).toHaveLength(1)
     const text = strip(writes[0])
-    expect(text).toContain("POST m1")
+    expect(text).toContain("╭ ◆ request  m1 · ")
     expect(text).toContain("tools: [1 tool(s)]")
     expect(text.endsWith("\n")).toBe(true)
 
@@ -136,9 +137,9 @@ describe("attachRequestDumpRenderer", () => {
     publish(inspector, VERBOSE_REQUEST)
     verbose = true
     publish(inspector, VERBOSE_REQUEST)
-    expect(strip(writes[0])).not.toContain(" │ ")
-    expect(strip(writes[0])).toContain("      #1 user: fix this: ⏎ indented line")
-    expect(strip(writes[1])).toContain("         1 │ fix this:")
+    expect(strip(writes[0])).not.toMatch(/\d │ /)
+    expect(strip(writes[0])).toContain("  │       #1 user: fix this: ⏎ indented line")
+    expect(strip(writes[1])).toContain("  │          1 │ fix this:")
     handle.dispose()
   })
 
@@ -183,7 +184,7 @@ describe("attachRequestDumpRenderer", () => {
     expect(writes).toHaveLength(2)
     const text = strip(writes[0])
     expect(text).toContain("↳ core · sessionContext")
-    for (const l of text.split("\n").filter((x) => x.includes(" │ "))) {
+    for (const l of text.split("\n").filter((x) => /\d │ /.test(x))) {
       expect(l.length).toBeLessThanOrEqual(40)
     }
     handle.dispose()

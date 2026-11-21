@@ -92,7 +92,10 @@ describe("paramTable nesting", () => {
         name: { type: "string" },
         opts: {
           type: "object",
-          properties: { name: { type: "integer" }, inner: { type: "object", properties: { x: { type: "boolean" } } } },
+          properties: {
+            name: { type: "integer" },
+            inner: { type: "object", properties: { x: { type: "boolean" } } },
+          },
         },
       },
     })

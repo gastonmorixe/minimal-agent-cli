@@ -8,6 +8,7 @@
 import { describe, expect, it } from "bun:test"
 import { displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { DumpView } from "../../logging/request-dump-model.ts"
+import { stripSizeLabels } from "../../logging/request-dump-size.fixtures.ts"
 import {
   CACHE,
   fakeOrigins,
@@ -20,7 +21,7 @@ import { renderDumpBlock } from "./debug-dump.ts"
 import type { VerboseRenderOptions } from "./debug-dump-verbose.ts"
 
 /** Strip SGR so assertions can look for text, not escapes. */
-const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
+const strip = (s: string): string => stripSizeLabels(s.replace(/\x1b\[[0-9;]*m/g, ""))
 
 /** Render a view in verbose form. */
 function verbose(view: DumpView, opts: VerboseRenderOptions = {}): string[] {
@@ -35,43 +36,43 @@ const plain = verbose(block, { origins: fakeOrigins() }).map(strip)
 
 describe("verbose dump: real lines", () => {
   it("prints each source line on its own line with a gutter", () => {
-    expect(plain).toContain("      #1 user")
-    expect(plain).toContain("         1 │ fix this:")
-    expect(plain).toContain("         2 │     indented line")
+    expect(plain).toContain("  │       #1 user")
+    expect(plain).toContain("  │          1 │ fix this:")
+    expect(plain).toContain("  │          2 │     indented line")
     // The one-line preview of the labelled row is not repeated.
     expect(plain.join("\n")).not.toContain("⏎")
   })
 
   it("restarts the numbers at 1 for each part", () => {
-    const i = plain.indexOf("      #2 assistant")
-    expect(plain.slice(i)).toContain("         1 │ {")
-    expect(plain).toContain('         2 │   "command": "ls"')
-    expect(plain).toContain("         1 │ README.md")
-    expect(plain).toContain("         1 │ Discover, inspect and load an Agent Skill.")
-    expect(plain).toContain("         1 │ Run a command")
+    const i = plain.indexOf("  │       #2 assistant")
+    expect(plain.slice(i)).toContain("  │          1 │ {")
+    expect(plain).toContain('  │          2 │   "command": "ls"')
+    expect(plain).toContain("  │          1 │ README.md")
+    expect(plain).toContain("  │          1 │ Discover, inspect and load an Agent Skill.")
+    expect(plain).toContain("  │          1 │ Run a command")
   })
 
   it("right-aligns the gutter to the widest number of the part", () => {
     const text = Array.from({ length: 12 }, (_, i) => `l${i + 1}`).join("\n")
     const out = verbose(viewOf({ system: [{ type: "text", text }] })).map(strip)
-    expect(out).toContain("          1 │ l1")
-    expect(out).toContain("         12 │ l12")
+    expect(out).toContain("  │           1 │ l1")
+    expect(out).toContain("  │          12 │ l12")
   })
 
   it("prints an empty line as a bare gutter", () => {
-    expect(plain).toContain("         4 │")
+    expect(plain).toContain("  │          4 │")
   })
 
   it("keeps the cache marker on the part header", () => {
-    expect(plain).toContain("      #3 user [← cached prefix ends here]")
-    expect(plain).toContain("      block 0 [cached]")
-    expect(plain).toContain("      Skill")
+    expect(plain).toContain("  │       #3 user [← cached prefix ends here]")
+    expect(plain).toContain("  │       block 0 [cached]")
+    expect(plain).toContain("  │       Skill")
   })
 
   it("strips C0 controls and a trailing CR, and expands a tab to fixed spaces", () => {
     const out = verbose(viewOf(oneTool("a\x1b[31mb\tc\r")))
     // A kept tab counts 0 cells but paints up to 8, so it drifts the gutter.
-    expect(out.map(strip)).toContain("         1 │ a[31mb    c")
+    expect(out.map(strip)).toContain("  │          1 │ a[31mb    c")
     expect(out.map(strip).join("\n")).not.toContain("\t")
   })
 
@@ -89,17 +90,17 @@ describe("verbose dump: real lines", () => {
     const b = viewOf(oneTool("x".repeat(40)))
     /** Only the gutter and ref lines: the section header is clipped by `width`. */
     const fitted = (raw: string[]): string[] =>
-      raw.map(strip).filter((l) => l.includes(" │ ") || l.includes("↳"))
-    // 13 cells leave 1 cell before the bar and none after it: the line clips.
-    const narrow = fitted(verbose(b, { wrapWidth: 13 }))
-    for (const l of narrow) expect(displayWidth(l)).toBeLessThanOrEqual(13)
+      raw.map(strip).filter((l) => /│.*[\d⋯ ] │ /.test(l) || l.includes("↳"))
+    // 17 cells (4 of frame gutter) leave 1 cell before the bar and none after it: the line clips.
+    const narrow = fitted(verbose(b, { wrapWidth: 17 }))
+    for (const l of narrow) expect(displayWidth(l)).toBeLessThanOrEqual(17)
     expect(narrow.join("\n")).not.toContain("xxxx")
-    expect(narrow).toContain("         1 │ ")
-    // 20 cells leave 7 for text, which is what gets painted.
-    const wide = fitted(verbose(b, { wrapWidth: 20 }))
-    expect(wide).toContain(`         1 │ ${"x".repeat(7)}`)
-    expect(wide).toContain(`           │ ${"x".repeat(7)}`)
-    for (const l of wide) expect(displayWidth(l)).toBeLessThanOrEqual(20)
+    expect(narrow).toContain("  │          1 │ ")
+    // 24 cells (4 of frame gutter) leave 7 for text, which is what gets painted.
+    const wide = fitted(verbose(b, { wrapWidth: 24 }))
+    expect(wide).toContain(`  │          1 │ ${"x".repeat(7)}`)
+    expect(wide).toContain(`  │            │ ${"x".repeat(7)}`)
+    for (const l of wide) expect(displayWidth(l)).toBeLessThanOrEqual(24)
   })
 
   it("strips control bytes out of a plugin tool name before styling it", () => {
@@ -162,13 +163,14 @@ describe("verbose dump: real lines", () => {
       viewOf({ system: [{ type: "text", text: '<ma::sys::tool name="Skill">' }] }),
       {
         origins: fakeOrigins(),
-        wrapWidth: 30,
+        wrapWidth: 34,
       },
     ).map(strip)
-    for (const l of narrow) expect(displayWidth(l)).toBeLessThanOrEqual(30)
+    for (const l of narrow.filter((x) => x.includes("↳") || /│.*[\d⋯ ] │ /.test(x)))
+      expect(displayWidth(l)).toBeLessThanOrEqual(34)
     // A ref names one origin, so it truncates instead of wrapping.
-    expect(narrow).toContain("         ↳ ma-skills-plugin ·…")
-    expect(narrow).not.toContain('         ↳ ma-skills-plugin · <ma::sys::tool name="Skill">')
+    expect(narrow).toContain("  │          ↳ ma-skills-plugin ·…")
+    expect(narrow).not.toContain('  │          ↳ ma-skills-plugin · <ma::sys::tool name="Skill">')
   })
 })
 
@@ -176,13 +178,14 @@ describe("verbose dump: wrap", () => {
   it("wraps a long line with a hanging indent under the text column", () => {
     const b = viewOf(oneTool("x".repeat(40)))
     const out = verbose(b, { wrapWidth: 30 }).map(strip)
-    const i = out.findIndex((l) => l.startsWith("         1 │ "))
-    expect(out[i]).toBe(`         1 │ ${"x".repeat(17)}`)
-    expect(out[i + 1]).toBe(`           │ ${"x".repeat(17)}`)
-    expect(out[i + 2]).toBe(`           │ ${"x".repeat(6)}`)
-    for (const l of out) expect(l.length).toBeLessThanOrEqual(30)
+    const i = out.findIndex((l) => l.startsWith("  │          1 │ "))
+    expect(out[i]).toBe(`  │          1 │ ${"x".repeat(13)}`)
+    expect(out[i + 1]).toBe(`  │            │ ${"x".repeat(13)}`)
+    expect(out[i + 2]).toBe(`  │            │ ${"x".repeat(13)}`)
+    for (const l of out.filter((x) => /│.*[\d⋯ ] │ /.test(x)))
+      expect(l.length).toBeLessThanOrEqual(30)
     // No wrap width: the line stays whole.
-    expect(verbose(b).map(strip)).toContain(`         1 │ ${"x".repeat(40)}`)
+    expect(verbose(b).map(strip)).toContain(`  │          1 │ ${"x".repeat(40)}`)
   })
 })
 
@@ -220,38 +223,41 @@ describe("verbose dump: elided lines", () => {
     const text = Array.from({ length: 5000 }, (_, i) => `l${i + 1}`).join("\n")
     const out = verbose(viewOf(oneTool(text, "Bash"))).map(strip)
     // The gutter stays faithful for every shown line.
-    expect(out).toContain("           1 │ l1")
-    expect(out).toContain("         200 │ l200")
+    expect(out).toContain("  │            1 │ l1")
+    expect(out).toContain("  │          200 │ l200")
     expect(out.filter((l) => l.includes(" │ l"))).toHaveLength(200)
     // Exactly one hint, and it names the count the model gives as data.
     const hints = out.filter((l) => l.includes("4800"))
     expect(hints).toHaveLength(1)
-    expect(hints[0]).toBe("           ⋯ │ 4800 more lines")
+    expect(hints[0]).toBe("  │            ⋯ │ 4800 more lines")
     // The hint comes AFTER the last shown line, never inside the gutter run.
-    expect(out[out.indexOf("         200 │ l200") + 1]).toBe("           ⋯ │ 4800 more lines")
+    expect(out[out.indexOf("  │          200 │ l200") + 1]).toBe(
+      "  │            ⋯ │ 4800 more lines",
+    )
   })
 
   it("says `line` for one hidden line and `lines` above one", () => {
     const one = verbose(capped(1, 1)).map(strip)
-    expect(one).toContain("         1 │ l1")
-    expect(one).toContain("         ⋯ │ 1 more line")
+    expect(one).toContain("  │          1 │ l1")
+    expect(one).toContain("  │          ⋯ │ 1 more line")
     const many = verbose(capped(1, 2)).map(strip)
-    expect(many).toContain("         ⋯ │ 2 more lines")
+    expect(many).toContain("  │          ⋯ │ 2 more lines")
   })
 
   it("wraps the hint under the text column of the gutter", () => {
-    const out = verbose(capped(2, 4800), { wrapWidth: 20 }).map(strip)
+    const out = verbose(capped(2, 4800), { wrapWidth: 24 }).map(strip)
     // The section header is not part of the gutter form, so only the gutter
     // lines are measured.
-    for (const l of out.filter((x) => x.includes(" │ ")))
-      expect(displayWidth(l)).toBeLessThanOrEqual(20)
-    // room = 20 - (9 indent + 1 digit + 3 bar) = 7 cells of hint per line.
-    expect(out).toContain("         ⋯ │ 4800 mo")
-    expect(out).toContain("           │ re line")
-    expect(out).toContain("           │ s")
+    for (const l of out.filter((x) => /│.*[\d⋯ ] │ /.test(x)))
+      expect(displayWidth(l)).toBeLessThanOrEqual(24)
+    // room = 24 - 4 frame - (9 indent + 1 digit + 3 bar) = 7 cells of hint per
+    // line. The hint word-wraps: each break is at a space.
+    expect(out).toContain("  │          ⋯ │ 4800")
+    expect(out).toContain("  │            │ more")
+    expect(out).toContain("  │            │ lines")
     // The line numbering of the shown lines did not move.
-    expect(out).toContain("         1 │ l1")
-    expect(out).toContain("         2 │ l2")
+    expect(out).toContain("  │          1 │ l1")
+    expect(out).toContain("  │          2 │ l2")
   })
 
   it("has no hint and no `elided` key when no block hit the cap", () => {
@@ -260,17 +266,18 @@ describe("verbose dump: elided lines", () => {
     expect(b.sections[0].parts[0]).not.toHaveProperty("elided")
     expect(verbose(b).map(strip)).toEqual([
       "",
-      "--- POST (default model) ---",
-      "  stream: true",
-      "  request_type: conversation",
-      "  Body:",
-      "    tools: [1 tool(s)]",
-      "      Bash",
-      "         ↳ core · built-in",
-      "         1 │ a",
-      "         2 │ b",
+      "  ╭ ◆ request  (default model) · stream · 1 tools · 0 msgs",
+      "  │   stream: true",
+      "  │   request_type: conversation",
+      "  │   Body:",
+      "  │     tools: [1 tool(s)]",
+      "  │       Bash",
+      "  │          ↳ core · built-in",
+      "  │          1 │ a",
+      "  │          2 │ b",
       // `messages` is always there (the view's rule).
-      "    messages: [0 message(s)]",
+      "  │     messages: [0 message(s)]",
+      "  ╰",
     ])
   })
 
@@ -278,40 +285,40 @@ describe("verbose dump: elided lines", () => {
     const compact = renderDumpBlock(capped(2, 4800), undefined, { enabled: false }).map(strip)
     expect(compact.join("\n")).not.toContain("4800")
     expect(compact.join("\n")).not.toContain("⋯")
-    expect(compact.join("\n")).not.toContain(" │ ")
-    expect(compact).toContain("      Bash: Run a command")
+    expect(compact.join("\n")).not.toMatch(/\d │ /)
+    expect(compact).toContain("  │       Bash: Run a command")
   })
 })
 
 describe("verbose dump: reference lines", () => {
   it("names the block type of each message", () => {
-    expect(plain).toContain("         ↳ text")
-    expect(plain).toContain("         ↳ tool_use · Bash · #a1")
+    expect(plain).toContain("  │          ↳ text")
+    expect(plain).toContain("  │          ↳ tool_use · Bash · #a1")
   })
 
   it("names the tool of a tool_result through its tool_use id", () => {
-    expect(plain).toContain("         ↳ tool_result · from tool_use Bash #a1")
+    expect(plain).toContain("  │          ↳ tool_result · from tool_use Bash #a1")
   })
 
   it("names the core slot and each plugin section of a system block", () => {
-    const i = plain.indexOf("         ↳ core · sessionContext")
+    const i = plain.indexOf("  │          ↳ core · sessionContext")
     expect(i).toBeGreaterThan(0)
     const skill = plain.indexOf(
-      '         ↳ ma-skills-plugin · <ma::sys::tool name="Skill"> · plugins/ma-skills-plugin',
+      '  │          ↳ ma-skills-plugin · <ma::sys::tool name="Skill"> · plugins/ma-skills-plugin',
     )
     expect(skill).toBe(i + 1)
-    expect(plain[skill + 1]).toBe('         1 │ <ma::sys::tool name="Skill">')
+    expect(plain[skill + 1]).toBe('  │          1 │ <ma::sys::tool name="Skill">')
     const env = plain.indexOf(
-      '         ↳ ma-env-info-plugin · <ma::sys::context name="environment"> · plugins/ma-env-info-plugin',
+      '  │          ↳ ma-env-info-plugin · <ma::sys::context name="environment"> · plugins/ma-env-info-plugin',
     )
-    expect(plain[env + 1]).toBe('         5 │ <ma::sys::context name="environment">')
+    expect(plain[env + 1]).toBe('  │          5 │ <ma::sys::context name="environment">')
   })
 
   it("names the owner of each tool", () => {
-    expect(plain).toContain("         ↳ ma-skills-plugin · plugins/ma-skills-plugin")
-    expect(plain).toContain("         ↳ core · built-in")
-    const i = plain.indexOf("      Mystery")
-    expect(plain[i + 1]).toBe("         ↳ origin not recorded")
+    expect(plain).toContain("  │          ↳ ma-skills-plugin · plugins/ma-skills-plugin")
+    expect(plain).toContain("  │          ↳ core · built-in")
+    const i = plain.indexOf("  │       Mystery")
+    expect(plain[i + 1]).toBe("  │          ↳ origin not recorded")
   })
 
   it("names a <ma::agent::NAME> attachment", () => {
@@ -325,18 +332,18 @@ describe("verbose dump: reference lines", () => {
         ],
       }),
     ).map(strip)
-    expect(out).toContain("         ↳ attachment · <ma::agent::tasks>")
+    expect(out).toContain("  │          ↳ attachment · <ma::agent::tasks>")
   })
 
   it("prints 'origin not recorded' when the loader has no data", () => {
     const bare = verbose(block).map(strip)
-    const sys = bare.indexOf("      block 0 [cached]")
-    expect(bare[sys + 1]).toBe("         ↳ origin not recorded")
-    expect(bare).toContain('         ↳ <ma::sys::tool name="Skill"> · origin not recorded')
-    const skill = bare.indexOf("      Skill")
-    expect(bare[skill + 1]).toBe("         ↳ origin not recorded")
+    const sys = bare.indexOf("  │       block 0 [cached]")
+    expect(bare[sys + 1]).toBe("  │          ↳ origin not recorded")
+    expect(bare).toContain('  │          ↳ <ma::sys::tool name="Skill"> · origin not recorded')
+    const skill = bare.indexOf("  │       Skill")
+    expect(bare[skill + 1]).toBe("  │          ↳ origin not recorded")
     // Message refs come from the dump itself, so they stay.
-    expect(bare).toContain("         ↳ tool_result · from tool_use Bash #a1")
+    expect(bare).toContain("  │          ↳ tool_result · from tool_use Bash #a1")
   })
 
   it("never throws on a loader whose getters throw", () => {

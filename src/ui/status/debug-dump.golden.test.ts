@@ -21,7 +21,7 @@
  * @module ui/status/debug-dump.golden.test
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test"
+import { afterEach, beforeEach, describe, expect, it, setSystemTime } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
@@ -34,6 +34,7 @@ import {
   type RequestSnapshot,
 } from "@minimal-agent/core/host/request-inspector"
 import { describeSystemBlock } from "@minimal-agent/core/host/system-block-origins"
+import { makeCharRatioEstimator } from "@minimal-agent/core/plugin-api/llm/token-estimate"
 import { AgentCore } from "@minimal-agent/core/sdk/agent-core"
 import {
   registerTestProvider,
@@ -104,7 +105,7 @@ async function captureCoreRequests(verbose: boolean): Promise<DumpView[]> {
   const views: DumpView[] = []
   // The snapshot is valid only during the call: build the view inside it.
   const off = processRequestInspector().subscribe((e) => {
-    views.push(dumpView(e.request, { lines: verbose }))
+    views.push(dumpView(e.request, { lines: verbose, ts: e.ts }))
   })
   try {
     await runTurn()
@@ -146,6 +147,8 @@ type CanonicalEvents = Parameters<typeof sseBodyFromEvents>[0]
 
 const MODEL = "test-model-1"
 const PROVIDER = "test-prov"
+/** The explicit test estimator: 3.5 chars for each token. */
+const TEST_ESTIMATOR = makeCharRatioEstimator(3.5)
 const AUTH: AuthResult = { type: "provider", auth: { kind: "api-key", key: "test-token" } }
 
 const SESSION_CONTEXT = [
@@ -254,10 +257,24 @@ beforeEach(() => {
   clearModelRegistry()
   clearProviderRegistry()
   clearProviderPlugins()
-  registerTestProvider({ id: PROVIDER, models: [{ id: MODEL }] })
+  // An explicit test estimator for the core model and the synthetic model,
+  // so the goldens show `~N tok`. Core has no ratio of its own.
+  registerTestProvider({
+    id: PROVIDER,
+    models: [
+      { id: MODEL, estimateTokens: TEST_ESTIMATOR },
+      { id: GOLDEN_SNAPSHOT.model ?? "", estimateTokens: TEST_ESTIMATOR },
+    ],
+  })
+  // The header shows the local event time (`HH:MM:SS`). Freeze the clock at
+  // a LOCAL wall time, so the header is `14:43:26` in each time zone. Do not
+  // change `process.env.TZ`: Bun keeps the zone for the full process, and a
+  // write here changes the zone for the test files that run after this file.
+  setSystemTime(new Date(2026, 0, 2, 14, 43, 26))
 })
 
 afterEach(() => {
+  setSystemTime()
   clearModelRegistry()
   clearProviderRegistry()
   clearProviderPlugins()
@@ -274,6 +291,15 @@ describe("debug dump golden: synthetic request", () => {
       golden(`synthetic.${v.name}.ansi`, renderBytes(input, v, goldenOrigins()))
     })
   }
+
+  it("no token estimator: bytes only", () => {
+    clearModelRegistry()
+    const v: GoldenVariant = { name: "compact-w80-no-estimator", verbose: false, width: 80 }
+    golden(
+      `synthetic.${v.name}.ansi`,
+      renderBytes(blockFromSnapshot(GOLDEN_SNAPSHOT, false), v, goldenOrigins()),
+    )
+  })
 
   it("verbose without origins", () => {
     const v: GoldenVariant = { name: "verbose-no-origins", verbose: true, wrapWidth: 100 }

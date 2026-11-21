@@ -30,6 +30,7 @@ import type {
   DumpPart,
   DumpSectionName,
 } from "../../logging/request-dump-model.ts"
+import { type DumpSize, sizeLabel } from "../../logging/request-dump-size.ts"
 import { cellWidths, paramCells } from "../../logging/tool-schema.ts"
 import { c } from "../style/ansi.ts"
 import {
@@ -113,6 +114,16 @@ function showPath(dir: string): string {
 }
 
 const DOT = c.dim(" · ")
+
+/** Clip a title line to the wrap width (no wrap: keep it whole). */
+export function fitTitle(line: string, wrapWidth: number | undefined): string {
+  return wrapWidth === undefined ? line : truncateDisplayWidth(line, wrapWidth, "…")
+}
+
+/** The dim size label with a lead space, or nothing. */
+export function sizeTag(size: DumpSize | undefined): string {
+  return size === undefined ? "" : ` ${c.dim(sizeLabel(size))}`
+}
 const ARROW = c.dim("↳")
 const UNRECORDED = c.dim("origin not recorded")
 
@@ -195,21 +206,33 @@ const REF_PREFIX = `${SUB_INDENT}${ARROW} `
  * @param ref - The origin to name.
  * @param wrapWidth - Cells per line. Omitted: no fit.
  */
-const refLine = (ref: OriginRef, wrapWidth: number | undefined): string => {
-  const text = `${REF_PREFIX}${refText(ref)}`
+const refLine = (ref: OriginRef, wrapWidth: number | undefined, size?: DumpSize): string => {
+  const text = `${REF_PREFIX}${refText(ref)}${sizeTag(size)}`
   if (wrapWidth === undefined) return text
   return truncateDisplayWidth(text, wrapWidth, "…")
 }
+
+/**
+ * How {@link hardWrap} breaks a line.
+ *
+ * - `hard`: cut at the cell limit, also in the middle of a word.
+ * - `word`: break at spaces. Cut a word only when it alone is wider than the line.
+ */
+export type WrapMode = "hard" | "word"
 
 /**
  * Cut `text` into pieces of at most `room` cells. Never returns an empty list.
  *
  * With `room < 1` there is no cell left for text, so the line becomes the bare
  * gutter instead of the whole line: a narrow terminal must clip, not overflow.
+ *
+ * In `word` mode the spaces at a break go away, and the lead indent of the
+ * first piece stays. The verbose dump uses `word` mode. `hard` is the default.
  */
-function hardWrap(text: string, room: number): string[] {
+export function hardWrap(text: string, room: number, mode: WrapMode = "hard"): string[] {
   if (room < 1) return [""]
   if (displayWidth(text) <= room) return [text]
+  if (mode === "word") return packTokens(text.split(/( +)/), room)
   const out: string[] = []
   let cur = ""
   let w = 0
@@ -224,6 +247,56 @@ function hardWrap(text: string, room: number): string[] {
     w += cw
   }
   out.push(cur)
+  return out
+}
+
+/**
+ * Wrap a type cell (for example a long enum) to `room` cells. The break goes
+ * after a `|` or at a space. A part wider than the line is cut.
+ */
+export function wrapType(text: string, room: number): string[] {
+  if (room < 1) return [""]
+  if (displayWidth(text) <= room) return [text]
+  return packTokens(text.split(/( +|(?<=\|))/), room)
+}
+
+/**
+ * Greedy line fill. `tokens` alternate words and space runs (a split with a
+ * capture group). A space run that does not fit ends the line and goes away.
+ * A word that is wider than the line is cut at the cell limit.
+ */
+function packTokens(tokens: readonly string[], room: number): string[] {
+  const out: string[] = []
+  let cur = ""
+  for (const tok of tokens) {
+    if (tok === "") continue
+    if (tok.trim() === "") {
+      // A continuation line starts with no spaces.
+      if (cur === "" && out.length > 0) continue
+      if (displayWidth(cur + tok) <= room) cur += tok
+      else if (cur.trim() !== "") {
+        out.push(cur.trimEnd())
+        cur = ""
+      } else cur = ""
+      continue
+    }
+    if (displayWidth(cur + tok) <= room) {
+      cur += tok
+      continue
+    }
+    // An indent alone stays with the word, so the first line keeps its indent.
+    const words = cur.trim() !== ""
+    const head = words ? "" : cur
+    if (words) out.push(cur.trimEnd())
+    if (words && displayWidth(tok) <= room) {
+      cur = tok
+      continue
+    }
+    const pieces = hardWrap(head + tok, room)
+    out.push(...pieces.slice(0, -1))
+    cur = pieces[pieces.length - 1] ?? ""
+  }
+  if (cur.trim() !== "" || out.length === 0) out.push(cur.trimEnd())
   return out
 }
 
@@ -250,7 +323,7 @@ function gutterLines(
       out.push(`${SUB_INDENT}${num}${bar}${text}`)
       continue
     }
-    const [first, ...rest] = hardWrap(text, room)
+    const [first, ...rest] = hardWrap(text, room, "word")
     out.push(`${SUB_INDENT}${num}${bar}${first}`)
     for (const r of rest) out.push(`${blank}${r}`)
   }
@@ -298,7 +371,7 @@ function elidedLines(
       out.push(`${mark}${bar}${c.dim(text)}`)
       continue
     }
-    const [first, ...rest] = hardWrap(text, room)
+    const [first, ...rest] = hardWrap(text, room, "word")
     out.push(`${mark}${bar}${c.dim(first)}`)
     for (const r of rest) out.push(`${blank}${c.dim(r)}`)
   }
@@ -318,13 +391,18 @@ function renderMessage(
   toolNames: Map<string, string>,
   wrapWidth: number | undefined,
 ): string[] {
-  const out = [`${PART_INDENT}${c.bold(`#${n}`)} ${styledName(part, CACHE_MSG_LABEL, c.green)}`]
+  const out = [
+    fitTitle(
+      `${PART_INDENT}${c.bold(`#${n}`)} ${styledName(part, CACHE_MSG_LABEL, c.green)}${sizeTag(part.size)}`,
+      wrapWidth,
+    ),
+  ]
   const digits = digitsOf(part.lines)
   const used = new Set<DumpLine>()
   for (const b of part.blocks) {
     const own = part.lines.filter((l) => l.block === b.block)
     for (const l of own) used.add(l)
-    out.push(refLine(blockRef(b, toolNames, own[0]?.text), wrapWidth))
+    out.push(refLine(blockRef(b, toolNames, own[0]?.text), wrapWidth, b.size))
     if (b.blockType === "tool_use" && b.toolUseId !== undefined && b.toolName !== undefined) {
       toolNames.set(b.toolUseId, b.toolName)
     }
@@ -343,7 +421,12 @@ function renderMessage(
 
 /** One system block part: its refs, each placed before its line. */
 function renderSystem(part: DumpPart, opts: VerboseRenderOptions): string[] {
-  const out = [`${PART_INDENT}${styledName(part, CACHE_BLOCK_LABEL, c.magenta)}`]
+  const out = [
+    fitTitle(
+      `${PART_INDENT}${styledName(part, CACHE_BLOCK_LABEL, c.magenta)}${sizeTag(part.size)}`,
+      opts.wrapWidth,
+    ),
+  ]
   const text = part.lines.map((l) => l.text).join("\n")
   const refs = systemRefs(text, opts.origins)
   const digits = digitsOf(part.lines)
@@ -376,14 +459,100 @@ function paramLines(part: DumpPart, wrapWidth: number | undefined): string[] {
   const bar = c.dim(" ┆ ")
   const lead = `${SUB_INDENT}${c.dim("params")}`
   const out = [`${lead}${c.dim(" ┆")}`]
-  const pad = `${SUB_INDENT}      `
+  const pad = `${SUB_INDENT}      ${bar}`
+  const paint = (req: string): string =>
+    req.trim() === "required" ? c.bold(c.yellow(req)) : c.dim(req)
+  if (wrapWidth === undefined) {
+    for (const x of cells) {
+      const line = `${pad}${c.cyan(x.name.padEnd(w.name))}  ${c.dim(x.type.padEnd(w.type))}  ${paint(x.req.padEnd(w.req))}${x.desc === "" ? "" : `  ${x.desc}`}`
+      out.push(line)
+    }
+    return out
+  }
+  const room = wrapWidth - displayWidth(pad)
+  const layout = paramLayout(w, room)
   for (const x of cells) {
-    const req =
-      x.req === "required" ? c.bold(c.yellow(x.req.padEnd(w.req))) : c.dim(x.req.padEnd(w.req))
-    const line = `${pad}${bar}${c.cyan(x.name.padEnd(w.name))}  ${c.dim(x.type.padEnd(w.type))}  ${req}${x.desc === "" ? "" : `  ${x.desc}`}`
-    out.push(wrapWidth === undefined ? line : truncateDisplayWidth(line, wrapWidth, "…"))
+    out.push(
+      ...(layout === undefined
+        ? stackedParam(x, room)
+        : tableParam(x, w, layout.type, layout.desc)
+      ).map((l) => `${pad}${l}`),
+    )
   }
   return out
+
+  /** Table rows of one parameter: the type and the description wrap in their columns. */
+  function tableParam(x: ParamRow, cw: Widths, typeW: number, descW: number): string[] {
+    const types = wrapType(x.type, typeW)
+    const descs = x.desc === "" ? [] : hardWrap(x.desc, descW, "word")
+    const rows: string[] = []
+    for (let i = 0; i < Math.max(types.length, descs.length); i++) {
+      const name = i === 0 ? c.cyan(x.name.padEnd(cw.name)) : " ".repeat(cw.name)
+      const t = types[i] ?? ""
+      const desc = descs[i]
+      if (i > 0 && desc === undefined) {
+        // A type continuation with no description: no padding after the type.
+        rows.push(`${name}  ${c.dim(t)}`)
+        continue
+      }
+      const type = c.dim(`${t}${" ".repeat(Math.max(0, typeW - displayWidth(t)))}`)
+      const req = i === 0 ? paint(x.req.padEnd(cw.req)) : " ".repeat(cw.req)
+      rows.push(`${name}  ${type}  ${req}${desc === undefined ? "" : `  ${desc}`}`)
+    }
+    return rows
+  }
+
+  /** Stacked rows of one parameter, for a narrow room: the head, then the description. */
+  function stackedParam(x: ParamRow, width: number): string[] {
+    const indent = "    "
+    const rows: string[] = []
+    if (displayWidth(`${x.name}  ${x.type}  ${x.req}`) <= width) {
+      rows.push(`${c.cyan(x.name)}  ${c.dim(x.type)}  ${paint(x.req)}`)
+    } else {
+      // Too wide for one line: the name and `required`, then the type below.
+      const names = hardWrap(x.name, width)
+      const last = names.pop() ?? ""
+      rows.push(...names.map((n) => c.cyan(n)))
+      if (displayWidth(`${last}  ${x.req}`) <= width) rows.push(`${c.cyan(last)}  ${paint(x.req)}`)
+      else rows.push(c.cyan(last), paint(x.req))
+      for (const t of wrapType(x.type, width - indent.length)) rows.push(`${indent}${c.dim(t)}`)
+    }
+    if (x.desc !== "") {
+      for (const d of hardWrap(x.desc, width - indent.length, "word")) rows.push(`${indent}${d}`)
+    }
+    return rows
+  }
+}
+
+/** The stripped cells of one parameter row. */
+interface ParamRow {
+  readonly name: string
+  readonly type: string
+  readonly req: string
+  readonly desc: string
+}
+
+/** Column widths of the parameter table. */
+type Widths = ReturnType<typeof cellWidths>
+
+/** Cells of the gaps between the four table columns. */
+const PARAM_GAPS = 6
+/** Fraction of the room that the type column can take before it wraps. */
+const TYPE_SHARE = 0.3
+/** The type column keeps at least this many cells (or its full width). */
+const MIN_TYPE_CELLS = 8
+/** Below this many description cells, the table changes to the stacked form. */
+const MIN_DESC_CELLS = 20
+
+/**
+ * The type and description column widths for `room` cells, or `undefined`
+ * when the description column is too narrow (then use the stacked form).
+ */
+function paramLayout(w: Widths, room: number): { type: number; desc: number } | undefined {
+  const cap = Math.max(MIN_TYPE_CELLS, Math.floor(room * TYPE_SHARE))
+  const type = Math.min(w.type, cap)
+  const desc = room - w.name - type - w.req - PARAM_GAPS
+  return desc < MIN_DESC_CELLS ? undefined : { type, desc }
 }
 
 /** One tool part: the owner ref, the description lines, then the parameter table. */
@@ -393,7 +562,7 @@ function renderTool(part: DumpPart, opts: VerboseRenderOptions): string[] {
   const label = stripControls(part.name)
   const digits = digitsOf(part.lines)
   return [
-    `${PART_INDENT}${c.magenta(label)}`,
+    fitTitle(`${PART_INDENT}${c.magenta(label)}${sizeTag(part.size)}`, opts.wrapWidth),
     refLine(toolRef(label, opts.origins), opts.wrapWidth),
     ...gutterLines(part.lines, digits, opts.wrapWidth),
     ...elidedLines(part.elided ?? [], digits, opts.wrapWidth),
