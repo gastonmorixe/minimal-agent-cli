@@ -66,7 +66,7 @@ export function snapOf(input: SnapInput): RequestSnapshot {
  * @param lines - Fill the verbose lines. Default `true`.
  */
 export function viewOf(input: SnapInput, lines = true): DumpView {
-  return dumpView(snapOf(input), { lines })
+  return dumpView(snapOf(input), { lines, sideband: testSideband })
 }
 
 /** A tool definition with a description. */

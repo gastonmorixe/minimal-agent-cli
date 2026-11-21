@@ -25,6 +25,7 @@ import {
   truncateDisplayWidth,
 } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type {
+  DumpAnnotation,
   DumpElided,
   DumpLine,
   DumpPart,
@@ -34,6 +35,7 @@ import { type DumpSize, sizeLabel } from "../../logging/request-dump-size.ts"
 import { cellWidths, paramCells } from "../../logging/tool-schema.ts"
 import { c } from "../style/ansi.ts"
 import {
+  annotationRef,
   blockRef,
   type DumpOriginSource,
   type DumpSideband,
@@ -188,6 +190,16 @@ function refFields(ref: OriginRef): string {
         ...(ref.isError ? [c.red("error")] : []),
       ].join(DOT)
     }
+    case "msg-annotation":
+      return [
+        c.yellow("annotation"),
+        c.magenta(stripControls(`<${ref.tag}>`)),
+        ...Object.entries(ref.attrs).map(
+          ([k, v]) => `${stripControls(k)} ${stripControls(String(v))}`,
+        ),
+        ...(ref.source === "text" ? [c.dim("from text")] : []),
+        ...(ref.shown ? [] : [c.dim("not shown")]),
+      ].join(DOT)
     default:
       // Only `msg-other` is left. The type check proves it.
       return c.yellow(stripControls(ref.blockType))
@@ -390,6 +402,30 @@ function styledName(part: DumpPart, markLabel: string, style: (s: string) => str
   return part.cached ? `${name} ${c.bold(c.brightGreen(markLabel))}` : name
 }
 
+/**
+ * The lines of one block, with a reference line before the first line of
+ * each annotation. An annotation that the line cap hid gets its reference
+ * after the shown lines (the ref says "not shown").
+ */
+function annotatedLines(
+  lines: readonly DumpLine[],
+  anns: readonly DumpAnnotation[],
+  digits: number,
+  wrapWidth: number | undefined,
+  sb: DumpSideband,
+): string[] {
+  if (anns.length === 0) return gutterLines(lines, digits, wrapWidth)
+  const out: string[] = []
+  let a = 0
+  for (const l of lines) {
+    for (; a < anns.length && anns[a].shown && anns[a].line <= l.line; a++)
+      out.push(refLine(annotationRef(anns[a], sb), wrapWidth))
+    out.push(...gutterLines([l], digits, wrapWidth))
+  }
+  for (; a < anns.length; a++) out.push(refLine(annotationRef(anns[a], sb), wrapWidth))
+  return out
+}
+
 /** One message part: `#N role`, then each block's ref and lines. */
 function renderMessage(
   part: DumpPart,
@@ -413,7 +449,7 @@ function renderMessage(
     if (b.blockType === "tool_use" && b.toolUseId !== undefined && b.toolName !== undefined) {
       toolNames.set(b.toolUseId, b.toolName)
     }
-    out.push(...gutterLines(own, digits, wrapWidth))
+    out.push(...annotatedLines(own, b.annotations ?? [], digits, wrapWidth, sb))
   }
   out.push(
     ...gutterLines(

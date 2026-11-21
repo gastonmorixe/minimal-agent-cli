@@ -46,7 +46,7 @@ import { describeSystemBlock } from "@minimal-agent/core/host/system-block-origi
 import { type DebugGateEnv, isVerboseEnv } from "../../cli/debug-gate.ts"
 import { dumpView } from "../../logging/request-dump-model.ts"
 import { renderDumpBlock } from "./debug-dump.ts"
-import type { DumpOriginSource, SystemSlotSpan } from "./debug-dump-origins.ts"
+import { type DumpOriginSource, dumpSideband, type SystemSlotSpan } from "./debug-dump-origins.ts"
 
 /** What the sink needs to paint. */
 export interface RequestDumpRenderOptions {
@@ -264,10 +264,13 @@ export function attachLiveAreaRequestDumpIfWanted(
 export function attachRequestDumpRenderer(opts: RequestDumpRenderOptions): RequestDumpRenderHandle {
   const off = opts.inspector.subscribe((event) => {
     const enabled = opts.verbose?.() ?? false
-    const view = dumpView(event.request, { lines: enabled, ts: event.ts })
+    // One sideband for the view (tool_result annotations) and the refs.
+    const sideband = dumpSideband(opts.origins)
+    const view = dumpView(event.request, { lines: enabled, ts: event.ts, sideband })
     const wrapWidth = opts.wrapWidth?.()
     const verbose = {
       enabled,
+      sideband,
       ...(opts.origins === undefined ? {} : { origins: opts.origins }),
       ...(wrapWidth === undefined ? {} : { wrapWidth }),
     }
