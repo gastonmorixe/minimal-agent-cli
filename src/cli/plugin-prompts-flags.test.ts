@@ -27,6 +27,8 @@ import {
 } from "@minimal-agent/core/host/plugin-prompt-resolution"
 import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 
+import { SIDEBAND_CODEC_FIXTURE_ID, sidebandCodecRoots } from "../test-utils/sideband-codec-root.ts"
+
 import { extractPromptFromArgs, FLAGS_NO_VALUE, FLAGS_WITH_VALUES } from "./extract-prompt.ts"
 import { pluginPromptsCliTier, resolvePluginPromptsForCli } from "./plugin-prompts-resolution.ts"
 import { builtinRegistry } from "./registry/index.ts"
@@ -248,12 +250,15 @@ describe("loader: pluginPrompts drops the text, keeps the plugin", () => {
 
   afterAll(() => {
     rmSync(ROOT, { recursive: true, force: true })
+    for (const root of sidebandCodecRoots()) rmSync(root, { recursive: true, force: true })
   })
 
   // The same call `src/main.ts` makes, then the same option it passes.
+  // The sideband codec root gives the loader the codec and the system role
+  // kinds, so core can render the plugin prompt sections (design step 7).
   const load = (args: readonly string[]) =>
     PluginLoader.load({
-      roots: { embedded: [PLUGINS] },
+      roots: { embedded: [PLUGINS, ...sidebandCodecRoots()] },
       logger: () => {},
       pluginPrompts: resolvePluginPromptsForCli({ args, env: undefined, config: undefined })
         .suppression,
@@ -275,6 +280,8 @@ describe("loader: pluginPrompts drops the text, keeps the plugin", () => {
       loader
         .loadedPackages()
         .map((p) => p.id)
+        // The codec fixture package is test setup, not a prompt plugin.
+        .filter((id) => id !== SIDEBAND_CODEC_FIXTURE_ID)
         .sort(),
     ).toEqual(["alpha-prompts", "beta-prompts"])
   })
