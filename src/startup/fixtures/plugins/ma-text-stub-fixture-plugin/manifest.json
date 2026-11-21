@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Test fixture: a short stub for every required text contract, so a CLI spawn test boots with no sibling plugins repo.",
   "required": true,
-  "provides": ["prompts.template", "sideband.kinds.core"],
+  "provides": ["prompts.template"],
   "capabilities": [],
   "systemPromptBase": {
     "id": "stub",
