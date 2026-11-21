@@ -11,8 +11,8 @@
 
 import { describe, expect, it } from "bun:test"
 import type { RequestSnapshot } from "@minimal-agent/core/host/request-inspector"
-
 import { dumpView, MAX_LINE_ROWS } from "./request-dump-model.ts"
+import { stripRowSizeLabels, stripSizeLabels } from "./request-dump-size.fixtures.ts"
 import { type RequestDumpTextRow, requestDumpTextRows } from "./request-dump-text.ts"
 
 /** A loose request shape for the fixtures (casts like the core tests do). */
@@ -74,30 +74,35 @@ const REQUEST: SnapInput = {
 
 /** The rows of a request. */
 function rows(input: SnapInput, verbose: boolean): RequestDumpTextRow[] {
-  return requestDumpTextRows(dumpView(snap(input), { lines: verbose }), verbose)
+  return requestDumpTextRows(dumpView(snap(input), { lines: verbose }), verbose).map(
+    stripRowSizeLabels,
+  )
 }
 
 /** The row texts of a request. */
 function lines(input: SnapInput, verbose = false): string[] {
-  return rows(input, verbose).map((r) => r.text)
+  return rows(input, verbose).map((r) => stripSizeLabels(r.text))
 }
 
 const lineRows = (all: readonly RequestDumpTextRow[]) => all.filter((r) => r.data?.kind === "line")
 
+const FOOTER = "  ╰"
+
 const EXPECTED_REQUEST_LINES = [
-  "--- POST test-model ---",
-  "  model: test-model",
-  "  stream: true",
-  "  max_tokens: 100",
-  "  request_type: conversation",
-  "  Body:",
-  "    tools: [1 tool(s)]",
-  "      Read: read a file",
-  "    system: [1 block(s)]",
-  "      block 0 [cached]: system text",
-  "    messages: [2 message(s)]",
-  "      user: hello",
-  '      assistant [← cached prefix ends here]: "hi"',
+  "  ╭ ◆ request  test-model · stream · 1 tools · 2 msgs",
+  "  │   model: test-model",
+  "  │   stream: true",
+  "  │   max_tokens: 100",
+  "  │   request_type: conversation",
+  "  │   Body:",
+  "  │     tools: [1 tool(s)]",
+  "  │       Read: read a file",
+  "  │     system: [1 block(s)]",
+  "  │       block 0 [cached]: system text",
+  "  │     messages: [2 message(s)]",
+  "  │       user: hello",
+  '  │       assistant [← cached prefix ends here]: "hi"',
+  FOOTER,
 ]
 
 describe("requestDumpTextRows (compact)", () => {
@@ -119,14 +124,14 @@ describe("requestDumpTextRows (compact)", () => {
       speed: "fast",
     })
     expect(out.slice(0, 6)).toEqual([
-      "--- POST (default model) ---",
-      "  stream: false",
-      "  request_type: title",
-      '  thinking: {"type":"adaptive","display":"summarized"}',
-      '  output_config: {"effort":"high"}',
-      "  speed: fast",
+      "  ╭ ◆ request  (default model) · no stream · 0 tools · 0 msgs",
+      "  │   stream: false",
+      "  │   request_type: title",
+      '  │   thinking: {"type":"adaptive","display":"summarized"}',
+      '  │   output_config: {"effort":"high"}',
+      "  │   speed: fast",
     ])
-    expect(lines({ messages: [], speed: "normal" })).not.toContain("  speed: normal")
+    expect(lines({ messages: [], speed: "normal" })).not.toContain("  │   speed: normal")
   })
 
   it("keeps every row on a single line even when the source text is multi-line", () => {
@@ -141,9 +146,9 @@ describe("requestDumpTextRows (compact)", () => {
     }
     const out = lines(multi)
     expect(out.filter((l) => l.includes("\n"))).toEqual([])
-    const blocks = out.filter((l) => /^ {6}block \d/.test(l))
+    const blocks = out.filter((l) => /^ {2}│ {7}block \d/.test(l))
     expect(blocks).toHaveLength(4)
-    expect(blocks[0]).toBe("      block 0: identity")
+    expect(blocks[0]).toBe("  │       block 0: identity")
     expect(blocks.slice(1).every((l) => l.includes("⏎"))).toBe(true)
   })
 
@@ -155,7 +160,7 @@ describe("requestDumpTextRows (compact)", () => {
       messages: [{ role: "user", content: "hi" }],
     }
     const row = lines(multi).find((l) => l.includes("block 0")) ?? ""
-    expect(row).toBe("      block 0: line one ⏎ line two")
+    expect(row).toBe("  │       block 0: line one ⏎ line two")
   })
 
   it("emits a full continuation row when a preview is capped, and none when verbose", () => {
@@ -167,15 +172,15 @@ describe("requestDumpTextRows (compact)", () => {
       system: [],
     }
     const capped = lines(req, false)
-    const rowIndex = capped.findIndex((l) => l.startsWith("      Mode: "))
-    expect(capped[rowIndex]).toBe(`      Mode: ${"x".repeat(80)}...(+220ch)`)
-    expect(capped[rowIndex + 1]).toBe(`        ${long}`)
+    const rowIndex = capped.findIndex((l) => l.startsWith("  │       Mode: "))
+    expect(capped[rowIndex]).toBe(`  │       Mode: ${"x".repeat(80)}...(+220ch)`)
+    expect(capped[rowIndex + 1]).toBe(`  │         ${long}`)
 
     const verbose = lines(req, true)
     expect(verbose.some((l) => l.includes("...(+"))).toBe(false)
     const withLong = rows(req, true).filter((r) => r.text.includes(long))
     expect(withLong).toHaveLength(2)
-    expect(withLong.filter((r) => r.text.startsWith("      Mode: "))).toHaveLength(1)
+    expect(withLong.filter((r) => r.text.startsWith("  │       Mode: "))).toHaveLength(1)
     expect(withLong.filter((r) => r.data?.kind === "line" && r.text === long)).toHaveLength(1)
   })
 
@@ -197,16 +202,16 @@ describe("requestDumpTextRows (compact)", () => {
         },
       ],
     })
-    expect(out.slice(-2)).toEqual([
-      "      assistant: thinking(4ch) ⟶ tool_use(Bash#abc123){command}",
-      '      user: tool_result!(abc123) "ok"',
+    expect(out.slice(-3, -1)).toEqual([
+      "  │       assistant: thinking(4ch) ⟶ tool_use(Bash#abc123){command}",
+      '  │       user: tool_result!(abc123) "ok"',
     ])
   })
 
   it("non-verbose rows carry no data", () => {
     const all = rows(REQUEST, false)
     expect(all.every((r) => r.data === undefined)).toBe(true)
-    expect(all.map((r) => r.text)).toEqual(EXPECTED_REQUEST_LINES)
+    expect(all.map((r) => stripSizeLabels(r.text))).toEqual(EXPECTED_REQUEST_LINES)
   })
 })
 
@@ -219,7 +224,7 @@ describe("requestDumpTextRows (verbose)", () => {
       tools: [],
     }
     const out = lineRows(rows(req, true))
-    expect(out.map((r) => r.text)).toEqual(["a", "  b", "", "c"])
+    expect(out.map((r) => stripSizeLabels(r.text))).toEqual(["a", "  b", "", "c"])
     expect(out.map((r) => r.data?.line)).toEqual([1, 2, 3, 4])
     expect(out.every((r) => r.data?.section === "system" && r.data?.part === 0)).toBe(true)
   })
@@ -242,25 +247,25 @@ describe("requestDumpTextRows (verbose)", () => {
 
   it("the full verbose dump of the base request", () => {
     expect(rows(REQUEST, true)).toEqual([
-      { text: "--- POST test-model ---" },
-      { text: "  model: test-model" },
-      { text: "  stream: true" },
-      { text: "  max_tokens: 100" },
-      { text: "  request_type: conversation" },
-      { text: "  Body:" },
-      { text: "    tools: [1 tool(s)]" },
-      { text: "      Read: read a file", data: { kind: "part", section: "tools", part: 0 } },
+      { text: "  ╭ ◆ request  test-model · stream · 1 tools · 2 msgs" },
+      { text: "  │   model: test-model" },
+      { text: "  │   stream: true" },
+      { text: "  │   max_tokens: 100" },
+      { text: "  │   request_type: conversation" },
+      { text: "  │   Body:" },
+      { text: "  │     tools: [1 tool(s)]" },
+      { text: "  │       Read: read a file", data: { kind: "part", section: "tools", part: 0 } },
       { text: "read a file", data: { section: "tools", part: 0, kind: "line", line: 1 } },
-      { text: "    system: [1 block(s)]" },
+      { text: "  │     system: [1 block(s)]" },
       {
-        text: "      block 0 [cached]: system text",
+        text: "  │       block 0 [cached]: system text",
         data: { kind: "part", section: "system", part: 0 },
       },
       { text: "system text", data: { section: "system", part: 0, kind: "line", line: 1 } },
-      { text: "    messages: [2 message(s)]" },
-      { text: "      user: hello", data: { kind: "part", section: "messages", part: 0 } },
+      { text: "  │     messages: [2 message(s)]" },
+      { text: "  │       user: hello", data: { kind: "part", section: "messages", part: 0 } },
       {
-        text: "        block 0 text",
+        text: "  │         block 0 text",
         data: { kind: "block", section: "messages", part: 0, block: 0, blockType: "text" },
       },
       {
@@ -268,14 +273,15 @@ describe("requestDumpTextRows (verbose)", () => {
         data: { section: "messages", part: 0, block: 0, kind: "line", line: 1 },
       },
       {
-        text: '      assistant [← cached prefix ends here]: "hi"',
+        text: '  │       assistant [← cached prefix ends here]: "hi"',
         data: { kind: "part", section: "messages", part: 1 },
       },
       {
-        text: "        block 0 text",
+        text: "  │         block 0 text",
         data: { kind: "block", section: "messages", part: 1, block: 0, blockType: "text" },
       },
       { text: "hi", data: { section: "messages", part: 1, block: 0, kind: "line", line: 1 } },
+      { text: FOOTER },
     ])
   })
 
@@ -308,7 +314,7 @@ describe("requestDumpTextRows (verbose)", () => {
     }
     const all = rows(req, true)
     expect(all.filter((r) => r.text.includes("\n"))).toEqual([])
-    const texts = lineRows(all).map((r) => r.text)
+    const texts = lineRows(all).map((r) => stripSizeLabels(r.text))
     expect(texts).toContain('  "command": "ls\\n-la"')
     expect(texts).toContain("  three")
     expect(texts).toContain("r2")
@@ -339,7 +345,7 @@ describe("requestDumpTextRows (verbose)", () => {
     const blocks = rows(req, true).filter((r) => r.data?.kind === "block")
     expect(blocks).toEqual([
       {
-        text: "        block 0 tool_use",
+        text: "  │         block 0 tool_use",
         data: {
           kind: "block",
           section: "messages",
@@ -351,7 +357,7 @@ describe("requestDumpTextRows (verbose)", () => {
         },
       },
       {
-        text: "        block 0 tool_result",
+        text: "  │         block 0 tool_result",
         data: {
           kind: "block",
           section: "messages",
@@ -384,7 +390,7 @@ describe("requestDumpTextRows (verbose)", () => {
       all = rows(req, true)
     }).not.toThrow()
     expect(all.length).toBeGreaterThan(0)
-    expect(lineRows(all).map((r) => r.text)).toContain('  "self": "[Circular]"')
+    expect(lineRows(all).map((r) => stripSizeLabels(r.text))).toContain('  "self": "[Circular]"')
   })
 
   it("a BigInt tool input produces a row instead of throwing", () => {
@@ -410,7 +416,9 @@ describe("requestDumpTextRows (verbose)", () => {
     expect(() => {
       all = rows(req, true)
     }).not.toThrow()
-    expect(lineRows(all).map((r) => r.text)).toContain('  "bytes": "9007199254740993n"')
+    expect(lineRows(all).map((r) => stripSizeLabels(r.text))).toContain(
+      '  "bytes": "9007199254740993n"',
+    )
   })
 
   it("a huge block stops at MAX_LINE_ROWS and reports the hidden count", () => {
@@ -442,7 +450,9 @@ describe("requestDumpTextRows (verbose)", () => {
         },
       },
     ])
-    expect(all.filter((r) => r.text.includes("...(+")).map((r) => r.text)).toEqual([])
+    expect(all.filter((r) => r.text.includes("...(+")).map((r) => stripSizeLabels(r.text))).toEqual(
+      [],
+    )
   })
 
   it("the elided row follows the last line row of its block", () => {

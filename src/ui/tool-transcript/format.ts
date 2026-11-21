@@ -912,15 +912,59 @@ export function formatToolHeaderRows(opts: {
       ? `${icon}${label}${dimTimeSuffix}`
       : `${icon}${label}${labelGap}${content}${dimTimeSuffix}`
 
-  const rows = [clampTranscriptRow(`  ${c.dimCyan("╭")} ${headerLine}`, cols)]
+  const rows = [frameOpenRow(headerLine, cols)]
   if (headerOverride === undefined) {
     const indent = " ".repeat(toolContinuationIndentCells(tool.name, iconText))
     for (const cont of formatToolInputContinuation(tool, adjustedCols)) {
-      rows.push(clampTranscriptRow(`  ${c.dimCyan("│")} ${indent}${c.dim(cont)}`, cols))
+      rows.push(frameBodyRow(`${indent}${c.dim(cont)}`, cols))
     }
   }
-  rows.push(`  ${c.dimCyan("│")}`)
+  rows.push(frameBodyRow(""))
   return rows
+}
+
+/** Cells of the frame chrome before the header text: `  ╭ <icon> <label>  `. */
+export function frameHeaderChromeCells(iconText: string, label: string): number {
+  return (
+    HEADER_FRAME_CELLS + displayWidth(iconText) + 1 + displayWidth(label) + HEADER_LABEL_GAP_CELLS
+  )
+}
+
+/** The `  ╭ <line>` open row of a transcript frame, clamped to `cols`. */
+export function frameOpenRow(line: string, cols?: number): string {
+  return clampTranscriptRow(`  ${c.dimCyan("╭")} ${line}`, cols)
+}
+
+/** A `  │ <line>` body row of a transcript frame (bare gutter when `line` is empty). */
+export function frameBodyRow(line: string, cols?: number): string {
+  if (line.length === 0) return `  ${c.dimCyan("│")}`
+  return clampTranscriptRow(`  ${c.dimCyan("│")} ${line}`, cols)
+}
+
+/** The `  ╰ <line>` closer of a transcript frame (bare glyph when `line` is empty). */
+export function frameCloseRow(line = ""): string {
+  return line.length === 0 ? `  ${c.dimCyan("╰")}` : `  ${c.dimCyan("╰")} ${line}`
+}
+
+/**
+ * The generic frame header: `  ╭ <icon> <label>  <text> · <time>`, painted
+ * like a tool header (bold icon and label in `labelColor`, dim text and time).
+ * The tool header ({@link formatToolHeaderRows}) uses the same paint.
+ */
+export function formatFrameHeaderRow(opts: {
+  label: string
+  text: string
+  timeText?: string
+  iconText?: string
+  labelColor?: (s: string) => string
+  cols?: number
+}): string {
+  const color = opts.labelColor ?? c.orange
+  const icon = `${c.bold(color(opts.iconText ?? DEFAULT_TOOL_ICON))} `
+  const time =
+    opts.timeText !== undefined && opts.timeText !== "" ? c.dim(` · ${opts.timeText}`) : ""
+  const text = opts.text === "" ? "" : `  ${c.dim(opts.text)}`
+  return frameOpenRow(`${icon}${c.bold(color(opts.label))}${text}${time}`, opts.cols)
 }
 
 /**

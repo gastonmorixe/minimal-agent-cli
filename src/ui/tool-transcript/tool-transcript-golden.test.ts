@@ -190,7 +190,8 @@ describe.skipIf(!textFixturesPresent())("REPL tool transcript golden (S24, S29)"
       ],
       "ask",
       "dark",
-      () => new Date(2026, 4, 22, 17, 52, 30),
+      // A UTC instant: the golden keeps its ISO text, so it must not follow the local zone.
+      () => new Date(Date.UTC(2026, 4, 22, 17, 52, 30)),
       undefined,
       undefined,
       undefined,

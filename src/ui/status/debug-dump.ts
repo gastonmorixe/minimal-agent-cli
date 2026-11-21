@@ -30,6 +30,7 @@
  */
 
 import { displayWidth, truncateDisplayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { DUMP_FRAME_LABEL, dumpFacts, dumpModel } from "../../logging/request-dump-header.ts"
 import {
   type DumpKvRow,
   type DumpKvSection,
@@ -43,13 +44,28 @@ import {
   oneLine,
   PREVIEW_CAP,
 } from "../../logging/request-dump-model.ts"
+import { type DumpSize, sizeLabel } from "../../logging/request-dump-size.ts"
 import { paramSummary } from "../../logging/tool-schema.ts"
 import { c } from "../style/ansi.ts"
 import { truncHint } from "../style/truncate-hint.ts"
 import {
+  DEFAULT_TOOL_ICON,
+  formatFrameHeaderRow,
+  frameBodyRow,
+  frameCloseRow,
+  frameHeaderChromeCells,
+} from "../tool-transcript/format.ts"
+import {
+  TOOL_PREVIEW_GUTTER_WIDTH,
+  TOOL_PREVIEW_WRAP_SAFETY_WIDTH,
+} from "../tool-transcript/preview-width.ts"
+import {
   CACHE_BLOCK_LABEL,
   CACHE_MSG_LABEL,
+  fitTitle,
+  hardWrap,
   renderVerboseSection,
+  sizeTag,
   stripControls,
   type VerboseRenderOptions,
 } from "./debug-dump-verbose.ts"
@@ -96,6 +112,9 @@ function fitLine(prefix: string, full: string, width: number | undefined): strin
   return `${prefix}${c.dim(fitBody(full, room, PREVIEW_CAP))}`
 }
 
+/** Cells a compact preview keeps before the size label is dropped. */
+const MIN_PREVIEW_CELLS = 16
+
 /** The bright-green cache label after a part name, or nothing. */
 function cacheMark(part: DumpPart, label: string): string {
   return part.cached ? ` ${c.bold(c.brightGreen(label))}` : ""
@@ -112,22 +131,38 @@ function cacheMark(part: DumpPart, label: string): string {
  */
 function renderRow(part: DumpPart, width: number | undefined, n: number): string {
   const name = stripControls(part.name)
+  // The size label is part of the clamp budget. On a narrow row it goes
+  // away, so the preview keeps at least MIN_PREVIEW_CELLS.
+  const fits = (prefix: string): boolean =>
+    width === undefined || width - displayWidth(prefix) >= MIN_PREVIEW_CELLS
+  const pick = (build: (tag: string) => string): string => {
+    const full = build(sizeTag(part.size))
+    return fits(full) ? full : build("")
+  }
   switch (part.section) {
     case "messages": {
       // `#N`: the history position. Each request sends the full history, so
       // the part position is that position.
       const num = `${c.bold(`#${n}`)} `
       const mark = cacheMark(part, CACHE_MSG_LABEL)
-      return fitLine(`      ${num}${c.green(name)}${mark}: `, part.full, width)
+      return fitLine(
+        pick((t) => `      ${num}${c.green(name)}${mark}${t}: `),
+        part.full,
+        width,
+      )
     }
     case "system":
       return fitLine(
-        `      ${c.magenta(name)}${cacheMark(part, CACHE_BLOCK_LABEL)}: `,
+        pick((t) => `      ${c.magenta(name)}${cacheMark(part, CACHE_BLOCK_LABEL)}${t}: `),
         part.full,
         width,
       )
     case "tools":
-      return fitLine(`      ${c.magenta(name)}: `, part.full, width)
+      return fitLine(
+        pick((t) => `      ${c.magenta(name)}${t}: `),
+        part.full,
+        width,
+      )
     default: {
       const _exhaustive: never = part.section
       return _exhaustive
@@ -136,22 +171,12 @@ function renderRow(part: DumpPart, width: number | undefined, n: number): string
 }
 
 /**
- * Strip, then clip one header label to `width` cells.
- *
- * Strip FIRST: `displayWidth` counts an ESC byte as one cell, so a clip before
- * the strip would reserve cells for bytes that are never painted.
- */
-function clipLabel(label: string, width: number | undefined): string {
-  const clean = stripControls(label)
-  return width === undefined ? clean : truncateDisplayWidth(clean, width)
-}
-
-/**
  * Render one request as the colored lines the user sees in the TUI.
  *
- * Each request becomes one block: the bold-cyan `--- POST … ---` header, dim
+ * Each request becomes one block in the shared tool transcript frame: the
+ * `╭ ◆ request  <model> · <facts>` header row (see `formatFrameHeaderRow`), dim
  * key/value header fields, then a bold `Body:` line with its yellow section
- * names and per-section rows. The blank line before the header is included so
+ * names and per-section rows behind the `│` gutter, then the `╰` closer. The blank line before the header is included so
  * consecutive requests stay visually separated in scrollback.
  *
  * With `verbose.enabled`, each section renders as real lines with a gutter
@@ -174,9 +199,20 @@ export function renderDumpBlock(
   width?: number,
   verbose: VerboseRenderOptions = {},
 ): string[] {
-  const w = width !== undefined && width > 0 ? width : undefined
-  const label = `--- POST ${view.model ?? "(default model)"} ---`
-  const out = ["", c.bold(c.cyan(clipLabel(label, w)))]
+  const cols = width !== undefined && width > 0 ? width : undefined
+  // Body rows sit behind the frame gutter, so they get the inner width.
+  const w =
+    cols === undefined
+      ? undefined
+      : Math.max(1, cols - TOOL_PREVIEW_GUTTER_WIDTH - TOOL_PREVIEW_WRAP_SAFETY_WIDTH)
+  // The header clamps to the terminal width, else to the verbose wrap width.
+  const frame = cols ?? verbose.wrapWidth
+  const header = dumpFrameHeader(view, frame)
+  // Verbose rows are never clipped: they wrap to the room behind the gutter.
+  const inner = (n: number | undefined): number | undefined =>
+    n === undefined ? undefined : Math.max(1, n - TOOL_PREVIEW_GUTTER_WIDTH)
+  const vopts: VerboseRenderOptions = { ...verbose, wrapWidth: inner(verbose.wrapWidth) }
+  const out: string[] = []
 
   for (const [key, value] of view.fields) {
     const prefix = `  ${c.dim(`${stripControls(key)}:`)} `
@@ -186,13 +222,21 @@ export function renderDumpBlock(
   }
 
   if (view.sections.length > 0 || view.kv.length > 0) out.push(`  ${c.bold("Body:")}`)
-  for (const section of view.kv) out.push(...renderKvSection(section, w, verbose.enabled === true))
+  const on = verbose.enabled === true
+  for (const section of view.kv) {
+    out.push(...renderKvSection(section, on ? vopts.wrapWidth : w, on))
+  }
 
   for (const section of view.sections) {
     const count = ` ${c.dim(`[${section.parts.length} ${unitFor(section.name)}]`)}`
-    out.push(`    ${c.yellow(section.name)}:${count}`)
+    out.push(
+      fitTitle(
+        `    ${c.yellow(section.name)}:${count}${sectionTotal(section.size)}`,
+        on ? vopts.wrapWidth : w,
+      ),
+    )
     if (verbose.enabled === true) {
-      out.push(...renderVerboseSection(section.name, section.parts, verbose))
+      out.push(...renderVerboseSection(section.name, section.parts, vopts))
       continue
     }
     section.parts.forEach((part, i) => {
@@ -202,7 +246,32 @@ export function renderDumpBlock(
     })
   }
 
-  return out
+  return ["", header, ...out.map((row) => frameBodyRow(row, cols)), frameCloseRow()]
+}
+
+/**
+ * The frame header row of one request: the shared tool header with the
+ * label `request`, the model as the header text and the facts at the place
+ * of the tool `· time`. Narrow: the facts go first, then the row clamp clips
+ * the model with the `...(+Nch)` hint.
+ */
+export function dumpFrameHeader(view: DumpView, cols?: number): string {
+  const model = stripControls(dumpModel(view))
+  const facts = stripControls(dumpFacts(view))
+  const chrome = frameHeaderChromeCells(DEFAULT_TOOL_ICON, DUMP_FRAME_LABEL)
+  const room = cols === undefined ? undefined : cols - TOOL_PREVIEW_WRAP_SAFETY_WIDTH - chrome
+  const fits = room === undefined || displayWidth(model) + displayWidth(` · ${facts}`) <= room
+  return formatFrameHeaderRow({
+    label: DUMP_FRAME_LABEL,
+    text: model,
+    timeText: fits ? facts : undefined,
+    cols,
+  })
+}
+
+/** The dim ` · <size>` total of a section header, or nothing. */
+function sectionTotal(size: DumpSize | undefined): string {
+  return size === undefined ? "" : c.dim(` · ${sizeLabel(size)}`)
 }
 
 /** Paint a value: dim italic when core masked it, normal otherwise. */
@@ -222,29 +291,59 @@ export function renderKvSection(
   verbose: boolean,
 ): string[] {
   const out = [
-    `    ${c.yellow(section.name)}: ${c.dim(`[${section.rows.length} ${kvUnit(section.name)}]`)}`,
+    fitTitle(
+      `    ${c.yellow(section.name)}: ${c.dim(`[${section.rows.length} ${kvUnit(section.name)}]`)}${sectionTotal(section.size)}`,
+      width,
+    ),
   ]
   const w = keyWidth(section)
-  for (const r of section.rows) {
+  // Size labels pad to one width, so the values stay in one column.
+  const labels = section.rows.map((r) => (r.size === undefined ? "" : sizeLabel(r.size)))
+  const lw = labels.reduce((m, l) => Math.max(m, displayWidth(l)), 0)
+  const tag = (i: number): string => (lw === 0 ? "" : `${c.dim((labels[i] ?? "").padEnd(lw))}  `)
+  section.rows.forEach((r, i) => {
     const key = stripControls(r.key)
-    const prefix = `      ${c.cyan(key.padEnd(w))}  `
     if (!verbose) {
+      const prefix = `      ${c.cyan(key.padEnd(w))}  ${tag(i)}`
       const room = width === undefined ? undefined : width - displayWidth(prefix)
       if (room !== undefined && room <= 0) {
         out.push(truncateDisplayWidth(prefix, width ?? 0))
-        continue
+        return
       }
       out.push(`${prefix}${paintValue(r, fitBody(oneLine(r.value), room, PREVIEW_CAP))}`)
-      continue
+      return
     }
     if (r.pretty === undefined) {
-      out.push(`${prefix}${paintValue(r, stripControls(r.value))}`)
-      continue
+      const prefix = `      ${c.cyan(key.padEnd(w))}  ${tag(i)}`
+      out.push(...hanging(prefix, stripControls(r.value), width, (t) => paintValue(r, t)))
+      return
     }
-    out.push(`      ${c.cyan(key)}`)
-    for (const line of r.pretty) out.push(`        ${c.dim("┆")} ${stripControls(line)}`)
-  }
+    const label = labels[i] === "" ? "" : ` ${c.dim(labels[i] ?? "")}`
+    out.push(fitTitle(`      ${c.cyan(key)}${label}`, width))
+    const gutter = `        ${c.dim("┆")} `
+    for (const line of r.pretty) out.push(...hanging(gutter, stripControls(line), width, (t) => t))
+  })
   return out
+}
+
+/**
+ * Word-wrap `text` behind `prefix` to `width` cells. Each next line gets a
+ * blank indent of the real prefix width (displayWidth), so no line passes
+ * the width. `width` undefined: one line, no wrap.
+ */
+function hanging(
+  prefix: string,
+  text: string,
+  width: number | undefined,
+  paint: (t: string) => string,
+): string[] {
+  if (width === undefined) return [`${prefix}${paint(text)}`]
+  const lead = displayWidth(prefix)
+  const room = width - lead
+  if (room < 1) return [truncateDisplayWidth(`${prefix}${text}`, width, "…")]
+  const [first, ...rest] = hardWrap(text, room, "word")
+  const blank = " ".repeat(lead)
+  return [`${prefix}${paint(first ?? "")}`, ...rest.map((t) => `${blank}${paint(t)}`)]
 }
 
 /** The noun a section's count label uses. */

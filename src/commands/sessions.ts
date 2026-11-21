@@ -301,6 +301,7 @@ export function toListItem(row: SessionCatalogRow, now: number): SessionListItem
     ...(row.title !== undefined && row.titleSource ? { titleSource: row.titleSource } : {}),
     ...(s?.title === undefined ? {} : { prompt: s.title }),
     ...(s ? { tokens: s.tokens, estimated: s.estimated } : {}),
+    ...(s?.tokensUnknown ? { tokensUnknown: true } : {}),
     ...(s?.costUsd === undefined ? {} : { costUsd: s.costUsd }),
     model: sessionModelLabel(row.model),
     status: statusOf(row),

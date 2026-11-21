@@ -259,7 +259,7 @@ export function attachLiveAreaRequestDumpIfWanted(
 export function attachRequestDumpRenderer(opts: RequestDumpRenderOptions): RequestDumpRenderHandle {
   const off = opts.inspector.subscribe((event) => {
     const enabled = opts.verbose?.() ?? false
-    const view = dumpView(event.request, { lines: enabled })
+    const view = dumpView(event.request, { lines: enabled, ts: event.ts })
     const wrapWidth = opts.wrapWidth?.()
     const verbose = {
       enabled,

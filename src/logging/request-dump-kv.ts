@@ -10,6 +10,7 @@
  */
 
 import type { RequestSnapshot } from "@minimal-agent/core/host/request-inspector"
+import { type DumpSize, sumSizes } from "./request-dump-size.ts"
 
 /** A `headers` or `body` section name. */
 export type DumpKvSectionName = "headers" | "body"
@@ -24,6 +25,8 @@ export interface DumpKvRow {
   readonly pretty?: readonly string[]
   /** True when core masked the value. */
   readonly redacted: boolean
+  /** Size of key + value. Absent when no sizer was given. */
+  readonly size?: DumpSize
 }
 
 /** One `headers` or `body` section. */
@@ -32,6 +35,8 @@ export interface DumpKvSection {
   readonly name: DumpKvSectionName
   /** Rows, sorted by key. */
   readonly rows: readonly DumpKvRow[]
+  /** Sum of the row sizes. */
+  readonly size?: DumpSize
 }
 
 /** The form of a mask that core writes (`<redacted:N chars>`, `…abcd`, `Bearer …abcd`). */
@@ -71,14 +76,26 @@ const byKey = (a: DumpKvRow, b: DumpKvRow): number => (a.key < b.key ? -1 : a.ke
  * left out.
  *
  * @param req - The redacted request snapshot.
+ * @param size - Optional sizer. When given, each row gets the size of
+ *   `key + value` and each section the sum.
  * @returns `headers` first, then `body`.
  */
-export function kvSections(req: RequestSnapshot): DumpKvSection[] {
+export function kvSections(
+  req: RequestSnapshot,
+  size?: (text: string) => DumpSize,
+): DumpKvSection[] {
   const out: DumpKvSection[] = []
+  const sized = (r: DumpKvRow): DumpKvRow =>
+    size === undefined ? r : { ...r, size: size(`${r.key}${r.value}`) }
+  const section = (name: DumpKvSectionName, rows: DumpKvRow[]): DumpKvSection => {
+    const sorted = rows.map(sized).sort(byKey)
+    if (size === undefined) return { name, rows: sorted }
+    return { name, rows: sorted, size: sumSizes(sorted.map((r) => r.size as DumpSize)) }
+  }
   const headers = Object.entries(req.headers ?? {}).map(([k, v]) => row(k.toLowerCase(), v))
-  if (headers.length > 0) out.push({ name: "headers", rows: headers.sort(byKey) })
+  if (headers.length > 0) out.push(section("headers", headers))
   const body = Object.entries(req.body ?? {}).map(([k, v]) => row(k, v))
-  if (body.length > 0) out.push({ name: "body", rows: body.sort(byKey) })
+  if (body.length > 0) out.push(section("body", body))
   return out
 }
 

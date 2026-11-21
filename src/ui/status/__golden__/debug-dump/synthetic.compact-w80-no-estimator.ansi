@@ -1,0 +1,32 @@
+
+  [2;36m╭[22;39m [1m[38;5;208m◆[39m[22m [1m[38;5;208mrequest[39m[22m  [2mclaude-opus-4-8[22m[2m · stream · 6 tools · 9 msgs · 4.1 kB[22m
+  [2;36m│[22;39m   [2mmodel:[22m claude-opus-4-8
+  [2;36m│[22;39m   [2mstream:[22m true
+  [2;36m│[22;39m   [2mmax_tokens:[22m 32000
+  [2;36m│[22;39m   [2mrequest_type:[22m conversation
+  [2;36m│[22;39m   [2mthinking:[22m {"type":"adaptive","display":"summarized"}
+  [2;36m│[22;39m   [2moutput_config:[22m {"effort":"high","format":{"type":"json_schema"...(+71ch)
+  [2;36m│[22;39m   [2mspeed:[22m fast
+  [2;36m│[22;39m   [1mBody:[22m
+  [2;36m│[22;39m     [33mtools[39m: [2m[6 tool(s)][22m[2m · 533 B[22m
+  [2;36m│[22;39m       [35mSkill[39m [2m64 B[22m: [2mDiscover, inspect and load an Agent Skill.[22m
+  [2;36m│[22;39m       [35mBash[39m [2m212 B[22m: [2mExecutes a given bash command. ⏎ Output: cappe...(+146ch)[22m
+  [2;36m│[22;39m       [35mRead[39m [2m53 B[22m: [2mRead a file. ⏎ Returns its text.[22m
+  [2;36m│[22;39m       [35mMystery[39m [2m10 B[22m: [2mx[22m
+  [2;36m│[22;39m       [35mWide[39m [2m165 B[22m: [2m日本語のテキストです。表示幅表示幅表示幅表示幅...(+30ch)[22m
+  [2;36m│[22;39m       [35mCtl[39m [2m29 B[22m: [2mRun a comm[31mand now[22m
+  [2;36m│[22;39m     [33msystem[39m: [2m[3 block(s)][22m[2m · 423 B[22m
+  [2;36m│[22;39m       [35mblock 0[39m [2m22 B[22m: [2mYou are minimal agent.[22m
+  [2;36m│[22;39m       [35mblock 1[39m [1m[92m[cached][39m[22m [2m196 B[22m: [2m<ma::sys::tool name="Skill"> ⏎ Nam...(+172ch)[22m
+  [2;36m│[22;39m       [35mblock 2[39m [1m[92m[cached][39m[22m [2m205 B[22m: [2m# Instructions ⏎ - Be concise. ⏎ P...(+174ch)[22m
+  [2;36m│[22;39m     [33mmessages[39m: [2m[9 message(s)][22m[2m · 3.1 kB[22m
+  [2;36m│[22;39m       [1m#1[22m [32muser[39m [2m30 B[22m: [2mfix this: ⏎ indented line[22m
+  [2;36m│[22;39m       [1m#2[22m [32massistant[39m [2m220 B[22m: [2mthinking(24ch) ⟶ "Sure." ⟶ tool_use(Bas...(+30ch)[22m
+  [2;36m│[22;39m       [1m#3[22m [32muser[39m [2m88 B[22m: [2mtool_result(a1b2c3) "README.md\nsrc"[22m
+  [2;36m│[22;39m       [1m#4[22m [32massistant[39m [2m90 B[22m: [2mtool_use(Read#d4e5f6){file_path}[22m
+  [2;36m│[22;39m       [1m#5[22m [32muser[39m [2m159 B[22m: [2mtool_result!(d4e5f6) "ENOENT: no such file o...(+23ch)[22m
+  [2;36m│[22;39m       [1m#6[22m [32muser[39m [2m2.0 kB[22m: [2m"line 1\nline 2\nline 3\nline 4\nline 5\n...(+1951ch)[22m
+  [2;36m│[22;39m       [1m#7[22m [32muser[39m [2m319 B[22m: [2mimage(base64 image/png) ⟶ "what is this? no...(+148ch)[22m
+  [2;36m│[22;39m       [1m#8[22m [32massistant[39m [2m206 B[22m: [2ma control [2J byte and a C1  byte in 日...(+52ch)[22m
+  [2;36m│[22;39m       [1m#9[22m [32muser[39m [1m[92m[← cached prefix ends here][39m[22m [2m72 B[22m: [2m"hi there"[22m
+  [2;36m╰[22;39m
