@@ -21,7 +21,6 @@ import type { DumpAnnotation, DumpBlockRef } from "../../logging/request-dump-mo
 export type SystemSlotId =
   | "identity"
   | "instructions"
-  | "toolOutputConventions"
   | "afterInstructions"
   | "sessionContext"
   | "providerPreamble"

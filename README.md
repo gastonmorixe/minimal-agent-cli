@@ -181,7 +181,6 @@ The controllable parts:
 | Whole core prompt | `--system-prompt` | `systemPrompt.full` | `MINIMAL_AGENT_SYSTEM_PROMPT` |
 | Neutral identity | `--system-identity` | `systemPrompt.identity` | `MINIMAL_AGENT_SYSTEM_IDENTITY` |
 | Base instructions | `--system-instructions` | `systemPrompt.instructions` | `MINIMAL_AGENT_SYSTEM_INSTRUCTIONS` |
-| Tool-output conventions | `--system-tool-output-conventions` | `systemPrompt.toolOutputConventions` | `MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS` |
 | Session context (plugin prompts) | `--system-session-context` | `systemPrompt.sessionContext` | `MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT` |
 | Provider preamble | `--provider-system-preamble` | `systemPrompt.providerPreamble` | `MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE` |
 
@@ -246,7 +245,7 @@ Example:
   "skipQuota": false,
   "systemPrompt": {
     "instructionsFile": "~/prompts/my-instructions.md",
-    "toolOutputConventions": false
+    "sessionContext": false
   },
   "plugins": {
     "web-search": {

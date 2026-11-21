@@ -50,11 +50,6 @@ const FLAG_NAMES: Readonly<Record<SystemPromptOverridePart, SystemPromptOverride
     fileFlag: "--system-instructions-file",
     noFlag: "--no-system-instructions",
   },
-  toolOutputConventions: {
-    valueFlag: "--system-tool-output-conventions",
-    fileFlag: "--system-tool-output-conventions-file",
-    noFlag: "--no-system-tool-output-conventions",
-  },
   sessionContext: {
     valueFlag: "--system-session-context",
     fileFlag: "--system-session-context-file",

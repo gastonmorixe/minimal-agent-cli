@@ -143,11 +143,6 @@ exports[`root help snapshot COLUMNS=80, NO_COLOR=1: wrapped to 80, no color 1`] 
                                         (also --system-instructions-file <path>,
                                         --no-system-instructions; env:
                                         MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
-      --system-tool-output-conventions <text>
-          Replace the tool-output-conventions paragraph (also
-          --system-tool-output-conventions-file <path>,
-          --no-system-tool-output-conventions; env:
-          MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS)
       --system-session-context <text>   Replace the session-context block of
                                         plugin prompts (also
                                         --system-session-context-file <path>,
@@ -388,25 +383,19 @@ exports[`root help snapshot COLUMNS=120, NO_COLOR=1: wrapped to 120, no color 1`
     Session
       --session-id <uuid>  Pin the session id of this run (env: MINIMAL_AGENT_SESSION_ID)
     System prompt (override or omit individual system-prompt parts)
-      --system-prompt <text>                   Replace the whole core-controllable system prompt (also
-                                               --system-prompt-file <path>, --no-system-prompt; env:
-                                               MINIMAL_AGENT_SYSTEM_PROMPT)
-      --system-identity <text>                 Replace the neutral identity block (also --system-identity-file <path>,
-                                               --no-system-identity; env: MINIMAL_AGENT_SYSTEM_IDENTITY)
-      --system-instructions <text>             Replace the base instructions block (also --system-instructions-file
-                                               <path>, --no-system-instructions; env: MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
-      --system-tool-output-conventions <text>  Replace the tool-output-conventions paragraph (also
-                                               --system-tool-output-conventions-file <path>,
-                                               --no-system-tool-output-conventions; env:
-                                               MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS)
-      --system-session-context <text>          Replace the session-context block of plugin prompts (also
-                                               --system-session-context-file <path>, --no-system-session-context; env:
-                                               MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT)
-      --provider-system-preamble <text>        Replace the provider preamble, needs --unsafe-system-prompt-overrides
-                                               (also --provider-system-preamble-file <path>,
-                                               --no-provider-system-preamble; env:
-                                               MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE)
-      --unsafe-system-prompt-overrides         Allow a provider preamble override or omission
+      --system-prompt <text>             Replace the whole core-controllable system prompt (also --system-prompt-file
+                                         <path>, --no-system-prompt; env: MINIMAL_AGENT_SYSTEM_PROMPT)
+      --system-identity <text>           Replace the neutral identity block (also --system-identity-file <path>,
+                                         --no-system-identity; env: MINIMAL_AGENT_SYSTEM_IDENTITY)
+      --system-instructions <text>       Replace the base instructions block (also --system-instructions-file <path>,
+                                         --no-system-instructions; env: MINIMAL_AGENT_SYSTEM_INSTRUCTIONS)
+      --system-session-context <text>    Replace the session-context block of plugin prompts (also
+                                         --system-session-context-file <path>, --no-system-session-context; env:
+                                         MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT)
+      --provider-system-preamble <text>  Replace the provider preamble, needs --unsafe-system-prompt-overrides (also
+                                         --provider-system-preamble-file <path>, --no-provider-system-preamble; env:
+                                         MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE)
+      --unsafe-system-prompt-overrides   Allow a provider preamble override or omission
     Debug
       -d, --debug    Enable debug logging (env: DEBUG)
       -v, --verbose  Do not truncate debug output (env: VERBOSE)

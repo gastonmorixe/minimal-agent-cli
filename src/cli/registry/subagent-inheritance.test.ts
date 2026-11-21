@@ -15,7 +15,6 @@ const PARTS = [
   "system-prompt",
   "system-identity",
   "system-instructions",
-  "system-tool-output-conventions",
   "system-session-context",
   "provider-system-preamble",
 ]

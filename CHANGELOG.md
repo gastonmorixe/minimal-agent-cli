@@ -87,6 +87,20 @@ terminal client is being moved out of `minimal-agent-core` into this repo
   keep their exact text. The view now carries the event time (`ts`).
 ### Removed
 
+- 2026-11-21: **BREAKING: remove the tool-output-conventions system-prompt part.**
+  Removed: the tool-output-conventions system-prompt part, its slot, the
+  `--system-tool-output-conventions` / `-file` / `--no-` flags, the env vars
+  and the config keys. Breaking: old flags now fail as unknown flags; the
+  system prompt bytes change (one prompt cache miss).
+  - The startup systemHash changes. The first resume of an old session shows
+    the drift warning one time. After that, the hash does not depend on the
+    blob-store setting.
+  - The env vars `MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS(_FILE)` and
+    the config keys `systemPrompt.toolOutputConventions(File)` are removed.
+  - The README table row, the help rows and the sub-agent inheritance entry
+    are removed. The raw-output footer and the output-preview annotation
+    stay.
+
 - 2026-11-20: **Breaking: the loop-safety flags and the reflection cooldown
   are removed.** Core removed the reflection checkpoint and the `loopSafety`
   system prompt slot. A plugin (disabled by default) will add the feature

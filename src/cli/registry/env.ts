@@ -274,7 +274,7 @@ const VISIBLE_ENV: readonly BuiltinEnvSpec[] = [
     name: "MINIMAL_AGENT_SYSTEM_*",
     summary: "Override system-prompt parts, see the System prompt flags",
     description: [
-      "Parts: _INSTRUCTIONS, _IDENTITY, _TOOL_OUTPUT_CONVENTIONS, _SESSION_CONTEXT, _PROMPT.",
+      "Parts: _INSTRUCTIONS, _IDENTITY, _SESSION_CONTEXT, _PROMPT.",
       "Also MINIMAL_AGENT_PROVIDER_SYSTEM_PREAMBLE. Each one also has a *_FILE form for a path. An empty value omits the part.",
     ],
   },
