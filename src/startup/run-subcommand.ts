@@ -15,6 +15,7 @@
  * @module host/startup/run-subcommand
  */
 
+import { loadSidebandOnly } from "@minimal-agent/core/host/sideband"
 import { resolveAgentHome } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import type { CommandPlan } from "../cli/command-plan.ts"
 import type { PrintFormat } from "../cli/print-format.ts"
@@ -123,10 +124,16 @@ export async function runStartupSubcommand(ctx: SubcommandContext): Promise<bool
       }
       const out = process.stdout
       // `sessions <sid>` opens the detail view; else the list (item 29).
+      // `sessions` has no plugin loader: boot the sideband codec and kinds
+      // only, for the lazy summary title (the same roots as `dump`).
+      const sideband = await loadSidebandOnly({
+        roots: computePluginRoots(ctx.repoRoot, process.env, process.cwd(), resolveAgentHome()),
+      })
       const { rows, exitCode } = runSessionsEntry({
         flags: parsed.flags,
         width: resolveSessionsWidth(out, process.env),
         color: resolveHelpColor(process.env, out.isTTY, noColor),
+        sideband,
       })
       writeCommandRows(rows, out)
       if (exitCode !== undefined) process.exitCode = exitCode

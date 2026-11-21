@@ -17,6 +17,7 @@ import { dirname } from "node:path"
 
 import { AGENT_VERSION } from "@minimal-agent/core/host/build-info"
 import { loadSession } from "@minimal-agent/core/host/session-restore"
+import type { SidebandReader } from "@minimal-agent/core/host/sideband"
 import { BlobStore, loadBlobStoreConfig } from "@minimal-agent/core/host-kit/blob-store"
 import { FileTrackingStore } from "@minimal-agent/core/host-kit/file-tracking-store"
 import { defaultSessionsDir, SessionStore } from "@minimal-agent/core/host-kit/session-store"
@@ -53,6 +54,12 @@ export interface SessionStoreBootOptions {
   toolsHash: string
   /** Warning output stream; tests inject a collector. */
   output?: CommandOutput
+  /**
+   * The sideband reader of the loader (`sidebandOf(loader)`). The store uses
+   * it for the index summary title, and the resume drift check for the
+   * restore. Omitted: `NO_SIDEBAND`.
+   */
+  sideband?: SidebandReader
 }
 
 /** Result of {@link bootSessionStores}. */
@@ -161,6 +168,7 @@ export async function bootSessionStores(
       output,
     )
   }
+  if (store && opts.sideband) store.setSideband(opts.sideband)
 
   // Per-session blob store for raw tool outputs. Lives at
   // `~/.minimal-agent/sessions/<sid>.blobs/`, populated lazily as tools
@@ -230,7 +238,7 @@ export async function bootSessionStores(
     }
 
     try {
-      const loaded = loadSession(resumeSid)
+      const loaded = loadSession(resumeSid, undefined, { sideband: opts.sideband })
       const drifted =
         loaded.meta &&
         (loaded.meta.systemHash !== systemHash || loaded.meta.toolsHash !== toolsHash)

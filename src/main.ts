@@ -68,7 +68,7 @@ import {
   openAgentCoreSession,
 } from "@minimal-agent/core/host-kit/build-agent-core"
 import { hasEmbeddedPlugins } from "@minimal-agent/core/host-kit/embedded-plugins"
-import { lastAdvertisedModeFromHistory, ModeManager } from "@minimal-agent/core/host-kit/modes"
+import { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import { PluginLoader, providerRootsOf } from "@minimal-agent/core/host-kit/plugin-loader"
 import { resolveAgentHome } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import type { Message } from "@minimal-agent/core/sdk/messages"
@@ -109,6 +109,7 @@ import {
 import { peekResumeCredentialPin } from "./startup/resolve-credential-name.ts"
 import {
   loadResumeState,
+  primeModeFromHistory,
   type ResumedToolDisplay,
   type ResumeState,
   unfinishedTurnHint,
@@ -985,7 +986,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     // process is still set by the normal precedence (CLI > env >
     // config > plugin-default); only the "what the model knows"
     // bookkeeping is rehydrated here.
-    if (modeManager) modeManager.primeLastAdvertised(lastAdvertisedModeFromHistory(initialMessages))
+    primeModeFromHistory(modeManager, initialMessages, sidebandOf(loader))
   }
   // The `tools` row: the advertised tools with their CLI icons (S41).
   await closeStartupTreeWithToolsAndPluginRows(loader, loadedTools, opts.cliToolFilter, { cwd })
@@ -1028,6 +1029,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     ...(credentialName ? { credentialName } : {}),
     systemHash,
     toolsHash,
+    sideband: sidebandOf(loader),
   })
 
   // `--host-mode <id>` (ACP Level 1's dispatch slot): hand the whole

@@ -19,6 +19,7 @@ import {
   loadSession,
 } from "@minimal-agent/core/host/session-restore"
 import type { SidebandReader } from "@minimal-agent/core/host/sideband"
+import { lastAdvertisedModeFromHistory, type ModeManager } from "@minimal-agent/core/host-kit/modes"
 import { resolveSessionsDir } from "@minimal-agent/core/plugin-api/utils/agent-paths"
 import type { Message, ToolUseBlock } from "@minimal-agent/core/sdk/messages"
 import { toolDisplaysFromRecords, userTimestampsFromRecords } from "../session-replay.ts"
@@ -101,7 +102,7 @@ export function loadResumeState(
   env: NodeJS.ProcessEnv,
   sideband?: SidebandReader,
 ): ResumeState {
-  const loaded = loadSession(resumeSid)
+  const loaded = loadSession(resumeSid, undefined, { sideband })
   const initialMessages = loaded.messages
   const pendingDraft = loaded.pendingDraft
 
@@ -159,4 +160,21 @@ export function loadResumeState(
     roundCheckpoint,
     banner,
   }
+}
+
+/**
+ * Rehydrate the last advertised mode id of `modeManager` from the resumed
+ * history, so the first consume after resume does not emit again a mode
+ * attachment that the model already saw. With no manager: nothing.
+ *
+ * @param modeManager - the mode manager of the run, if any.
+ * @param messages - the resumed model history.
+ * @param sideband - the sideband reader of the loader, to find the mode tags.
+ */
+export function primeModeFromHistory(
+  modeManager: Pick<ModeManager, "primeLastAdvertised"> | null | undefined,
+  messages: ReadonlyArray<Message>,
+  sideband: SidebandReader,
+): void {
+  modeManager?.primeLastAdvertised(lastAdvertisedModeFromHistory(messages, sideband))
 }
