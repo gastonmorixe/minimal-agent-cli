@@ -35,9 +35,6 @@
     "src/interactive-session.test.ts": {
       "bracket-notice": 1
     },
-    "src/sdk-adapters/golden-parity.test.ts": {
-      "tag-literal": 1
-    },
     "src/sdk-adapters/plugin-tool-e2e.test.ts": {
       "tag-literal": 1
     },
