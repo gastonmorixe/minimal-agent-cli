@@ -395,7 +395,7 @@ export async function replayToScrollback(
       // on `--resume` exactly as it was when live.
       if (
         Array.isArray(content) &&
-        content.every((b) => b.type === "tool_result" || isRuntimeAttachmentBlock(b))
+        content.every((b) => b.type === "tool_result" || isRuntimeAttachmentBlock(b, sideband))
       ) {
         for (const b of content) {
           const change = readModeChangeFromTo(b, sideband)
@@ -903,7 +903,7 @@ export function stringifyUserText(
     // into scrollback verbatim on `--resume`.
     const to = readModeChangeFromTo(b, sb)?.to
     if (to !== undefined) modeAfter = to === "default" ? null : to
-    if (isRuntimeAttachmentBlock(b)) continue
+    if (isRuntimeAttachmentBlock(b, sb)) continue
     parts.push(b.text)
   }
   return { text: parts.join(" ").trim(), modeAfter }

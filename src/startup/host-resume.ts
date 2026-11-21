@@ -24,6 +24,7 @@ import { join } from "node:path"
 import type { RoundCheckpoint } from "@minimal-agent/core"
 import { AGENT_VERSION } from "@minimal-agent/core/host/build-info"
 import { lastTurnRoundCheckpoint, loadSession } from "@minimal-agent/core/host/session-restore"
+import { NO_SIDEBAND, sidebandOf } from "@minimal-agent/core/host/sideband"
 import { BlobStore, loadBlobStoreConfig } from "@minimal-agent/core/host-kit/blob-store"
 import type { BuildAgentCoreDeps } from "@minimal-agent/core/host-kit/build-agent-core"
 import { FileTrackingStore } from "@minimal-agent/core/host-kit/file-tracking-store"
@@ -73,7 +74,12 @@ export function prepareHostResume(
   if (!UUID_RE.test(sid) || !existsSync(sessionFilePath(sid, dir))) {
     throw codedError(SESSION_NOT_FOUND, `no saved session ${JSON.stringify(sid)} to resume`)
   }
-  const loaded = loadSession(sid, dir)
+  // The sideband reader of the boot loader: it finds the runtime attachment
+  // blocks and the mode-change tags in the saved history.
+  const loader = base.loader
+  const sideband =
+    loader && typeof loader.sideband === "function" ? sidebandOf(loader) : NO_SIDEBAND
+  const loaded = loadSession(sid, dir, { sideband })
   const checkpoint: RoundCheckpoint | null = lastTurnRoundCheckpoint(loaded.records)
   const store = SessionStore.open({
     sid,
@@ -89,6 +95,7 @@ export function prepareHostResume(
     ...(base.credentialName ? { credentialName: base.credentialName } : {}),
     existsOk: true,
   })
+  store.setSideband(sideband)
   try {
     store.appendAttach()
   } catch {
@@ -108,7 +115,7 @@ export function prepareHostResume(
     fileTrackingStore = null
   }
   // The model already saw the modes in its history: do not announce them again.
-  base.modeManager?.primeLastAdvertised(lastAdvertisedModeFromHistory(loaded.messages))
+  base.modeManager?.primeLastAdvertised(lastAdvertisedModeFromHistory(loaded.messages, sideband))
   return {
     deps: {
       ...base,

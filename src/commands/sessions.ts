@@ -19,6 +19,7 @@ import {
   listSessions,
   type SessionCatalogRow,
 } from "@minimal-agent/core/host/session-index"
+import type { SidebandReader } from "@minimal-agent/core/host/sideband"
 import { defaultSessionsDir } from "@minimal-agent/core/host-kit/session-store"
 import { displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 import {
@@ -482,6 +483,11 @@ export interface RunSessionsOptions {
   writeSummaries?: boolean
   now?: number
   timeZone?: string
+  /**
+   * The sideband reader (`loadSidebandOnly()` in the CLI host). The catalog
+   * uses it for the lazy summary title. Omitted: `NO_SIDEBAND`.
+   */
+  sideband?: SidebandReader
 }
 
 /** The result of the command: rows for stdout. */
@@ -501,6 +507,7 @@ export function runSessionsCommand(opts: RunSessionsOptions): SessionsCommandRes
     ...catalogOptions(opts.flags),
     dir: sessionsDir,
     ...(opts.writeSummaries === undefined ? {} : { writeSummaries: opts.writeSummaries }),
+    ...(opts.sideband === undefined ? {} : { sideband: opts.sideband }),
   })
   if (opts.flags.json) return { rows: [sessionsJson(result, opts.flags)] }
   const view = buildSessionsView({ result, flags: opts.flags, sessionsDir, now })

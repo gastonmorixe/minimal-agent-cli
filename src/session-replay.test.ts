@@ -435,6 +435,7 @@ describe("replayToScrollback", () => {
         { type: "text", text: "real user question" },
       ],
       null,
+      testSideband,
     )
     expect(text).not.toContain("<ma::agent::")
     expect(text).not.toContain("#94b14e")

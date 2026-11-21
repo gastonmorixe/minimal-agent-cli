@@ -29,6 +29,7 @@ import {
   resolveLastSessionSid,
   type SessionCatalogRow,
 } from "@minimal-agent/core/host/session-index"
+import type { SidebandReader } from "@minimal-agent/core/host/sideband"
 import { defaultSessionsDir, sessionFilePath } from "@minimal-agent/core/host-kit/session-store"
 
 import {
@@ -228,6 +229,8 @@ interface FindRowOptions {
    * may write, tests and scripts pass false (review M1).
    */
   writeSummaries: boolean
+  /** The sideband reader for the lazy summary title. Omitted: `NO_SIDEBAND`. */
+  sideband?: SidebandReader
 }
 
 /** Rows per catalog page in {@link topRow}. */
@@ -262,6 +265,7 @@ function topRow(
       page,
       includeHidden: true,
       writeSummaries: opts.writeSummaries,
+      ...(opts.sideband === undefined ? {} : { sideband: opts.sideband }),
     })
     const row = result.rows.find((r) => r.sid === sid)
     if (row) return row
@@ -428,6 +432,8 @@ export interface RunSessionDetailOptions {
   now?: number
   timeZone?: string
   home?: string
+  /** The sideband reader for the lazy summary title. Omitted: `NO_SIDEBAND`. */
+  sideband?: SidebandReader
 }
 
 /** Render the detail view of one sid (or its `--json`). */
@@ -438,6 +444,7 @@ export function runSessionDetail(opts: RunSessionDetailOptions): SessionsCommand
     dir,
     all: opts.all === true,
     writeSummaries: opts.writeSummaries,
+    ...(opts.sideband === undefined ? {} : { sideband: opts.sideband }),
   })
   if (row === undefined) {
     return { rows: [`  session ${opts.sid} has no saved file`], exitCode: 1 }
@@ -534,6 +541,7 @@ export function runSessionsEntry(opts: RunSessionsEntryOptions): SessionsCommand
         // catalog default). Tests and scripts pass false.
         writeSummaries: opts.writeSummaries !== false,
         ...(opts.home === undefined ? {} : { home: opts.home }),
+        ...(opts.sideband === undefined ? {} : { sideband: opts.sideband }),
       })
     }
     if (target.kind === "ambiguous") return runAmbiguousPrefix(target, common)
