@@ -205,4 +205,23 @@ describe("blockRef", () => {
       blockType: "image",
     })
   })
+
+  it("an attachment keeps the origin label of its writer", () => {
+    // Built from parts, so the test adds no hand-written tag literal.
+    const name = "ma::agent::policy"
+    const line = `<${name}>x</${name}>`
+    expect(
+      blockRef(
+        { block: 0, blockType: "text", origin: "hooks · user · ~/.minimal-agent/hooks.json" },
+        names,
+        line,
+        testSideband,
+      ),
+    ).toEqual({
+      kind: "msg-attachment",
+      name: "policy",
+      tag: name,
+      origin: "hooks · user · ~/.minimal-agent/hooks.json",
+    })
+  })
 })

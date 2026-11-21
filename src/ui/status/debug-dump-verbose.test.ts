@@ -324,18 +324,34 @@ describe("verbose dump: reference lines", () => {
     expect(plain[i + 1]).toBe("  │          ↳ origin not recorded")
   })
 
-  it("names a <ma::agent::NAME> attachment", () => {
+  it("names a <ma::agent::NAME> attachment, and its writer when the mark has one", () => {
+    // Built from parts, so the test adds no hand-written tag literal.
+    const tasks = "ma::agent::tasks"
+    const policy = "ma::agent::policy"
     const out = verbose(
       viewOf({
         messages: [
           {
             role: "user",
-            content: [{ type: "text", text: "<ma::agent::tasks>\n</ma::agent::tasks>" }],
+            content: [{ type: "text", text: `<${tasks}>\n</${tasks}>` }],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `<${policy}>x</${policy}>`,
+                sideband: { kind: "policy", origin: "hooks · user · ~/.minimal-agent/hooks.json" },
+              },
+            ],
           },
         ],
       }),
     ).map(strip)
-    expect(out).toContain("  │          ↳ attachment · <ma::agent::tasks>")
+    expect(out).toContain(`  │          ↳ attachment · <${tasks}>`)
+    expect(out).toContain(
+      `  │          ↳ attachment · <${policy}> · hooks · user · ~/.minimal-agent/hooks.json`,
+    )
   })
 
   it("prints 'origin not recorded' when the loader has no data", () => {

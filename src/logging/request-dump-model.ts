@@ -61,6 +61,11 @@ export interface DumpBlockRef {
   readonly isError?: boolean
   /** Size of the block JSON. */
   readonly size?: DumpSize
+  /**
+   * The `sideband.origin` debug label of a harness text block: the hook or
+   * plugin that wrote it. Absent when the block has no mark or no label.
+   */
+  readonly origin?: string
   /** The annotations at the end of a `tool_result` (verbose only). Absent when none. */
   readonly annotations?: readonly DumpAnnotation[]
 }
@@ -335,7 +340,9 @@ function blockRef(b: SnapshotBlock, block: number): DumpBlockRef {
       ...(b.is_error !== undefined ? { isError: b.is_error } : {}),
     }
   }
-  return { block, blockType: b.type }
+  // A harness text block carries the debug label of its writer on the mark.
+  const origin = b.type === "text" ? b.sideband?.origin : undefined
+  return { block, blockType: b.type, ...(origin === undefined ? {} : { origin }) }
 }
 
 /** A part that is still collecting its verbose data. */
