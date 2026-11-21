@@ -14,6 +14,7 @@ import type { CommandDispatchOptions } from "@minimal-agent/core/host-kit/comman
 import { parseCommandLine } from "@minimal-agent/core/host-kit/command-registry"
 import type {
   CommandResult,
+  EditorSubmittedPayload,
   PromptSource,
   PromptSubmittedPayload,
 } from "@minimal-agent/core/plugin-api/types/plugin"
@@ -27,12 +28,27 @@ import {
   renderCompactNotice,
 } from "./compact-submit.ts"
 
-/** Queues a prompt; `source` (default `user`) is the origin of the text (SPEC §6.1). */
+/**
+ * Queues a prompt; `source` (default `user`) is the origin of the text: see
+ * `PromptSource` in the `@minimal-agent/core` plugin-api types (spec: monorepo
+ * `research/title-plugin/SPEC.md` §6.1).
+ */
 export type EnqueuePrompt = (
   text: string,
   commitLines: string[],
   submittedAt?: Date,
   source?: PromptSource,
+) => void
+
+/** Origin of a submitted line: typed in the editor, or a `prompt.inject` emit. */
+export type SubmitSource = Extract<PromptSource, "user" | "inject">
+
+/** The live-area submit handler. `source` defaults to `user` (the editor path). */
+export type SubmitLine = (
+  text: string,
+  commitLines?: string[],
+  submittedAt?: Date,
+  source?: SubmitSource,
 ) => void
 
 /**
@@ -52,6 +68,53 @@ export function promptSubmittedPayload(
   source: PromptSource,
 ): PromptSubmittedPayload {
   return { text, cwd: process.cwd(), sid: sid ?? null, exit: "submitted", queuePos, source }
+}
+
+/**
+ * Build the `editor.submitted` payload: the raw line that the user typed in
+ * the editor, before slash-command dispatch or expansion. Only the editor
+ * submit path calls it (never `prompt.inject`, recovery or `/continue`).
+ *
+ * @param text - The raw submitted line.
+ * @param sid - The session id, if the host has one.
+ * @param submittedAt - Submit time; defaults to now.
+ * @returns The payload for the plugin bus.
+ */
+export function editorSubmittedPayload(
+  text: string,
+  sid: string | null | undefined,
+  submittedAt?: Date,
+): EditorSubmittedPayload {
+  return {
+    text,
+    cwd: process.cwd(),
+    sid: sid ?? null,
+    submittedAt: (submittedAt ?? new Date()).toISOString(),
+  }
+}
+
+/**
+ * Build the editor `submit` listener. It is the ONLY emitter of
+ * `editor.submitted`: for each non-blank typed line it emits the raw text
+ * first (before slash-command dispatch, so `/model x` is recorded as typed),
+ * then calls `onSubmit` with source `user`. `prompt.inject`, recovery and
+ * `/continue` call `onSubmit` / the queue directly and never pass here.
+ *
+ * @param bus - The plugin bus, or `null` when plugins are disabled.
+ * @param sid - The session id, if the host has one.
+ * @param onSubmit - The shared submit path.
+ * @returns The listener for `editor.on("submit", …)`.
+ */
+export function editorSubmitListener(
+  bus: { emit(event: string, payload: EditorSubmittedPayload): void } | null,
+  sid: string | null | undefined,
+  onSubmit: SubmitLine,
+): (text: string, commitLines?: string[], submittedAt?: Date) => void {
+  return (text, commitLines, submittedAt) => {
+    if (!text.trim()) return
+    bus?.emit("editor.submitted", editorSubmittedPayload(text, sid, submittedAt))
+    onSubmit(text, commitLines, submittedAt, "user")
+  }
 }
 
 /** Structural view of the command registry the submit path needs. */
