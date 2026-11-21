@@ -239,7 +239,6 @@ async function runTurn(): Promise<void> {
     systemPromptOverrides: {
       identity: { kind: "replace", text: "You are a test agent." },
       instructions: { kind: "omit" },
-      toolOutputConventions: { kind: "omit" },
     },
     retry: { clock: { now: () => Date.now(), sleep: async () => {} }, random: () => 0 },
   })

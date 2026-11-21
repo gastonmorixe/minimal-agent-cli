@@ -120,7 +120,7 @@ describe("system-prompt override flags do not leak into the user prompt", () => 
       rawArgv: [
         "--system-identity",
         "ID",
-        "--no-system-tool-output-conventions",
+        "--no-system-session-context",
         "--prompt",
         "explicit prompt",
       ],
@@ -130,7 +130,7 @@ describe("system-prompt override flags do not leak into the user prompt", () => 
     })
     expect(await prepared.extractPrompt()).toBe("explicit prompt")
     expect(prepared.opts.systemPromptOverrides.identity).toEqual({ kind: "replace", text: "ID" })
-    expect(prepared.opts.systemPromptOverrides.toolOutputConventions).toEqual({ kind: "omit" })
+    expect(prepared.opts.systemPromptOverrides.sessionContext).toEqual({ kind: "omit" })
   })
 
   it("missing override file exits 2 with a clean startup error", () => {

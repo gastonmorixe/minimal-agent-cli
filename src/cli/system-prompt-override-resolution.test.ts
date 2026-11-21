@@ -262,7 +262,7 @@ describe("resolveSystemPromptOverridesForStartup", () => {
         args: [
           "--system-instructions",
           "custom",
-          "--no-system-tool-output-conventions",
+          "--no-system-session-context",
           "--system-identity",
           "My Agent",
         ],
@@ -271,7 +271,7 @@ describe("resolveSystemPromptOverridesForStartup", () => {
       }),
     ).toEqual({
       instructions: { kind: "replace", text: "custom" },
-      toolOutputConventions: { kind: "omit" },
+      sessionContext: { kind: "omit" },
       identity: { kind: "replace", text: "My Agent" },
     })
   })

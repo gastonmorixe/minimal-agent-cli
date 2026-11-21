@@ -31,7 +31,6 @@ const SYSTEM_PROMPT_PARTS = [
   "system-prompt",
   "system-identity",
   "system-instructions",
-  "system-tool-output-conventions",
   "system-session-context",
   "provider-system-preamble",
 ] as const

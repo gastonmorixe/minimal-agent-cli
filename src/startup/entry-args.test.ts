@@ -308,11 +308,7 @@ describe("prepareEntrypointArgs", () => {
   it("resolves system prompt overrides from CLI flags", () => {
     const h = makeHarness()
     const prepared = prepareEntrypointArgs({
-      rawArgv: [
-        "--system-instructions",
-        "custom instructions",
-        "--no-system-tool-output-conventions",
-      ],
+      rawArgv: ["--system-instructions", "custom instructions", "--no-system-session-context"],
       env: {},
       cwd: "/tmp",
       ...h.deps,
@@ -321,7 +317,7 @@ describe("prepareEntrypointArgs", () => {
       kind: "replace",
       text: "custom instructions",
     })
-    expect(prepared.opts.systemPromptOverrides.toolOutputConventions).toEqual({ kind: "omit" })
+    expect(prepared.opts.systemPromptOverrides.sessionContext).toEqual({ kind: "omit" })
   })
 
   it("rejects --effort --fast as a missing effort level (does not swallow --fast)", () => {

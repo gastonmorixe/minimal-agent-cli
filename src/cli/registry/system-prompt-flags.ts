@@ -54,12 +54,6 @@ const PARTS: readonly SystemPromptPartData[] = [
     summary: "Replace the base instructions block",
   },
   {
-    flag: "system-tool-output-conventions",
-    env: "MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS",
-    fileEnv: "MINIMAL_AGENT_SYSTEM_TOOL_OUTPUT_CONVENTIONS_FILE",
-    summary: "Replace the tool-output-conventions paragraph",
-  },
-  {
     flag: "system-session-context",
     env: "MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT",
     fileEnv: "MINIMAL_AGENT_SYSTEM_SESSION_CONTEXT_FILE",
