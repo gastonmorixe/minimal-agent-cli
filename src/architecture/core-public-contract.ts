@@ -22,6 +22,8 @@ export const CORE_PUBLIC_CONTRACT = {
     "./host/request-inspector",
     // The sideband API of a loader, and the sideband-only boot (design step 13).
     "./host/sideband",
+    // The media gate, registry and token kit for the CLI paste code (src/paste/).
+    "./host-kit/media",
     "./plugin-api",
   ],
   events: ["AgentEvent", "EventSink"],
