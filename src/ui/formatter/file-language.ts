@@ -162,6 +162,7 @@ const EXTENSIONS: Readonly<Record<string, FileLanguage | null>> = {
   ".mjs": "javascript",
   ".ml": "ocaml",
   ".mli": "ocaml",
+  ".m": "objective-c",
   ".mm": "objective-c",
   ".mts": "typescript",
   ".nix": "nix",

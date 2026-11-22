@@ -19,6 +19,8 @@ describe("resolveFileLanguage", () => {
     expect(resolveFileLanguage({ path: "docs/CHANGELOG.md" })).toBe("markdown")
     expect(resolveFileLanguage({ path: "README.md" })).toBe("markdown")
     expect(resolveFileLanguage({ path: "guide.mdx" })).toBe("markdown")
+    expect(resolveFileLanguage({ path: "MenuItemWalkerTests.m" })).toBe("objective-c")
+    expect(resolveFileLanguage({ path: "View.mm" })).toBe("objective-c")
   })
 
   it("returns null for ambiguous prose, logs, text, and unknown extensions", () => {
