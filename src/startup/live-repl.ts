@@ -203,8 +203,10 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     // and moves each inline node as one chip. No codec: no spans.
     spanSource: (line) => chips.spansOf(line, sideband),
   })
-  // A chip label registered later (D3 plugins) changes the spans.
-  const disposeChipWatch = chips.subscribe(() => editor.buffer().invalidateSpans())
+  // A chip label registered later (D3 plugins) changes the spans. Repaint too,
+  // so a draft already on screen shows the new label.
+  // Note: a submit with show-hidden on commits the raw tag text to scrollback.
+  const disposeChipWatch = chips.subscribe(() => editor.refreshSpans())
   // Media ingestion: the media paste hook (priority 90, src/paste/media-paste.ts).
   // A dropped image path (or, on Linux, a blank paste while an image sits on
   // the clipboard) becomes a `[Image #id WxH size]` token instead of literal

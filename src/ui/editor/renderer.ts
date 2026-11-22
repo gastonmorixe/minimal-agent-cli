@@ -101,6 +101,11 @@ export class EditorRenderer {
     this.showHidden = v
   }
 
+  /** True while invisible characters and raw tag text are painted. */
+  get showsHidden(): boolean {
+    return this.showHidden
+  }
+
   /**
    * Install buffer style spans for subsequent {@link render} calls.
    * Pass `[]` to clear. Does not repaint on its own — the controller
@@ -160,6 +165,15 @@ export class EditorRenderer {
    */
   promptDisplayWidthForRow(row: number): number {
     return row === 0 ? this.promptWidth : this.continuationPromptWidth
+  }
+
+  /**
+   * The chip spans that the paint uses for a row: none while show-hidden is
+   * on (the raw tag text is painted). Cursor and Up/Down layout must use the
+   * same spans as the paint.
+   */
+  layoutSpans(buf: EditorBuffer, row: number): readonly ChipSpan[] {
+    return this.showHidden ? NO_CHIP_SPANS : spansOf(buf, row)
   }
 
   render(

@@ -115,6 +115,40 @@ describe("EditorController chips: paint, show-hidden, commit", () => {
     ctrl.stop()
   })
 
+  it("show-hidden: Up/Down use the raw text layout, as the paint does", () => {
+    // The raw span is 24 cells, its label 3. With cols 12, the raw line wraps
+    // and the chip line does not.
+    const raw = `a{${"y".repeat(22)}}`
+    const chips = make({ spanSource: braces, columns: 12 })
+    chips.ctrl.start()
+    chips.ctrl.setBuffer(`top\n${raw}`)
+    chips.stdin.send(UP)
+    // Chips: the line is one row, so Up goes to the line above.
+    expect(chips.ctrl.buffer().row).toBe(0)
+    chips.ctrl.stop()
+
+    const hidden = make({ spanSource: braces, columns: 12 })
+    hidden.ctrl.start()
+    hidden.ctrl.setBuffer(`top\n${raw}`)
+    hidden.stdin.send("\x1c")
+    hidden.stdin.send(UP)
+    // Raw text: the line wraps, so Up moves one visual row in the same line.
+    expect(hidden.ctrl.buffer().row).toBe(1)
+    hidden.ctrl.stop()
+  })
+
+  it("refreshSpans repaints with the new spans", () => {
+    let spans = (_line: string): ChipSpan[] => []
+    const { ctrl, compositor } = make({ spanSource: (l) => spans(l) })
+    ctrl.start()
+    ctrl.setBuffer("go {x}")
+    expect(compositor.last()!.lines.some((l) => l.includes(`${CHIP_SGR}[c]`))).toBe(false)
+    spans = braces
+    ctrl.refreshSpans()
+    expect(compositor.last()!.lines.some((l) => l.includes(`${CHIP_SGR}[c]`))).toBe(true)
+    ctrl.stop()
+  })
+
   it("commitLines (scrollback) paint the chip; the submit text keeps the raw form", () => {
     const { ctrl, stdin } = make({ spanSource: braces })
     const seen: { text: string; lines: string[] }[] = []

@@ -128,7 +128,7 @@ function installCleanupHooksOnce(): void {
 
 /**
  * Orchestrates the interactive prompt: owns the editor buffer, key dispatch
- * (including the plugin `editor.key` hook chain), kill-ring, undo, history
+ * (including the plugin `editor.key` hook chain), kill-ring, history
  * navigation, and submit/cancel events for the REPL.
  */
 export class EditorController extends EventEmitter {
@@ -205,7 +205,6 @@ export class EditorController extends EventEmitter {
    * `this.renderer.prompt` is used (current behavior, byte-stable).
    */
   private commitPromptBuilder: (() => string) | null = null
-  private showHiddenChars = false
   /**
    * Wrap-aware vertical cursor movement with sticky visual column.
    * Owns the sticky-column state; see `editor/vertical-nav.ts`.
@@ -279,7 +278,6 @@ export class EditorController extends EventEmitter {
       continuationPrompt: opts.continuationPrompt,
       showHidden: opts.showHidden ?? false,
     })
-    this.showHiddenChars = opts.showHidden ?? false
     this.compositor = opts.compositor
     this.stdin = opts.stdin ?? process.stdin
     this.output = opts.output ?? process.stdout
@@ -298,6 +296,7 @@ export class EditorController extends EventEmitter {
       this.buf,
       (row) => this.renderer.promptDisplayWidthForRow(row),
       () => (this.output as { columns?: number }).columns,
+      (row) => this.renderer.layoutSpans(this.buf, row),
     )
     this.pasteHooks = opts.pasteHooks ?? new PasteHookRegistry()
     if (opts.spanSource) this.buf.setSpanSource(opts.spanSource)
@@ -367,7 +366,7 @@ export class EditorController extends EventEmitter {
       moveUpVisual: () => this.verticalNav.moveUp(),
       moveDownVisual: () => this.verticalNav.moveDown(),
       toggleShowHidden: () => {
-        this.setShowHidden(!this.showHiddenChars)
+        this.setShowHidden(!this.renderer.showsHidden)
       },
       submit: () => {
         this.submit()
@@ -400,7 +399,7 @@ export class EditorController extends EventEmitter {
     let visualRow = 0
     let rowsInLogicalLine = 1
     if (cols && cols > 0) {
-      const spans = this.buf.spansOfRow(this.buf.row)
+      const spans = this.renderer.layoutSpans(this.buf, this.buf.row)
       const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols, spans)
       visualRow = cur.visualRow
       rowsInLogicalLine = cur.rowsInLine
@@ -832,8 +831,8 @@ export class EditorController extends EventEmitter {
     if (!cols || cols <= 0) return true
     const line = this.buf.lines[0] ?? ""
     const promptW = this.renderer.promptDisplayWidthForRow(0)
-    const at = computeCursorVisualPos(line, this.buf.col, promptW, cols, this.buf.spansOfRow(0))
-    return at.visualRow === 0
+    const spans = this.renderer.layoutSpans(this.buf, 0)
+    return computeCursorVisualPos(line, this.buf.col, promptW, cols, spans).visualRow === 0
   }
 
   /**
@@ -873,8 +872,13 @@ export class EditorController extends EventEmitter {
    * or `\x1b[92;5u` via the kitty keyboard protocol).
    */
   setShowHidden(v: boolean): void {
-    this.showHiddenChars = v
     this.renderer.setShowHidden(v)
+    this.refreshSpans()
+  }
+
+  /** Compute the chip spans again and repaint (a chip label came or went). */
+  refreshSpans(): void {
+    this.buf.invalidateSpans()
     if (this.started) this.repaint()
   }
 

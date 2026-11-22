@@ -13,6 +13,7 @@
  */
 
 import type { EditorBuffer } from "../input/editor-buffer.ts"
+import type { ChipSpan } from "../paste/chip-registry.ts"
 import {
   computeCursorVisualPos,
   findColAtVisualPos,
@@ -65,10 +66,16 @@ export class VerticalNavigator {
   private lastVerticalEndRow: number | null = null
   private lastVerticalEndCol: number | null = null
 
+  // The last argument gives the chip spans that the layout of a row uses. The
+  // default is the buffer spans. The controller gives no spans while
+  // show-hidden is on, so Up/Down use the same layout as the paint (the raw
+  // tag text).
   constructor(
     private readonly buf: EditorBuffer,
     private readonly promptWidthForRow: PromptWidthForRow,
     private readonly columns: () => number | undefined,
+    private readonly spansOfRow: (row: number) => readonly ChipSpan[] = (row) =>
+      buf.spansOfRow(row),
   ) {}
 
   /**
@@ -102,7 +109,7 @@ export class VerticalNavigator {
     }
     const line = this.buf.lines[this.buf.row]
     const promptW = this.promptWidthForRow(this.buf.row)
-    const spans = this.buf.spansOfRow(this.buf.row)
+    const spans = this.spansOfRow(this.buf.row)
     const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols, spans)
     if (this.desiredVisualCol === null) this.desiredVisualCol = cur.visualCol
     const target = this.desiredVisualCol
@@ -123,7 +130,7 @@ export class VerticalNavigator {
     const prevRow = this.buf.row - 1
     const prevLine = this.buf.lines[prevRow]
     const prevPromptW = this.promptWidthForRow(prevRow)
-    const prevSpans = this.buf.spansOfRow(prevRow)
+    const prevSpans = this.spansOfRow(prevRow)
     const prevRowCount = visualRowsInLine(prevLine, prevPromptW, cols, prevSpans)
     const targetVisualRow = prevRowCount - 1
     const newCol = findColAtVisualPos(
@@ -159,7 +166,7 @@ export class VerticalNavigator {
     }
     const line = this.buf.lines[this.buf.row]
     const promptW = this.promptWidthForRow(this.buf.row)
-    const spans = this.buf.spansOfRow(this.buf.row)
+    const spans = this.spansOfRow(this.buf.row)
     const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols, spans)
     if (this.desiredVisualCol === null) this.desiredVisualCol = cur.visualCol
     const target = this.desiredVisualCol
@@ -180,7 +187,7 @@ export class VerticalNavigator {
     const nextRow = this.buf.row + 1
     const nextLine = this.buf.lines[nextRow]
     const nextPromptW = this.promptWidthForRow(nextRow)
-    const nextSpans = this.buf.spansOfRow(nextRow)
+    const nextSpans = this.spansOfRow(nextRow)
     const newCol = findColAtVisualPos(nextLine, 0, target, nextPromptW, cols, nextSpans)
     this.buf.row = nextRow
     this.buf.col = newCol
