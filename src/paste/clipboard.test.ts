@@ -5,8 +5,19 @@ import {
   type ClipboardEnv,
   clipboardImage,
   clipboardImageSync,
+  clipboardText,
+  hasClipboardImage,
   readClipboardImage,
 } from "./clipboard.ts"
+
+describe("clipboard (real backend)", () => {
+  it("resolves without throwing on a headless runner", () => {
+    expect(typeof hasClipboardImage()).toBe("boolean")
+    // clipboardText may be null (no backend or empty clipboard). It must not throw.
+    const text = clipboardText()
+    expect(text === null || typeof text === "string").toBe(true)
+  })
+})
 
 const stub = (s: unknown) => s as BunImageStatics
 // On Linux a null native result falls through to wl-paste/xclip, which may exist.

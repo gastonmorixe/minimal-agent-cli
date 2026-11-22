@@ -191,7 +191,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
   // Media ingestion: a dropped image path (or an empty paste while an image
   // sits on the clipboard) becomes a `[Image #id WxH size]` token instead of
   // literal text. The submit path (agent.run) resolves the token to an image
-  // block. See src/media/paste-intercept.ts.
+  // block. See src/paste/paste-intercept.ts.
   // The plugin text resolver owns the media rejection text of a paste.
   const pasteText = hasPlugins ? loader.syntheticText() : undefined
   editor.setPasteInterceptor((pasted) =>
