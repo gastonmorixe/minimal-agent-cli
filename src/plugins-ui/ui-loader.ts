@@ -30,6 +30,7 @@ import type {
 import { TERMINAL_KIT } from "../terminal-kit/kit.ts"
 import { paletteEnvJson } from "../terminal-kit/palette.ts"
 
+import { type CliUiHost, cliUiExtensions, manifestCapabilities } from "./cli-ui-extensions.ts"
 import { importPackageModule, resolveLiveAreaSlot } from "./resolve-slot.ts"
 import { isObject, parseLiveAreaSlot, parseUiSetup, UiManifestError } from "./ui-manifest.ts"
 
@@ -39,8 +40,12 @@ export interface AcceptedPackage {
   readonly packageDir: string
 }
 
-/** Options for {@link loadPluginUi}. */
-export interface LoadPluginUiOptions {
+/**
+ * Options for {@link loadPluginUi}. The {@link CliUiHost} fields (`sideband`,
+ * `paste`, `chips`, `sid`, `sessionsDir`) give each `ui.setup` the CLI
+ * extensions `ctx.paste`, `ctx.chips` and `ctx.log` (paste plugin v3, D3).
+ */
+export interface LoadPluginUiOptions extends CliUiHost {
   /** Accepted packages, in load order. */
   readonly packages: readonly AcceptedPackage[]
   /** Sink for load problems. */
@@ -114,6 +119,7 @@ async function runUiSetup(
   manifestPath: string,
   tui: () => TerminalUiCapability,
   logger: (msg: string) => void,
+  extensions: () => object,
 ): Promise<void> {
   try {
     const entry = parseUiSetup(raw, manifestPath)
@@ -125,7 +131,12 @@ async function runUiSetup(
       logger(`${pkg.packageDir}: ui.setup ${abs} has no default export function`)
       return
     }
-    await mod.default({ tui: tui(), pluginId: pkg.id, packageDir: pkg.packageDir })
+    await mod.default({
+      ...extensions(),
+      tui: tui(),
+      pluginId: pkg.id,
+      packageDir: pkg.packageDir,
+    })
   } catch (e) {
     logger(`${pkg.packageDir}: ui.setup skipped: ${e instanceof Error ? e.message : String(e)}`)
   }
@@ -154,6 +165,8 @@ export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi>
     const manifestPath = join(pkg.packageDir, "manifest.json")
     let rawSlots: unknown[]
     let ui: Record<string, unknown> | undefined
+    let manifestId = pkg.id
+    let capabilities: string[] = []
     try {
       // Through the package source, so an embedded package (no manifest
       // on disk) reads the manifest text of the binary.
@@ -161,6 +174,8 @@ export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi>
       if (text === null) throw new Error(`cannot read ${manifestPath}`)
       const raw: unknown = JSON.parse(text)
       if (!isObject(raw)) continue
+      if (typeof raw.id === "string") manifestId = raw.id
+      capabilities = manifestCapabilities(raw)
       ui = uiBlockOf(raw)
       rawSlots = rawSlotsOf(ui)
     } catch (e) {
@@ -170,7 +185,10 @@ export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi>
       continue
     }
     if (ui?.setup !== undefined && opts.importModules !== false) {
-      await runUiSetup(ui.setup, pkg, manifestPath, tui, opts.logger)
+      const plugin = { id: manifestId, capabilities }
+      await runUiSetup(ui.setup, pkg, manifestPath, tui, opts.logger, () =>
+        cliUiExtensions(opts, plugin, opts.logger),
+      )
     }
     const seen = new Set<string>()
     for (let i = 0; i < rawSlots.length; i++) {

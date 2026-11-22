@@ -28,11 +28,21 @@
  * J4: every spawn sets TERM explicitly (with TERM=dumb the CLI runs the plain
  * REPL, not the editor).
  *
+ * I3 (D3): with the REAL ma-paste-plugin loaded (`paste-plugin-pty-driver.ts`),
+ * a 129-line paste before the first message shows a `[Paste #` chip, saves
+ * one 0600 file under `<sessionsDir>/<sid>.files/paste/`, and Enter sends the
+ * full text inside the paste tag; the JSONL keeps the ref only. The agent
+ * home is a temp dir. Skipped when the plugins checkout is missing.
+ *
  * Skipped when Bun.Terminal is unavailable.
  */
 import { describe, expect, it } from "bun:test"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 import { FakeTerminal } from "../test-utils/fake-terminal.ts"
+import { SIBLING_REPO_ROOT, siblingPluginPresent } from "../test-utils/sibling-repo.ts"
 
 const PANE_COLS = 60
 const PANE_ROWS = 24
@@ -41,9 +51,12 @@ function haveBunTerminal(): boolean {
   return typeof Bun.spawn === "function"
 }
 
-async function runDriver(env: Record<string, string>): Promise<string> {
+async function runDriver(
+  env: Record<string, string>,
+  driver = "src/test-utils/fixtures/paste-pty-driver.ts",
+): Promise<string> {
   const chunks: string[] = []
-  const proc = Bun.spawn(["bun", "run", "src/test-utils/fixtures/paste-pty-driver.ts"], {
+  const proc = Bun.spawn(["bun", "run", driver], {
     cwd: import.meta.dir + "/../..",
     terminal: {
       cols: PANE_COLS,
@@ -160,5 +173,56 @@ describe("paste ghost frames — real Bun.Terminal PTY integration", () => {
       expect(buffer.match(/\[Image #/g)?.length).toBe(2)
     },
     20_000,
+  )
+
+  it.skipIf(!haveBunTerminal() || !siblingPluginPresent("ma-paste-plugin"))(
+    "I3: a 129-line paste with the real paste plugin gives a chip, one 0600 file, and an expanded send",
+    async () => {
+      const home = mkdtempSync(join(tmpdir(), "paste-plugin-pty-"))
+      try {
+        const out = await runDriver(
+          {
+            COLUMNS: String(PANE_COLS),
+            HOME: home,
+            MINIMAL_AGENT_HOME: home,
+            PASTE_PTY_PLUGINS: SIBLING_REPO_ROOT,
+          },
+          "src/test-utils/fixtures/paste-plugin-pty-driver.ts",
+        )
+        expect(out).not.toContain("PASTE-PLUGIN-PTY-ERROR")
+        const r = JSON.parse(decodeAfter(out, "PASTE-PLUGIN-PTY")) as {
+          sid: string
+          expected: string
+          screen: string
+          buffer: string
+          submitted: string | null
+          files: Array<{ name: string; mode: number; text: string }>
+          sent: string[]
+          jsonl: string
+        }
+        // The screen shows the chip label, not the pasted lines.
+        expect(r.screen).toContain("[Paste #")
+        expect(r.screen).toContain("129L")
+        expect(r.screen).not.toContain("line 128 of the paste")
+        // The buffer holds one self-closing ref (codec form).
+        expect(r.buffer).toMatch(/^<[^>]*paste id="[^"]+" bytes="\d+" lines="129"\s*\/>$/)
+        expect(r.submitted).toBe(r.buffer)
+        // One 0600 file with the whole paste (CR as LF).
+        expect(r.files).toHaveLength(1)
+        expect(r.files[0]!.mode).toBe(0o600)
+        expect(r.files[0]!.text).toBe(r.expected)
+        // The stub provider got the full text inside the paste tag.
+        expect(r.sent).toHaveLength(1)
+        expect(r.sent[0]).toContain("line 0 of the paste\nline 1 of the paste")
+        expect(r.sent[0]).toContain("line 128 of the paste")
+        expect(r.sent[0]).toMatch(/<[^>]*paste id="[^"]+"[^>]*>\n?line 0 of the paste/)
+        // The JSONL has the ref only.
+        expect(r.jsonl).toContain(JSON.stringify(r.buffer).slice(1, -1))
+        expect(r.jsonl).not.toContain("line 128 of the paste")
+      } finally {
+        rmSync(home, { recursive: true, force: true })
+      }
+    },
+    30_000,
   )
 })

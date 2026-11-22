@@ -304,6 +304,7 @@ export class EditorController extends EventEmitter {
     this.dispatcher = new EditorKeyDispatcher(this.makeDispatchHost(), {
       bareEscapeMs: opts.bareEscapeMs ?? 20,
       doubleEscapeMs: opts.doubleEscapeMs ?? 500,
+      ...(opts.pasteIdleMs !== undefined ? { pasteIdleMs: opts.pasteIdleMs } : {}),
       ...(opts.setTimeout ? { setTimeout: opts.setTimeout } : {}),
       ...(opts.clearTimeout ? { clearTimeout: opts.clearTimeout } : {}),
     })
@@ -1118,7 +1119,9 @@ export class EditorController extends EventEmitter {
   /**
    * Install a synchronous paste interceptor: a non-null result replaces the
    * paste. Pass `undefined` to remove it. Kept for one release as an adapter:
-   * it is a {@link pasteHooks} hook at priority 90 (the media slot).
+   * it is a {@link pasteHooks} hook at priority 90 (the media slot). With
+   * this adapter and the async-image adapter, Ctrl+V runs the interceptor
+   * two times: one time on "" and one time on the clipboard text.
    * @deprecated Register a hook on {@link pasteHooks}.
    */
   setPasteInterceptor(fn: ((pasted: string) => string | null) | undefined): void {
@@ -1139,7 +1142,9 @@ export class EditorController extends EventEmitter {
   /**
    * Async clipboard-image fallback for a blank paste; `undefined` removes it.
    * Kept for one release as an adapter: a {@link pasteHooks} hook at priority
-   * 89 that defers to `fn` (`editor/async-paste-runner.ts`).
+   * 89 that defers to `fn` (`editor/async-paste-runner.ts`). With the
+   * interceptor adapter too, Ctrl+V runs the interceptor two times (see
+   * {@link setPasteInterceptor}).
    * @deprecated Register a hook on {@link pasteHooks} (see `paste/media-paste.ts`).
    */
   setAsyncClipboardImageHandler(fn: (() => Promise<string | null>) | undefined): void {

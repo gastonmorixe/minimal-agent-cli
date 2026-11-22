@@ -10,6 +10,10 @@
  * @module paste/paste-chain
  */
 
+import type { SidebandApi } from "@minimal-agent/core/host/sideband"
+import { defaultSessionsDir } from "@minimal-agent/core/host-kit/session-store"
+
+import type { CliUiHost } from "../plugins-ui/cli-ui-extensions.ts"
 import { ChipRegistry } from "./chip-registry.ts"
 import { PasteHookRegistry } from "./paste-hooks.ts"
 
@@ -52,4 +56,19 @@ let processChain: CliPasteChain | null = null
 export function cliPasteChain(): CliPasteChain {
   processChain ??= createPasteChain()
   return processChain
+}
+
+/**
+ * The `loadPluginUi` fields of `chain` (D3): the paste registry, the chip
+ * registry, the lazy sid, the sideband of the loader, and the sessions dir
+ * of the CLI session store (`SessionStore.open` uses the same default).
+ */
+export function pasteUiHost(chain: CliPasteChain, sideband: () => SidebandApi): CliUiHost {
+  return {
+    sideband,
+    paste: chain.hooks,
+    chips: chain.chips,
+    sid: chain.sid,
+    sessionsDir: defaultSessionsDir(),
+  }
 }

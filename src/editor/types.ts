@@ -200,6 +200,11 @@ export interface EditorControllerOptions {
    */
   doubleEscapeMs?: number
   /**
+   * Idle timeout of a bracketed paste, in ms. The dispatcher gets it
+   * (`KeyDispatchOptions.pasteIdleMs`). Default: `PASTE_IDLE_TIMEOUT_MS`.
+   */
+  pasteIdleMs?: number
+  /**
    * Debounce window (ms) for the `"input"` event. The event fires this
    * long after the most recent buffer-text change. Default: 120ms - short
    * enough to feel live, long enough to coalesce a fast typist's stream

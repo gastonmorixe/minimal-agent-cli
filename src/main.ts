@@ -80,7 +80,7 @@ import { InteractiveSession } from "./interactive-session.ts"
 import { bareDisableIds } from "./oneshot/bare.ts"
 import { setupOneShot } from "./oneshot/oneshot-options.ts"
 import { prepareOrInput } from "./oneshot/or-input.ts"
-import { cliPasteChain } from "./paste/paste-chain.ts"
+import { cliPasteChain, pasteUiHost } from "./paste/paste-chain.ts"
 import { toolPresentationMap } from "./plugins-ui/tool-presentation.ts"
 import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
@@ -727,19 +727,19 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // `client.ts`, which broadcasts `quota.headersReceived` after every
   // successful API response — see src/global-bus.ts for the rationale).
   setGlobalEventBus(loader.bus())
-  // The paste hook chain and its lazy sid getter exist BEFORE the plugin UI
-  // loads (B-3), so D3 can pass `pasteChain.hooks` and `pasteChain.sid` to it.
-  // The chain also holds the process chip registry (D2): D3 passes
-  // `pasteChain.chips` to the loader (`ctx.chips`). The editor, the scrollback
-  // and the replay read the same object. No label is registered here: until a
-  // plugin registers one, a chip shows the fallback label.
-  const pasteChain = cliPasteChain()
   // The UI part of each accepted plugin (S35): live-area slots from the
   // `ui` block, granted `ctx.tui`. Core loads only the headless part.
   const pluginUi = await loadPluginUi({
     packages: loader.loadedPackages(),
     logger: (m) => diag.warn("plugin-ui", m),
     importModules: replRoute,
+    // The process paste chain (`cliPasteChain()`, one object) is made HERE,
+    // before the plugin UI loads (B-3). `pasteUiHost` gives the loader the
+    // hooks, the chip registry (D2), the lazy sid, the sideband and the
+    // sessions dir, so `ui.setup` gets `ctx.paste`, `ctx.chips` and the
+    // `files` binding (D3). The editor, the scrollback and the replay read
+    // the same chain.
+    ...pasteUiHost(cliPasteChain(), () => sidebandOf(loader)),
   })
   // Per-turn attachment producers + content drains, contributed by
   // plugins through the loader's `turnAttachments` manifest seam (the
@@ -1026,7 +1026,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // lifecycle markers. Lives in `src/startup/session-store-boot.ts`;
   // see that module for the fork-on-resume + best-effort semantics.
   // The paste chain reads the active sid lazily from here on.
-  const sid = pasteChain.bindSid(getSessionId(), getSessionId)
+  const sid = cliPasteChain().bindSid(getSessionId(), getSessionId)
   const { store, blobStore, fileTrackingStore } = await bootSessionStores({
     sid,
     resumeSid,
