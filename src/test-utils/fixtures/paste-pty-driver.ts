@@ -11,10 +11,17 @@
  * and the base64 of every byte the compositor wrote, so the parent can
  * replay the byte stream through a FakeTerminal-style DECAWM model and
  * assert on scrollback ghosts.
+ *
+ * `PASTE_PTY_MODE=image` (matrix row I4): register the media paste hook with
+ * a FAKE async image reader (the user clipboard is never read or changed),
+ * send a Ghostty-style blank bracketed paste and a Ctrl+V with no clipboard
+ * text, then print "PASTE-PTY-BUFFER" and the base64 of the buffer.
  */
 import { EventEmitter } from "node:events"
+import { createMediaRegistry } from "@minimal-agent/core/host-kit/media"
 
 import { EditorController } from "../../editor-controller.ts"
+import { createMediaPasteHook } from "../../paste/media-paste.ts"
 import { Compositor } from "../../ui/compositor.ts"
 
 let raw = ""
@@ -88,13 +95,51 @@ void (async () => {
   }
 })()
 
+/** A 2x2 PNG header: enough for the media registry to type and size it. */
+function fakePng(): Uint8Array {
+  const b = new Uint8Array(24)
+  b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0)
+  b.set([0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52], 8)
+  b[19] = 2
+  b[23] = 2
+  return b
+}
+
+async function runImage(): Promise<void> {
+  const registry = createMediaRegistry()
+  editor.pasteHooks.register(
+    createMediaPasteHook({
+      registry: () => registry,
+      // No sync (Linux) clipboard read: only the injected async reader.
+      intercept: () => null,
+      readImage: async () => ({ bytes: fakePng() }),
+    }),
+  )
+  editor.setClipboardPasteHandler(() => null)
+  await sleep(150)
+  stdin.send("\x1b[200~\x1b[201~")
+  await sleep(100)
+  stdin.send(" \x16")
+  await sleep(100)
+  const buffer = editor.buffer().toString()
+  editor.stop()
+  compositor.unmount()
+  process.stdout.write(`\nPASTE-PTY-BUFFER ${Buffer.from(buffer).toString("base64")}\n`)
+  process.exit(0)
+}
+
 async function run(): Promise<void> {
+  if (process.env.PASTE_PTY_MODE === "image") return runImage()
   // 80 lines x ~70 visible chars: at any plausible width most lines wrap,
   // which is what makes the erase walk-up sensitive to cols disagreement.
   const payload = Array.from({ length: 80 }, (_, i) => `${"x".repeat(70)} ${i}`).join("\r")
 
-  // Split into 12 chunks WITHOUT the closing terminator so the incremental
-  // consumeBracketedPaste path fires once per chunk (the paint-storm lane).
+  // Split into 12 chunks WITHOUT the closing terminator. Each chunk goes to
+  // the whole-paste assembler (paste plugin v3, D1): the buffer stays empty
+  // and only the "pasting N kB" status row changes, through the trailing
+  // paste-paint coalesce. The terminator paints the whole paste at once.
+  // (Each chunk repeats the start marker; the assembler keeps it as text,
+  // the same as before the assembly, when each chunk inserted it literally.)
   const chunks: string[] = []
   const per = Math.ceil(payload.length / 12)
   for (let i = 0; i < payload.length; i += per) chunks.push(payload.slice(i, i + per))

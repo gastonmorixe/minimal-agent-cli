@@ -16,11 +16,15 @@
  * erase math assumes, walk-up undershoots, and each of the N synchronous
  * per-chunk repaints pushes the previous frame up into scrollback.
  *
- * The paste path is additionally a paint storm (one full repaint per
- * stdin chunk — key-dispatch.ts consumePending → host.repaint()), which
- * multiplies any geometry deficit by the chunk count. Both are covered:
+ * The paste path was additionally a paint storm (one full repaint per
+ * stdin chunk), which multiplied any geometry deficit by the chunk count.
+ * Since the whole-paste assembly (paste plugin v3, D1) the buffer changes
+ * only at the end marker: the editor paints the whole paste ONE time there.
+ * Mid-burst chunks only update a "pasting N kB" status row, through the
+ * trailing paste-paint coalesce. Covered:
  *   - "single source of truth" tests pin renderer/erase col agreement;
- *   - "paste burst coalescing" pins N chunks → few paints.
+ *   - "paste burst coalescing" pins N chunks → few paints;
+ *   - "paint at the end" pins the empty buffer + status row mid-paste.
  */
 
 import { describe, expect, it } from "bun:test"
@@ -203,6 +207,29 @@ describe("EditorController — large paste must not stack frames into scrollback
       h.stdin.send("\x1b[201~")
 
       expect(paints.n).toBeLessThanOrEqual(3)
+    } finally {
+      h.cleanup()
+    }
+  })
+
+  it("paints the paste at the end marker; mid-paste only the status row changes", async () => {
+    const h = makeHarness({ termCols: 40, outColumns: 40 })
+    try {
+      const payload = bigPastePayload()
+      h.stdin.send("\x1b[200~")
+      for (const c of chunkify(payload, 12)) h.stdin.send(c)
+      // Mid-paste: nothing in the buffer yet, and the trailing coalesced
+      // paint shows the byte count (no text scan).
+      expect(h.ctrl.buffer().toString()).toBe("")
+      await new Promise((r) => setTimeout(r, 40))
+      const kb = Math.round(Buffer.byteLength(payload) / 1000)
+      expect(h.term.screen().some((l) => l.includes(`pasting ${kb} kB`))).toBe(true)
+      expect(h.term.screen().some((l) => l.includes("pasted line number"))).toBe(false)
+      h.stdin.send("\x1b[201~")
+      // At the end marker: the whole paste, painted at once; the row is gone.
+      expect(h.ctrl.buffer().toString()).toBe(payload)
+      expect(h.term.screen().some((l) => l.includes("pasting"))).toBe(false)
+      expect(ghostCount(h.term)).toBe(0)
     } finally {
       h.cleanup()
     }

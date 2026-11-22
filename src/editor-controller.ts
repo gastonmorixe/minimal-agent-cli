@@ -56,6 +56,7 @@ import {
 import { VerticalNavigator } from "./editor/vertical-nav.ts"
 import { EditorBuffer } from "./input/editor-buffer.ts"
 import { type InputCaptureStack, inputCaptureStack } from "./input/input-capture-stack.ts"
+import { asyncImageHook, interceptorHook, PasteHookRegistry } from "./paste/paste-hooks.ts"
 import { formatArmedFooter } from "./ui/chrome/armed-footer.ts"
 import { computeCursorVisualPos, EditorRenderer } from "./ui/editor/renderer.ts"
 import { c } from "./ui/style/ansi.ts"
@@ -153,20 +154,17 @@ export class EditorController extends EventEmitter {
   /** Trailing-edge timer that fires the single coalesced resize repaint. */
   private resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null
   /**
-   * Optional synchronous transform applied to bracketed-paste text before it
-   * is inserted. Returns a replacement string (e.g. a media token for a dropped
-   * image) to insert instead, or `null` to insert the paste literally. Set by
-   * the host via {@link setPasteInterceptor}; unset by default (no behavior
-   * change). Must not throw : a throw is caught and the paste inserts literally.
+   * The paste hook chain (`paste/paste-hooks.ts`). The dispatcher runs it ONE
+   * time for each paste (bracketed or Ctrl+V), with the whole text. A host
+   * passes the process chain in `opts.pasteHooks`; else the editor has its own.
    */
-  private pasteInterceptor?: (pasted: string) => string | null
+  readonly pasteHooks: PasteHookRegistry
   /**
-   * Optional Ctrl+V handler. Returns the text to insert (clipboard text, or a
-   * media token for a clipboard image), or `null` for "nothing to paste".
-   * Wired by the host via {@link setClipboardPasteHandler}. The returned text
-   * is run through {@link insertPasted}, so a returned drop-path still gets the
-   * normal {@link pasteInterceptor} media treatment. Must not throw : a throw
-   * is caught and the keystroke becomes a no-op (no literal `\x16` inserted).
+   * Optional Ctrl+V handler. Returns the clipboard text, or `null` for
+   * "nothing to paste". Wired by the host via {@link setClipboardPasteHandler}.
+   * The returned text runs through the paste chain, so a returned drop-path
+   * still gets the media treatment. Must not throw : a throw is caught and the
+   * keystroke becomes a no-op (no literal `\x16` inserted).
    */
   private clipboardPaste?: () => string | null
   private started = false
@@ -301,6 +299,7 @@ export class EditorController extends EventEmitter {
       (row) => this.renderer.promptDisplayWidthForRow(row),
       () => (this.output as { columns?: number }).columns,
     )
+    this.pasteHooks = opts.pasteHooks ?? new PasteHookRegistry()
     this.dispatcher = new EditorKeyDispatcher(this.makeDispatchHost(), {
       bareEscapeMs: opts.bareEscapeMs ?? 20,
       doubleEscapeMs: opts.doubleEscapeMs ?? 500,
@@ -360,17 +359,9 @@ export class EditorController extends EventEmitter {
           return null
         }
       },
-      interceptPaste: (text) => {
-        if (this.pasteInterceptor) {
-          try {
-            const replaced = this.pasteInterceptor(text)
-            if (replaced != null) return replaced
-          } catch {
-            // interceptor failed -> insert the paste literally
-          }
-        }
-        return text
-      },
+      pasteHooks: () => this.pasteHooks,
+      // No repaint here: the dispatcher's coalesced paste paint shows it.
+      setPasteStatus: (line) => this.footerLayers.setQuiet("paste-status", line ? [line] : [], 40),
       moveUpVisual: () => this.verticalNav.moveUp(),
       moveDownVisual: () => this.verticalNav.moveDown(),
       toggleShowHidden: () => {
@@ -1122,13 +1113,13 @@ export class EditorController extends EventEmitter {
   }
 
   /**
-   * Install a synchronous paste interceptor (see {@link pasteInterceptor}).
-   * Pass `undefined` to remove it. The host wires media drop/clipboard capture
-   * through this so a dropped image becomes a `[Image #id …]` token instead of
-   * a literal path.
+   * Install a synchronous paste interceptor: a non-null result replaces the
+   * paste. Pass `undefined` to remove it. Kept for one release as an adapter:
+   * it is a {@link pasteHooks} hook at priority 90 (the media slot).
+   * @deprecated Register a hook on {@link pasteHooks}.
    */
   setPasteInterceptor(fn: ((pasted: string) => string | null) | undefined): void {
-    this.pasteInterceptor = fn
+    this.pasteHooks.setSlot("legacy.interceptor", fn ? interceptorHook(fn) : undefined)
   }
 
   /**
@@ -1142,9 +1133,14 @@ export class EditorController extends EventEmitter {
     this.clipboardPaste = fn
   }
 
-  /** Async clipboard-image fallback (`editor/async-clipboard-image.ts`); `undefined` removes it. */
+  /**
+   * Async clipboard-image fallback for a blank paste; `undefined` removes it.
+   * Kept for one release as an adapter: a {@link pasteHooks} hook at priority
+   * 89 that defers to `fn` (`editor/async-paste-runner.ts`).
+   * @deprecated Register a hook on {@link pasteHooks} (see `paste/media-paste.ts`).
+   */
   setAsyncClipboardImageHandler(fn: (() => Promise<string | null>) | undefined): void {
-    this.dispatcher.asyncImage.set(fn)
+    this.pasteHooks.setSlot("legacy.async-image", fn ? asyncImageHook(fn) : undefined)
   }
 
   setDecorationLines(lines: string[]): void {

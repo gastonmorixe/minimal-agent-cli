@@ -80,6 +80,7 @@ import { InteractiveSession } from "./interactive-session.ts"
 import { bareDisableIds } from "./oneshot/bare.ts"
 import { setupOneShot } from "./oneshot/oneshot-options.ts"
 import { prepareOrInput } from "./oneshot/or-input.ts"
+import { cliPasteChain } from "./paste/paste-chain.ts"
 import { toolPresentationMap } from "./plugins-ui/tool-presentation.ts"
 import { loadPluginUi } from "./plugins-ui/ui-loader.ts"
 import { runRepl } from "./repl.ts"
@@ -726,6 +727,9 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // `client.ts`, which broadcasts `quota.headersReceived` after every
   // successful API response — see src/global-bus.ts for the rationale).
   setGlobalEventBus(loader.bus())
+  // The paste hook chain and its lazy sid getter exist BEFORE the plugin UI
+  // loads (B-3), so D3 can pass `pasteChain.hooks` and `pasteChain.sid` to it.
+  const pasteChain = cliPasteChain()
   // The UI part of each accepted plugin (S35): live-area slots from the
   // `ui` block, granted `ctx.tui`. Core loads only the headless part.
   const pluginUi = await loadPluginUi({
@@ -765,12 +769,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // Host lifecycle port (HookBus adapter). Used for session/cwd/instructions
   // broadcasts that live outside AgentCore's conversation loop.
   const hostLifecycle = createLifecyclePort(loader.hooks())
-  if (promptBlocks.afterInstructions) {
+  if (promptBlocks.afterInstructions)
     void hostLifecycle.instructionsDidLoad?.({ source: "agents-md" })
-  }
-  if (promptBlocks.sessionContext) {
+  if (promptBlocks.sessionContext)
     void hostLifecycle.instructionsDidLoad?.({ source: "plugin-session-context" })
-  }
   // Sticky Bash cwd → `cwd.didChange` for observe-only plugins.
   setBashCwdChangeListener((from, to) => {
     void hostLifecycle.cwdDidChange?.({ from, to })
@@ -1019,7 +1021,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   // Session store + blob store + resume warnings + attach/detach
   // lifecycle markers. Lives in `src/startup/session-store-boot.ts`;
   // see that module for the fork-on-resume + best-effort semantics.
-  const sid = getSessionId()
+  // The paste chain reads the active sid lazily from here on.
+  const sid = pasteChain.bindSid(getSessionId(), getSessionId)
   const { store, blobStore, fileTrackingStore } = await bootSessionStores({
     sid,
     resumeSid,

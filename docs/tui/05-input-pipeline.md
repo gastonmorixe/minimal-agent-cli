@@ -55,7 +55,21 @@ How one byte from stdin becomes a buffer mutation (or an abort, or a paste, or a
 
 ## Stage 1: bracketed paste
 
-`EditorController.start` enables bracketed paste (`ESC[?2004h`). When the terminal wraps a paste in `ESC[200~ ... ESC[201~`, the controller routes the entire payload to `EditorBuffer.insert(payload)` as a single atomic operation. No per-byte key dispatch, no abort heuristics - large pastes are common.
+`EditorController.start` enables bracketed paste (`ESC[?2004h`). When the terminal wraps a paste in `ESC[200~ ... ESC[201~`, the dispatcher does not run the paste bytes as keys. No per-byte key dispatch, no abort heuristics - large pastes are common.
+
+Whole-paste assembly (`src/editor/paste-assembler.ts`): after `ESC[200~`, each stdin chunk goes to the assembler. It keeps a partial end-marker tail across chunks, so a split `ESC[201~` is found. The buffer does not change until the end marker. While the paste is in progress, the footer shows a `pasting N kB` row (a byte count only, the text is not scanned). That paint goes through the trailing paste-paint coalesce, so a burst of chunks gives few paints. Over 32 MB, the assembler stops the collect step, sends one `paste.too_large` warning, and the text goes in as literal text (never dropped).
+
+At the end marker, the paste hook chain (`src/paste/paste-hooks.ts`, `PasteHookRegistry`) runs ONE time, with the whole text (`source: "bracketed"`). Hooks run by priority, higher first; the first non-null outcome wins, and a hook that throws is skipped with a `paste.hook_failed` warning:
+
+- `{kind: "insert", text}`: the text goes in place of the paste.
+- `{kind: "defer", run}`: only for a blank paste (Ghostty sends no text for an image). `AsyncPasteRunner` (`src/editor/async-paste-runner.ts`) runs one step at a time and drops a late result after `stop()` (epoch guard).
+- `null` from every hook: the paste goes in as literal text.
+
+The media hook (`src/paste/media-paste.ts`, priority 90) turns a dropped media path into an `[Image #id …]` token, and defers a blank paste to `clipboardImageToken` (the async native reader). Plugin hooks get priorities 0..80. All inserted text goes through the same sanitizer: printables and TAB, with CR, LF, CRLF and LFCR as one newline each. The rest of the end chunk, after `ESC[201~`, is also inserted as sanitized literal text, so a CR there is a newline, not a submit.
+
+Ctrl+V (`\x16`) uses the same chain with `source: "clipboard"`, in this order: (1) the chain on `""`, where a sync insert (the Linux clipboard image) ends the flow; (2) the clipboard text, when not empty, through the chain (an insert wins, else the literal text); (3) when the text is empty or null, the media hook defer (the async clipboard image).
+
+The CLI makes the process chain (`src/paste/paste-chain.ts`, `cliPasteChain()`) before the plugin UI loads, with a lazy session id getter that `main.ts` fills when the session store opens.
 
 The paste also bypasses the per-line submission heuristic: a paste containing `\n` produces multi-line buffer content, it does NOT submit on the first newline.
 

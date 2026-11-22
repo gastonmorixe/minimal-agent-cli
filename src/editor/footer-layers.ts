@@ -24,6 +24,16 @@ export class FooterLayers {
     this.changed()
   }
 
+  /**
+   * Set a layer and recompose WITHOUT the change callback (no repaint). The
+   * caller paints later (the paste status row uses the paste paint coalesce).
+   */
+  setQuiet(id: FooterLayerId, lines: string[], priority: number): void {
+    if (lines.length === 0) this.layers.delete(id)
+    else this.layers.set(id, { id, priority, lines: [...lines] })
+    this.composed = this.compose()
+  }
+
   clear(id: FooterLayerId): void {
     if (!this.layers.delete(id)) return
     this.changed()

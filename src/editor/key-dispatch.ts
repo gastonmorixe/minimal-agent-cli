@@ -24,10 +24,11 @@ import {
   isTypableKeyCode,
   parseCsiUKey,
   parseXtermOtherKey,
-  trailingPrefixLength,
 } from "../input/key-codec.ts"
 
-import { AsyncClipboardImage } from "./async-clipboard-image.ts"
+import type { PasteHookRegistry, PasteSource } from "../paste/paste-hooks.ts"
+import { AsyncPasteRunner } from "./async-paste-runner.ts"
+import { PasteAssembler } from "./paste-assembler.ts"
 import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from "./types.ts"
 
 /**
@@ -74,11 +75,16 @@ export interface KeyDispatchHost {
    */
   clipboardPasteText(): string | null
   /**
-   * Run the paste interceptor over pasted text. Returns the replacement
-   * (e.g. a media token) or the original text when no interceptor is
-   * wired / the interceptor declines / throws.
+   * The paste hook chain (`paste/paste-hooks.ts`). The dispatcher runs it ONE
+   * time for each paste, with the whole text.
    */
-  interceptPaste(text: string): string
+  pasteHooks(): PasteHookRegistry
+  /**
+   * Set (or clear with `null`) the "pasting N kB" status row of a paste in
+   * progress. It must NOT paint: the dispatcher's coalesced paste paint
+   * shows it.
+   */
+  setPasteStatus(line: string | null): void
   /** Wrap-aware cursor-up; true when the cursor moved. */
   moveUpVisual(): boolean
   /** Wrap-aware cursor-down; true when the cursor moved. */
@@ -142,10 +148,11 @@ export class EditorKeyDispatcher {
    * chunks; before this timer each chunk ran insertPasted → repaint()
    * synchronously, painting one full live-area frame per chunk. Any
    * per-frame geometry deficit then stacked N ghost frames into
-   * scrollback. With the coalesce, mid-burst mutations only mark the
-   * buffer dirty; a single trailing `repaint()` fires `pasteCoalesceMs`
-   * after the LAST chunk (or immediately when the closing `\x1b[201~`
-   * terminator is consumed). Mirrors the MA-481485 resize debounce.
+   * scrollback. Since the whole-paste assembly (paste plugin v3, D5) the
+   * buffer changes only at the end marker; mid-burst chunks change only the
+   * "pasting N kB" status row, and that paint goes through this trailing
+   * timer (`pasteCoalesceMs` after the LAST chunk). The end marker paints
+   * the whole paste at once. Mirrors the MA-481485 resize debounce.
    */
   /** Opaque handle from {@link KeyDispatchOptions.setTimeout}. */
   private pastePaintTimer: unknown = null
@@ -157,19 +164,33 @@ export class EditorKeyDispatcher {
   private readonly setT: (cb: () => void, ms: number) => unknown
   private readonly clearT: (handle: unknown) => void
 
-  /** Async clipboard-image fallback for pastes that carry no text. */
-  readonly asyncImage: AsyncClipboardImage
+  /** The async step (`defer` outcome) of a paste, for example a clipboard image read. */
+  readonly asyncPaste: AsyncPasteRunner
+  /** Collects one bracketed paste, so the paste chain runs once, at the end marker. */
+  private readonly assembler: PasteAssembler
+  /** True while the "pasting N kB" status row is set. */
+  private pasteStatusShown = false
 
   constructor(
     private readonly host: KeyDispatchHost,
     opts: KeyDispatchOptions,
   ) {
-    this.asyncImage = new AsyncClipboardImage({
+    this.asyncPaste = new AsyncPasteRunner({
       isStarted: () => host.isStarted(),
       insertAndRepaint: (text) => {
-        host.buf.insert(text)
+        this.insertLiteral(text)
         host.repaint()
       },
+    })
+    this.assembler = new PasteAssembler({
+      onCap: (cap) =>
+        host
+          .pasteHooks()
+          .warn(
+            "paste.too_large",
+            `The paste is larger than ${Math.round(cap / 1048576)} MB; it goes in as plain text`,
+            { capBytes: cap },
+          ),
     })
     this.bareEscapeMs = opts.bareEscapeMs
     this.doubleEscapeMs = opts.doubleEscapeMs
@@ -185,9 +206,9 @@ export class EditorKeyDispatcher {
   /**
    * Coalesced paste paint: schedule ONE trailing repaint for the current
    * stdin chunk burst instead of painting synchronously per chunk.
-   * Called by `consumePending` when paste-driven buffer mutations made
-   * the frame dirty. Fires at trailing edge (`pasteCoalesceMs` of
-   * silence) or when the bracketed-paste terminator arrives.
+   * Called by `consumePending` when a paste chunk changed the "pasting N
+   * kB" status row. Fires at trailing edge (`pasteCoalesceMs` of silence).
+   * The end marker cancels it and paints the whole paste at once.
    */
   private schedulePasteRepaint(): void {
     this.pastePaintPending = true
@@ -209,16 +230,6 @@ export class EditorKeyDispatcher {
       this.host.repaint()
     }, this.pasteCoalesceMs)
     ;(this.pastePaintTimer as { unref?: () => void }).unref?.()
-  }
-
-  private flushPendingPasteRepaint(): void {
-    if (this.pastePaintTimer !== null) {
-      this.clearT(this.pastePaintTimer)
-      this.pastePaintTimer = null
-    }
-    if (!this.pastePaintPending) return
-    this.pastePaintPending = false
-    this.host.repaint()
   }
 
   /** Append a stdin chunk and consume as much of `pending` as possible. */
@@ -254,19 +265,28 @@ export class EditorKeyDispatcher {
    */
   resetPasteState(): void {
     this.bracketedPaste = false
+    this.assembler.abort()
     // A stopped editor must not fire a pending coalesced paste paint:
     // the trailing timer would repaint a dead live area after teardown.
-    this.cancelPendingPasteRepaint()
+    this.clearPasteStatus()
   }
 
   /** Clear pending input and delayed Escape routes. */
   dispose(): void {
-    this.asyncImage.bumpEpoch() // drop an async paste still in flight
+    this.asyncPaste.bumpEpoch() // drop an async paste still in flight
     this.cancelBareEscapeTimer()
     if (this.doubleEscapeTimer !== null) this.clearT(this.doubleEscapeTimer)
     this.doubleEscapeTimer = null
     this.pending = ""
     this.bracketedPaste = false
+    this.assembler.abort()
+    this.clearPasteStatus()
+  }
+
+  /** Clear the "pasting N kB" row and drop a pending coalesced paste paint. */
+  private clearPasteStatus(): void {
+    if (this.pasteStatusShown) this.host.setPasteStatus(null)
+    this.pasteStatusShown = false
     this.cancelPendingPasteRepaint()
   }
 
@@ -383,11 +403,10 @@ export class EditorKeyDispatcher {
           host.feedFsm({ kind: "printable", at: host.now() })
         }
         const r = this.consumeBracketedPaste()
-        if (r === "wait") return
         if (r) {
           dirty = true
-          // consumeBracketedPaste already flushed synchronously when it
-          // saw the closing terminator; only burst-coalesce partials.
+          // A paste in progress (no end marker yet) only changed the status
+          // row: burst-coalesce it. At the end marker, paint now.
           if (this.bracketedPaste) pasteDirty = true
         }
         continue
@@ -622,17 +641,9 @@ export class EditorKeyDispatcher {
         // Ctrl+V — explicit clipboard paste. Cmd+V is intercepted by the
         // terminal/OS and may never reach us (and when it does it arrives as
         // a bracketed paste, handled elsewhere); Ctrl+V is the in-process
-        // shortcut. The host wires `clipboardPaste` to pull text or a
-        // clipboard image. The result is routed through `insertPasted`, so a
-        // pasted image path still becomes an `[Image #id …]` token via the
-        // media interceptor. When no handler is wired, swallow silently
-        // rather than inserting a raw `\x16` control byte.
-        const replacement = host.clipboardPasteText()
-        if (replacement != null && replacement.length > 0) {
-          if (this.insertPasted(replacement)) dirty = true
-        } else {
-          this.asyncImage.run()
-        }
+        // shortcut. See `clipboardPaste` for the order. With nothing to
+        // paste, swallow silently rather than inserting a raw `\x16` byte.
+        if (this.clipboardPaste()) dirty = true
         continue
       }
       if (char === "\x1c") {
@@ -1059,33 +1070,80 @@ export class EditorKeyDispatcher {
     return "changed"
   }
 
-  private consumeBracketedPaste(): "wait" | boolean {
-    const idx = this.pending.indexOf(BRACKETED_PASTE_END)
-    if (idx !== -1) {
-      const pasted = this.pending.slice(0, idx)
-      this.pending = this.pending.slice(idx + BRACKETED_PASTE_END.length)
-      this.bracketedPaste = false
-      const changed = this.insertPasted(pasted)
-      // Paste burst complete: paint the final buffer NOW instead of
-      // waiting for the trailing coalesce timer (feels instant). Flush even
-      // when this last slice is empty: the terminator often arrives in its
-      // own chunk, after earlier chunks already scheduled the paint.
-      this.flushPendingPasteRepaint()
-      return changed
+  /**
+   * Feed the pending bytes of a bracketed paste to the assembler. The paste
+   * chain runs ONE time, at the end marker, with the whole text (D5). After
+   * the end marker, the rest of the same chunk goes in as sanitized literal
+   * text, not as keys (so a CR there is a newline, not a submit). Returns
+   * true when the buffer or the paste status row changed.
+   */
+  private consumeBracketedPaste(): boolean {
+    const { done, rest, spill } = this.assembler.push(this.pending)
+    this.pending = ""
+    // Over the size cap: the text goes in now as literal text (never dropped).
+    let changed = spill.length > 0 && this.insertLiteral(spill)
+    if (!done) {
+      if (this.assembler.bytes === 0) return changed
+      // Count bytes only, never scan the text (S-2).
+      const kb = Math.max(1, Math.round(this.assembler.bytes / 1000))
+      this.host.setPasteStatus(`pasting ${kb} kB`)
+      this.pasteStatusShown = true
+      return true
     }
-    const keep = trailingPrefixLength(this.pending, BRACKETED_PASTE_END)
-    const pasted = this.pending.slice(0, this.pending.length - keep)
-    if (pasted.length === 0) return "wait"
-    this.pending = this.pending.slice(pasted.length)
-    return this.insertPasted(pasted)
+    this.bracketedPaste = false
+    const overflowed = this.assembler.overflowed
+    const text = this.assembler.finish()
+    // The end paint (consumePending) clears the status row and shows the
+    // whole paste in one frame.
+    if (this.pasteStatusShown) changed = true
+    this.clearPasteStatus()
+    if (overflowed) changed = this.insertLiteral(text) || changed
+    else changed = this.insertPasted(text, "bracketed") || changed
+    // The rest of the chunk is literal text; stray paste markers in it are dropped.
+    const tail = rest.replaceAll(BRACKETED_PASTE_START, "").replaceAll(BRACKETED_PASTE_END, "")
+    if (tail.length > 0) changed = this.insertLiteral(tail) || changed
+    return changed
   }
 
-  private insertPasted(text: string): boolean {
+  /**
+   * Run the paste chain on one whole paste. An `insert` replaces the text. A
+   * `defer` (J2) runs on the async runner only when the text is blank (the
+   * Ghostty image-only paste) and `allowDefer` is set; the blank text still
+   * goes in. With no outcome, the text goes in as sanitized literal text.
+   */
+  private insertPasted(text: string, source: PasteSource, allowDefer = true): boolean {
+    const hooks = this.host.pasteHooks()
+    const out = hooks.run(hooks.event(text, source))
+    if (out?.kind === "insert") return this.insertLiteral(out.text)
+    if (out?.kind === "defer" && allowDefer && !/\S/.test(text)) this.asyncPaste.run(out.run)
+    return this.insertLiteral(text)
+  }
+
+  /**
+   * Ctrl+V, in this order (W-2):
+   * 1. The chain on "" (source "clipboard"): a sync `insert` (the Linux sync
+   *    clipboard image) ends the flow. A `defer` is not run here.
+   * 2. The clipboard text. When it is not empty, the chain runs on it: an
+   *    `insert` wins, else the literal text. A `defer` is not run.
+   * 3. When the text is empty or null: the `defer` of step 1 (the media
+   *    hook's async clipboard image read) runs.
+   */
+  private clipboardPaste(): boolean {
+    const hooks = this.host.pasteHooks()
+    const first = hooks.run(hooks.event("", "clipboard"))
+    if (first?.kind === "insert") return this.insertLiteral(first.text)
+    const text = this.host.clipboardPasteText()
+    if (text != null && text.length > 0) return this.insertPasted(text, "clipboard", false)
+    if (first?.kind === "defer") this.asyncPaste.run(first.run)
+    return false
+  }
+
+  /**
+   * Insert text as typed literal text: printables and TAB, with CR, LF, CRLF
+   * and LFCR as one newline each. Control bytes (ESC, C0) are dropped.
+   */
+  private insertLiteral(text: string): boolean {
     const buf = this.host.buf
-    const intercepted = this.host.interceptPaste(text)
-    // Terminals send no text for an image-only clipboard (Ghostty). When the
-    // sync interceptor found no image either, try the async native reader.
-    if (text.trim() === "" && intercepted === text) this.asyncImage.run()
     let changed = false
     let run = ""
     const flush = () => {
@@ -1094,15 +1152,15 @@ export class EditorKeyDispatcher {
       run = ""
       changed = true
     }
-    for (let i = 0; i < intercepted.length; ) {
-      const cp = intercepted.codePointAt(i)
+    for (let i = 0; i < text.length; ) {
+      const cp = text.codePointAt(i)
       if (cp === undefined) break
       const ch = String.fromCodePoint(cp)
       i += ch.length
       if (ch === "\r" || ch === "\n") {
         flush()
-        if (i < intercepted.length) {
-          const next = intercepted[i]
+        if (i < text.length) {
+          const next = text[i]
           if ((ch === "\r" && next === "\n") || (ch === "\n" && next === "\r")) {
             i += 1
           }

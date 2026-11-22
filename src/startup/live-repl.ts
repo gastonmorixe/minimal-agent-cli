@@ -25,8 +25,8 @@ import type { ResolvedLiveAreaSlot } from "@minimal-agent/core/plugin-api/types/
 import { isDebugRequested } from "../cli/debug-gate.ts"
 import type { CliUserConfig } from "../config/terminal-config.ts"
 import { clipboardText } from "../paste/clipboard.ts"
-import { clipboardImageToken } from "../paste/clipboard-token.ts"
-import { mediaPasteInterceptor } from "../paste/paste-intercept.ts"
+import { createMediaPasteHook } from "../paste/media-paste.ts"
+import { cliPasteChain } from "../paste/paste-chain.ts"
 import type { ReplAgentLike, runRepl } from "../repl.ts"
 import type { Spinner } from "../ui/spinner/index.ts"
 import { attachCacheBreakRows } from "../ui/status/cache-break-row.ts"
@@ -97,6 +97,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
   const { StdioInterceptor } = await import("../ui/stdio-interceptor.ts")
   const { detectSynchronizedOutput } = await import("../ui/term-caps.ts")
   const { probeNerdGlyphCells, setNerdGlyphCells } = await import("../terminal/nerd-glyph-width.ts")
+  const pasteChain = cliPasteChain()
 
   // Probe the terminal for DEC mode 2026 (synchronized output) BEFORE
   // creating the editor. Detection puts stdin into raw mode briefly,
@@ -187,27 +188,26 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     // subscribe via their manifest's `hooks` array. Null when no
     // plugins are loaded — the editor short-circuits the emit.
     ...(hasPlugins ? { hooks: loader.hooks() } : {}),
+    // The process paste chain (made in main.ts before the plugin UI loads).
+    pasteHooks: pasteChain.hooks,
   })
-  // Media ingestion: a dropped image path (or an empty paste while an image
-  // sits on the clipboard) becomes a `[Image #id WxH size]` token instead of
-  // literal text. The submit path (agent.run) resolves the token to an image
-  // block. See src/paste/paste-intercept.ts.
-  // The plugin text resolver owns the media rejection text of a paste.
+  // Media ingestion: the media paste hook (priority 90, src/paste/media-paste.ts).
+  // A dropped image path (or, on Linux, a blank paste while an image sits on
+  // the clipboard) becomes a `[Image #id WxH size]` token instead of literal
+  // text. A blank paste with no sync image defers to the async native reader
+  // (Ghostty sends no text for an image); a failed read is a
+  // `media.clipboard_failed` warning. The submit path (agent.run) resolves
+  // the token to an image block. The plugin text resolver owns the media
+  // rejection text of a paste.
   const pasteText = hasPlugins ? loader.syntheticText() : undefined
-  editor.setPasteInterceptor((pasted) =>
-    mediaPasteInterceptor(pasted, undefined, undefined, pasteText),
+  const disposeMediaPaste = pasteChain.hooks.register(
+    createMediaPasteHook(pasteText ? { text: pasteText } : {}),
   )
-  // Ctrl+V: pull the system clipboard ourselves. Prefer an image (the
-  // interceptor's empty-paste branch captures a clipboard image and returns
-  // an `[Image #id …]` token); else paste clipboard text. This covers
-  // terminals/OSes where Cmd+V is swallowed and never reaches us.
-  editor.setClipboardPasteHandler(
-    () => mediaPasteInterceptor("", undefined, undefined, pasteText) ?? clipboardText(),
-  )
-  // Async image paste: Ghostty sends no text for an image, and Bun's native
-  // clipboard reader has an async `.bytes()`, so the editor runs it off-FSM.
-  // A failed read is a `media.clipboard_failed` warning on the diagnostics bus.
-  editor.setAsyncClipboardImageHandler(() => clipboardImageToken(undefined, undefined, pasteText))
+  // Ctrl+V: pull the system clipboard ourselves. The editor runs the chain on
+  // "" first (a sync clipboard image), then on this text, then the async
+  // image read when the text is empty. This covers terminals/OSes where
+  // Cmd+V is swallowed and never reaches us.
+  editor.setClipboardPasteHandler(clipboardText)
   // Restore the unsent draft (if any) into the editor buffer. This is
   // the resume-time twin of the abort-flow's setBuffer call in the REPL
   // (search "setBuffer" in the abort branch under `src/host/`) — same visual
@@ -330,6 +330,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
   } finally {
     // Unsubscribe before the compositor inside runReplLiveArea goes away.
     dumpHandle?.dispose()
+    disposeMediaPaste()
     disposeCacheBreakRows()
     restoreDiagnosticWriter()
     interceptor.uninstall()

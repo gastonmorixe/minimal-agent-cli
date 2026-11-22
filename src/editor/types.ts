@@ -16,6 +16,7 @@ import type { Hooks } from "@minimal-agent/core/host-kit/hooks"
 import type { AbortBus } from "../bus/abort-bus.ts"
 import type { FsmOptions } from "../bus/abort-quit-fsm.ts"
 import type { InputCaptureStack } from "../input/input-capture-stack.ts"
+import type { PasteHookRegistry } from "../paste/paste-hooks.ts"
 
 /**
  * Minimal compositor surface the editor controller depends on. Owns
@@ -298,6 +299,11 @@ export interface EditorControllerOptions {
   setTimeout?: (cb: () => void, ms: number) => unknown
   /** `clearTimeout` injection paired with {@link setTimeout}. */
   clearTimeout?: (handle: unknown) => void
+  /**
+   * The paste hook chain to run (paste plugin v3). The CLI passes the process
+   * chain (`paste/paste-chain.ts`). Default: a new, empty chain.
+   */
+  pasteHooks?: PasteHookRegistry
 }
 
 /**

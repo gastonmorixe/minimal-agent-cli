@@ -1,8 +1,132 @@
+/**
+ * U14 + J2: the async step of a paste (`AsyncPasteRunner`, was
+ * `AsyncClipboardImage`). Moved from `src/editor-controller.async-image.test.ts`
+ * (the controller cases run through the legacy `setAsyncClipboardImageHandler`
+ * adapter, which is a paste hook that defers on a blank paste).
+ */
 import { describe, expect, it } from "bun:test"
+import { createMediaRegistry } from "@minimal-agent/core/host-kit/media"
 
-import { make } from "./editor-controller.fixtures.ts"
+import { make } from "../editor-controller.fixtures.ts"
+import { createMediaPasteHook } from "../paste/media-paste.ts"
+import { AsyncPasteRunner } from "./async-paste-runner.ts"
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0))
+
+function runner(started = true) {
+  const inserted: string[] = []
+  const state = { started }
+  const r = new AsyncPasteRunner({
+    isStarted: () => state.started,
+    insertAndRepaint: (t) => inserted.push(t),
+  })
+  return { r, inserted, state }
+}
+
+function deferred() {
+  let release!: (v: string | null) => void
+  let fail!: (e: Error) => void
+  const p = new Promise<string | null>((res, rej) => {
+    release = res
+    fail = rej
+  })
+  return { p, release, fail }
+}
+
+describe("AsyncPasteRunner (U14, J2)", () => {
+  it("inserts the resolved text", async () => {
+    const { r, inserted } = runner()
+    r.run(async () => "tok")
+    await tick()
+    expect(inserted).toEqual(["tok"])
+  })
+
+  it("keeps one pending step: a second run while one waits is ignored", async () => {
+    const { r, inserted } = runner()
+    const d = deferred()
+    let calls = 0
+    const fn = () => {
+      calls++
+      return d.p
+    }
+    r.run(fn)
+    expect(r.busy).toBe(true)
+    r.run(fn)
+    r.run(async () => "other")
+    expect(calls).toBe(1)
+    d.release("one")
+    await tick()
+    expect(inserted).toEqual(["one"])
+    expect(r.busy).toBe(false)
+  })
+
+  it("drops a late result after bumpEpoch (stop / dispose)", async () => {
+    const { r, inserted } = runner()
+    const d = deferred()
+    r.run(() => d.p)
+    r.bumpEpoch()
+    d.release("late")
+    await tick()
+    expect(inserted).toEqual([])
+  })
+
+  it("drops a result when the host is no longer started", async () => {
+    const { r, inserted, state } = runner()
+    const d = deferred()
+    r.run(() => d.p)
+    state.started = false
+    d.release("late")
+    await tick()
+    expect(inserted).toEqual([])
+  })
+
+  it("a rejecting fn resets the pending flag and inserts nothing", async () => {
+    const { r, inserted } = runner()
+    const d = deferred()
+    r.run(() => d.p)
+    d.fail(new Error("busy"))
+    await tick()
+    expect(r.busy).toBe(false)
+    expect(inserted).toEqual([])
+    r.run(async () => "ok")
+    await tick()
+    expect(inserted).toEqual(["ok"])
+  })
+
+  it("null and empty results insert nothing", async () => {
+    const { r, inserted } = runner()
+    r.run(async () => null)
+    await tick()
+    r.run(async () => "")
+    await tick()
+    expect(inserted).toEqual([])
+  })
+})
+
+describe("EditorController — media hook defer (I4, unit level)", () => {
+  it("a Ghostty-style blank paste gives an [Image # token through the media hook", async () => {
+    const { ctrl, stdin } = make()
+    const registry = createMediaRegistry()
+    const png = new Uint8Array(24)
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0)
+    png.set([0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52], 8)
+    png[19] = 2
+    png[23] = 2
+    ctrl.pasteHooks.register(
+      createMediaPasteHook({
+        registry: () => registry,
+        intercept: () => null,
+        readImage: async () => ({ bytes: png }),
+      }),
+    )
+    ctrl.start()
+    stdin.send("\x1b[200~\x1b[201~")
+    await tick()
+    await tick()
+    expect(ctrl.buffer().toString()).toMatch(/^\[Image #/)
+    ctrl.stop()
+  })
+})
 
 describe("EditorController — async clipboard image fallback", () => {
   it("empty bracketed paste (Ghostty, image-only clipboard) inserts the async token", async () => {
