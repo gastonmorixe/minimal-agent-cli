@@ -30,14 +30,22 @@ import type {
 import { TERMINAL_KIT } from "../terminal-kit/kit.ts"
 import { paletteEnvJson } from "../terminal-kit/palette.ts"
 
-import { type CliUiHost, cliUiExtensions, manifestCapabilities } from "./cli-ui-extensions.ts"
+import { type CliUiHost, cliUiExtensions } from "./cli-ui-extensions.ts"
 import { importPackageModule, resolveLiveAreaSlot } from "./resolve-slot.ts"
 import { isObject, parseLiveAreaSlot, parseUiSetup, UiManifestError } from "./ui-manifest.ts"
 
-/** One plugin package that core accepted (`PluginLoader.loadedPackages()`). */
+/**
+ * One plugin package that core accepted (`PluginLoader.loadedPackages()`).
+ * The id, `capabilities`, `permissions` and `sidebandKinds` are the
+ * validated values of core. The loader never reads them from the raw JSON.
+ * A missing list is empty (no grant).
+ */
 export interface AcceptedPackage {
   readonly id: string
   readonly packageDir: string
+  readonly capabilities?: readonly string[]
+  readonly permissions?: readonly string[]
+  readonly sidebandKinds?: readonly string[]
 }
 
 /**
@@ -165,8 +173,6 @@ export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi>
     const manifestPath = join(pkg.packageDir, "manifest.json")
     let rawSlots: unknown[]
     let ui: Record<string, unknown> | undefined
-    let manifestId = pkg.id
-    let capabilities: string[] = []
     try {
       // Through the package source, so an embedded package (no manifest
       // on disk) reads the manifest text of the binary.
@@ -174,8 +180,6 @@ export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi>
       if (text === null) throw new Error(`cannot read ${manifestPath}`)
       const raw: unknown = JSON.parse(text)
       if (!isObject(raw)) continue
-      if (typeof raw.id === "string") manifestId = raw.id
-      capabilities = manifestCapabilities(raw)
       ui = uiBlockOf(raw)
       rawSlots = rawSlotsOf(ui)
     } catch (e) {
@@ -185,7 +189,12 @@ export async function loadPluginUi(opts: LoadPluginUiOptions): Promise<PluginUi>
       continue
     }
     if (ui?.setup !== undefined && opts.importModules !== false) {
-      const plugin = { id: manifestId, capabilities }
+      const plugin = {
+        id: pkg.id,
+        capabilities: pkg.capabilities ?? [],
+        permissions: pkg.permissions ?? [],
+        sidebandKinds: pkg.sidebandKinds ?? [],
+      }
       await runUiSetup(ui.setup, pkg, manifestPath, tui, opts.logger, () =>
         cliUiExtensions(opts, plugin, opts.logger),
       )
