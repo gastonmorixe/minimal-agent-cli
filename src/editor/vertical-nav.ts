@@ -106,13 +106,11 @@ export class VerticalNavigator {
     const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols, spans)
     if (this.desiredVisualCol === null) this.desiredVisualCol = cur.visualCol
     const target = this.desiredVisualCol
-    if (cur.visualRow > 0) {
-      // Same logical line, one wrap chunk up.
-      const newCol = findColAtVisualPos(line, cur.visualRow - 1, target, promptW, cols, spans)
-      if (newCol === this.buf.col) {
-        this.recordVerticalEndpoint()
-        return false
-      }
+    // Same logical line, one wrap chunk up. A row that gives the same col
+    // (a chip wider than a row, or an empty row before a chip) is skipped.
+    for (let r = cur.visualRow - 1; r >= 0; r--) {
+      const newCol = findColAtVisualPos(line, r, target, promptW, cols, spans)
+      if (newCol === this.buf.col) continue
       this.buf.col = newCol
       this.recordVerticalEndpoint()
       return true
@@ -165,13 +163,11 @@ export class VerticalNavigator {
     const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols, spans)
     if (this.desiredVisualCol === null) this.desiredVisualCol = cur.visualCol
     const target = this.desiredVisualCol
-    if (cur.visualRow < cur.rowsInLine - 1) {
-      // Same logical line, one wrap chunk down.
-      const newCol = findColAtVisualPos(line, cur.visualRow + 1, target, promptW, cols, spans)
-      if (newCol === this.buf.col) {
-        this.recordVerticalEndpoint()
-        return false
-      }
+    // Same logical line, one wrap chunk down. A row that gives the same col
+    // (the next rows of a chip wider than a row) is skipped.
+    for (let r = cur.visualRow + 1; r < cur.rowsInLine; r++) {
+      const newCol = findColAtVisualPos(line, r, target, promptW, cols, spans)
+      if (newCol === this.buf.col) continue
       this.buf.col = newCol
       this.recordVerticalEndpoint()
       return true

@@ -87,6 +87,9 @@ export class EditorBuffer {
     return this.rowValue
   }
 
+  // W-1: the named writers at input.ts ~:855-875 write a LineBuffer (the plain
+  // REPL), not an EditorBuffer, so these snapping setters do not cover them.
+
   /** Clamps to the buffer, then moves the cursor back out of a span (W-1). */
   set row(value: number) {
     this.rowValue = Math.max(0, Math.min(value, this.linesValue.length - 1))
@@ -318,22 +321,22 @@ export class EditorBuffer {
   private scanWordLeft(row: number, col: number): [number, number] {
     let r = row
     let c = col
+    let chars = this.lineChars(r)
     while (true) {
       if (c === 0) {
         if (r === 0) break
         r -= 1
-        c = this.lineLength(r)
+        chars = this.lineChars(r)
+        c = chars.length
         continue
       }
       if (this.spanEndingAt(r, c)) break
-      const chars = this.lineChars(r)
       if (!this.isWhitespace(chars[c - 1])) break
       c -= 1
     }
     // A span is one word of its own: the scan stops at its edges.
     const span = this.spanEndingAt(r, c)
     if (span) return [r, span.start]
-    const chars = this.lineChars(r)
     while (c > 0) {
       if (this.isWhitespace(chars[c - 1]) || this.spanEndingAt(r, c)) break
       c -= 1
@@ -349,22 +352,21 @@ export class EditorBuffer {
   private scanWordRight(row: number, col: number): [number, number] {
     let r = row
     let c = col
+    let chars = this.lineChars(r)
     while (true) {
-      const lineLen = this.lineLength(r)
-      if (c === lineLen) {
+      if (c === chars.length) {
         if (r === this.linesValue.length - 1) break
         r += 1
+        chars = this.lineChars(r)
         c = 0
         continue
       }
       if (this.spanStartingAt(r, c)) break
-      const chars = this.lineChars(r)
       if (!this.isWhitespace(chars[c])) break
       c += 1
     }
     const span = this.spanStartingAt(r, c)
     if (span) return [r, span.end]
-    const chars = this.lineChars(r)
     while (c < chars.length) {
       if (this.isWhitespace(chars[c]) || this.spanStartingAt(r, c)) break
       c += 1
@@ -372,16 +374,20 @@ export class EditorBuffer {
     return [r, c]
   }
 
-  /** The span of `row` that ends at `col`, if any. */
+  /** The span of `row` that ends at `col`, if any (binary search). */
   private spanEndingAt(row: number, col: number): ChipSpan | undefined {
-    for (const s of this.spansOfRow(row)) if (s.end === col) return s
-    return undefined
+    const spans = this.spansOfRow(row)
+    if (spans.length === 0) return undefined
+    const s = spans[firstSpanEndingAtOrAfter(spans, col)]
+    return s !== undefined && s.end === col ? s : undefined
   }
 
-  /** The span of `row` that starts at `col`, if any. */
+  /** The span of `row` that starts at `col`, if any (binary search). */
   private spanStartingAt(row: number, col: number): ChipSpan | undefined {
-    for (const s of this.spansOfRow(row)) if (s.start === col) return s
-    return undefined
+    const spans = this.spansOfRow(row)
+    if (spans.length === 0) return undefined
+    const s = spans[firstSpanEndingAtOrAfter(spans, col + 1)]
+    return s !== undefined && s.start === col ? s : undefined
   }
 
   /**
@@ -389,11 +395,11 @@ export class EditorBuffer {
    * (`forward`) or to its start (`back`). No span: no change.
    */
   private snapCursor(direction: "forward" | "back"): void {
-    for (const s of this.spansOfRow(this.rowValue)) {
-      if (this.colValue > s.start && this.colValue < s.end) {
-        this.colValue = direction === "forward" ? s.end : s.start
-        return
-      }
+    const spans = this.spansOfRow(this.rowValue)
+    if (spans.length === 0) return
+    const s = spans[firstSpanEndingAtOrAfter(spans, this.colValue + 1)]
+    if (s !== undefined && this.colValue > s.start && this.colValue < s.end) {
+      this.colValue = direction === "forward" ? s.end : s.start
     }
   }
 
@@ -444,4 +450,19 @@ export class EditorBuffer {
   private isWhitespace(char: string): boolean {
     return /\s/u.test(char)
   }
+}
+
+/**
+ * The index of the first span with `end >= col`, or `spans.length`. The spans
+ * are sorted and do not overlap, so their ends are sorted too.
+ */
+function firstSpanEndingAtOrAfter(spans: readonly ChipSpan[], col: number): number {
+  let lo = 0
+  let hi = spans.length
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (spans[mid]!.end < col) lo = mid + 1
+    else hi = mid
+  }
+  return lo
 }

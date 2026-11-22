@@ -185,6 +185,9 @@ export function colInChunks(
 ): number {
   const k = Math.max(0, Math.min(targetRow, chunks.length - 1))
   const chunk = chunks[k] ?? []
+  // An empty row (a chip that breaks before itself on row 0) holds no unit:
+  // the cursor goes to the first unit of the next row, not to the line end.
+  if (chunk.length === 0) return chunks[k + 1]?.[0]?.cp ?? 0
   let x = k === 0 ? promptW : 0
   let col = chunk[0]?.cp ?? lineLength
   let lastStart = col
@@ -203,7 +206,7 @@ export function colInChunks(
     col = cell.chip ? cell.chip.end : cell.cp + 1
     j = n
   }
-  if (k < chunks.length - 1 && chunk.length > 0) return lastStart
+  if (k < chunks.length - 1) return lastStart
   return Math.min(col, lineLength)
 }
 

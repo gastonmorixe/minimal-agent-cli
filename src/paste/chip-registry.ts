@@ -18,7 +18,13 @@
  * @module paste/chip-registry
  */
 
-import type { SidebandAttrs, SidebandNode, SidebandReader } from "@minimal-agent/core/host/sideband"
+import type {
+  SidebandApi,
+  SidebandAttrs,
+  SidebandNode,
+  SidebandReader,
+} from "@minimal-agent/core/host/sideband"
+import { codePointWidth, displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 /**
  * One chip of a line. `start` and `end` are code-point offsets into the line
@@ -45,10 +51,15 @@ export interface ChipLabelSpec {
   label(attrs: SidebandAttrs, body: string | undefined, known?: boolean): string
 }
 
-/** The sideband reads that the chip registry uses. */
-export type ChipSideband = Pick<SidebandReader, "find" | "kindInfo" | "attrs"> & {
-  readonly ready?: boolean
-}
+/**
+ * The sideband reads that the chip registry uses. With `kinds` and `example`
+ * the registry gets the open sigils of the codec, and a line with no sigil
+ * skips `find` (a cheap pre-check for a large plain paste).
+ */
+export type ChipSideband = Pick<SidebandReader, "find" | "kindInfo" | "attrs"> &
+  Partial<Pick<SidebandApi, "kinds" | "example">> & {
+    readonly ready?: boolean
+  }
 
 /**
  * SGR of a chip label: dim cyan, the same family as the other faint editor
@@ -64,8 +75,37 @@ export function paintChip(label: string): string {
 /** A body longer than this (in code points) is not a fallback label. */
 export const CHIP_BODY_LABEL_MAX = 32
 
-/** The widest label in code points. A longer label is cut with `…`. */
-export const CHIP_LABEL_MAX = 80
+/** The widest label in terminal cells. A wider label is cut with `…`. */
+export const CHIP_LABEL_MAX = 40
+
+/** The open sigils of each sideband (`null`: no pre-check is possible). */
+const sigilCache = new WeakMap<object, readonly string[] | null>()
+
+/**
+ * The first code unit of the wire form of each chip kind, from the codec
+ * (`sb.example`). Each node starts with one of them. `null` when the codec
+ * does not tell.
+ */
+function openSigils(sb: ChipSideband): readonly string[] | null {
+  const hit = sigilCache.get(sb)
+  if (hit !== undefined) return hit
+  let sigils: string[] | null = null
+  if (typeof sb.kinds === "function" && typeof sb.example === "function") {
+    try {
+      const set = new Set<string>()
+      for (const k of sb.kinds({ placement: "inline", direction: "to-model" })) {
+        const first = sb.example(k.kind).charAt(0)
+        if (first === "") throw new Error("no example")
+        set.add(first)
+      }
+      sigils = [...set]
+    } catch {
+      sigils = null
+    }
+  }
+  sigilCache.set(sb, sigils)
+  return sigils
+}
 
 /**
  * The chip registry of one CLI process. Each label is generic: the registry
@@ -159,6 +199,8 @@ export class ChipRegistry {
   /** The top-level chip nodes of `text`, in text order. */
   private chipNodes(text: string, sb: ChipSideband | null | undefined): SidebandNode[] {
     if (!sb || sb.ready === false || text.length === 0) return []
+    const sigils = openSigils(sb)
+    if (sigils !== null && !sigils.some((s) => text.includes(s))) return []
     let nodes: SidebandNode[]
     try {
       nodes = sb.find(text)
@@ -196,15 +238,31 @@ export function fallbackChipLabel(node: Pick<SidebandNode, "kind" | "body">): st
   return `[${cleanLabel(node.kind) || "?"}]`
 }
 
-/** One line, no control characters (a tab or a line end gives a space), at most {@link CHIP_LABEL_MAX} code points. */
+/**
+ * One line that the user sees in full: a tab or a line end gives a space, and
+ * the control, format (bidi, zero-width, soft hyphen) and line or paragraph
+ * separator characters go. At most {@link CHIP_LABEL_MAX} cells. A label with
+ * no visible cell gives `""` (the caller then uses the fallback).
+ */
 function cleanLabel(label: string): string {
   if (typeof label !== "string") return ""
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: control bytes are what this removes.
-  const flat = label.replace(/[\t\r\n]/gu, " ").replace(/[\x00-\x1f\x7f-\x9f]/gu, "")
-  const chars = Array.from(flat.trim())
-  return chars.length > CHIP_LABEL_MAX
-    ? `${chars.slice(0, CHIP_LABEL_MAX - 1).join("")}…`
-    : chars.join("")
+  const flat = label
+    .replace(/[\t\r\n]/gu, " ")
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: control bytes are what this removes.
+    .replace(/[\x00-\x1f\x7f-\x9f]/gu, "")
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, "")
+    .trim()
+  if (flat.length === 0 || displayWidth(flat) === 0) return ""
+  if (displayWidth(flat) <= CHIP_LABEL_MAX) return flat
+  let out = ""
+  let width = 0
+  for (const ch of flat) {
+    const w = codePointWidth(ch.codePointAt(0) ?? 0)
+    if (width + w > CHIP_LABEL_MAX - 1) break
+    out += ch
+    width += w
+  }
+  return `${out.trimEnd()}…`
 }
 
 /**

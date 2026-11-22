@@ -132,6 +132,14 @@ describe("cursor maps with chips", () => {
     expect(findColAtVisualPos(line, 0, 4, 2, 10, spans)).toBe(2)
   })
 
+  it("an empty row before a chip maps to the chip start, not the line end", () => {
+    // Label 6 cells, cols 7, prompt 2: row 0 is empty, the chip is row 1.
+    const l = "{x} tail"
+    const sp = braces(l)
+    expect(findColAtVisualPos(l, 0, 0, 2, 7, sp)).toBe(0)
+    expect(findColAtVisualPos(l, 0, 5, 2, 7, sp)).toBe(0)
+  })
+
   it("no spans: the old maps", () => {
     expect(computeCursorVisualPos("abc", 2, 2, 10)).toEqual(
       computeCursorVisualPos("abc", 2, 2, 10, []),

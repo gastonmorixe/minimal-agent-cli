@@ -212,6 +212,24 @@ describe("EditorBuffer spans: the cursor is never inside a span (W-1)", () => {
   })
 })
 
+describe("EditorBuffer spans: large lines", () => {
+  it("word moves in a line with many spans stay fast and exact", () => {
+    const line = "w {x} ".repeat(20_000)
+    const buf = new EditorBuffer(braces)
+    buf.insert(line)
+    expect(buf.spansOfRow(0).length).toBe(20_000)
+    buf.moveLineStart()
+    const t0 = performance.now()
+    for (let i = 0; i < 50; i++) buf.moveWordRight()
+    for (let i = 0; i < 50; i++) buf.moveWordLeft()
+    expect(performance.now() - t0).toBeLessThan(2000)
+    expect(buf.col).toBe(0)
+    buf.moveWordRight()
+    buf.moveWordRight()
+    expect(buf.col).toBe(5)
+  })
+})
+
 describe.skipIf(!sidebandFixturePresent())("EditorBuffer spans: real codec", () => {
   it("a peer mention and a paste ref are atomic", () => {
     const chips = new ChipRegistry()
@@ -229,5 +247,20 @@ describe.skipIf(!sidebandFixturePresent())("EditorBuffer spans: real codec", () 
     buf.moveLineStart()
     buf.deleteForward()
     expect(buf.toString()).toBe(" hi ")
+  })
+})
+
+describe.skipIf(!sidebandFixturePresent())("EditorBuffer spans: a large plain paste", () => {
+  it("a 200 kB one-line plain string gives no spans and word moves stay fast", () => {
+    const chips = new ChipRegistry()
+    const buf = new EditorBuffer((line) => chips.spansOf(line, sb))
+    buf.insert("lorem ipsum dolor ".repeat(Math.ceil(200_000 / 18)).slice(0, 200_000))
+    expect(buf.spansOfRow(0)).toEqual([])
+    buf.moveLineStart()
+    const t0 = performance.now()
+    for (let i = 0; i < 5; i++) buf.moveWordRight()
+    for (let i = 0; i < 5; i++) buf.moveWordLeft()
+    expect(performance.now() - t0).toBeLessThan(200)
+    expect(buf.col).toBe(0)
   })
 })
