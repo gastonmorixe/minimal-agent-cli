@@ -1142,6 +1142,11 @@ export class EditorController extends EventEmitter {
     this.clipboardPaste = fn
   }
 
+  /** Async clipboard-image fallback (`editor/async-clipboard-image.ts`); `undefined` removes it. */
+  setAsyncClipboardImageHandler(fn: (() => Promise<string | null>) | undefined): void {
+    this.dispatcher.asyncImage.set(fn)
+  }
+
   setDecorationLines(lines: string[]): void {
     if (
       lines.length === this.decorationLines.length &&

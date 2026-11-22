@@ -27,6 +27,7 @@ import {
   trailingPrefixLength,
 } from "../input/key-codec.ts"
 
+import { AsyncClipboardImage } from "./async-clipboard-image.ts"
 import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from "./types.ts"
 
 /**
@@ -156,10 +157,20 @@ export class EditorKeyDispatcher {
   private readonly setT: (cb: () => void, ms: number) => unknown
   private readonly clearT: (handle: unknown) => void
 
+  /** Async clipboard-image fallback for pastes that carry no text. */
+  readonly asyncImage: AsyncClipboardImage
+
   constructor(
     private readonly host: KeyDispatchHost,
     opts: KeyDispatchOptions,
   ) {
+    this.asyncImage = new AsyncClipboardImage({
+      isStarted: () => host.isStarted(),
+      insertAndRepaint: (text) => {
+        host.buf.insert(text)
+        host.repaint()
+      },
+    })
     this.bareEscapeMs = opts.bareEscapeMs
     this.doubleEscapeMs = opts.doubleEscapeMs
     this.pasteCoalesceMs = opts.pasteCoalesceMs ?? 16
@@ -250,6 +261,7 @@ export class EditorKeyDispatcher {
 
   /** Clear pending input and delayed Escape routes. */
   dispose(): void {
+    this.asyncImage.bumpEpoch() // drop an async paste still in flight
     this.cancelBareEscapeTimer()
     if (this.doubleEscapeTimer !== null) this.clearT(this.doubleEscapeTimer)
     this.doubleEscapeTimer = null
@@ -618,6 +630,8 @@ export class EditorKeyDispatcher {
         const replacement = host.clipboardPasteText()
         if (replacement != null && replacement.length > 0) {
           if (this.insertPasted(replacement)) dirty = true
+        } else {
+          this.asyncImage.run()
         }
         continue
       }
@@ -1069,6 +1083,9 @@ export class EditorKeyDispatcher {
   private insertPasted(text: string): boolean {
     const buf = this.host.buf
     const intercepted = this.host.interceptPaste(text)
+    // Terminals send no text for an image-only clipboard (Ghostty). When the
+    // sync interceptor found no image either, try the async native reader.
+    if (text.trim() === "" && intercepted === text) this.asyncImage.run()
     let changed = false
     let run = ""
     const flush = () => {

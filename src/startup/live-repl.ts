@@ -17,6 +17,7 @@
 
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { clipboardText } from "@minimal-agent/core/host/clipboard"
+import { clipboardImageToken } from "@minimal-agent/core/host/clipboard-token"
 import { getGlobalEventBus } from "@minimal-agent/core/host/global-bus"
 import { mediaPasteInterceptor } from "@minimal-agent/core/host/paste-intercept"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
@@ -203,6 +204,10 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
   editor.setClipboardPasteHandler(
     () => mediaPasteInterceptor("", undefined, undefined, pasteText) ?? clipboardText(),
   )
+  // Async image paste: Ghostty sends no text for an image, and Bun's native
+  // clipboard reader has an async `.bytes()`, so the editor runs it off-FSM.
+  // A failed read is a `media.clipboard_failed` warning on the diagnostics bus.
+  editor.setAsyncClipboardImageHandler(() => clipboardImageToken(undefined, undefined, pasteText))
   // Restore the unsent draft (if any) into the editor buffer. This is
   // the resume-time twin of the abort-flow's setBuffer call in the REPL
   // (search "setBuffer" in the abort branch under `src/host/`) — same visual
