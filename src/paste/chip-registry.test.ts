@@ -22,6 +22,13 @@ describe("fallbackChipLabel", () => {
     const bidi = "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
     expect(fallbackChipLabel({ kind: "k", body: `@b${bidi}ob` })).toBe("@bob")
   })
+
+  it("removes whole escape sequences, not only the ESC byte", () => {
+    // 7-bit CSI, C1 CSI (U+009B), OSC with BEL, and SS3.
+    expect(fallbackChipLabel({ kind: "k", body: "a\x1b[31mred\x9b0m" })).toBe("ared")
+    expect(fallbackChipLabel({ kind: "k", body: "x\x1b]0;title\x07y" })).toBe("xy")
+    expect(fallbackChipLabel({ kind: "k", body: "p\x1bOPq" })).toBe("pq")
+  })
   it("removes zero-width and format characters", () => {
     const zw = "\u200b\u200c\u200d\u200e\u200f\ufeff"
     expect(fallbackChipLabel({ kind: "k", body: `a${zw}b` })).toBe("ab")

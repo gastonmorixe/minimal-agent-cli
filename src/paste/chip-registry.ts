@@ -25,6 +25,7 @@ import type {
   SidebandReader,
 } from "@minimal-agent/core/host/sideband"
 import { codePointWidth, displayWidth } from "@minimal-agent/core/plugin-api/utils/term-width"
+import { stripEscapeSequences } from "../input/strip-escapes.ts"
 
 /**
  * One chip of a line. `start` and `end` are code-point offsets into the line
@@ -246,7 +247,8 @@ export function fallbackChipLabel(node: Pick<SidebandNode, "kind" | "body">): st
  */
 function cleanLabel(label: string): string {
   if (typeof label !== "string") return ""
-  const flat = label
+  // Whole escape sequences go first, so no "[31m" text stays after the ESC.
+  const flat = stripEscapeSequences(label)
     .replace(/[\t\r\n]/gu, " ")
     // biome-ignore lint/suspicious/noControlCharactersInRegex: control bytes are what this removes.
     .replace(/[\x00-\x1f\x7f-\x9f]/gu, "")

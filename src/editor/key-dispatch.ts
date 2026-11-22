@@ -27,6 +27,7 @@ import {
   trailingPrefixLength,
 } from "../input/key-codec.ts"
 
+import { stripEscapeSequences } from "../input/strip-escapes.ts"
 import type { PasteHookRegistry, PasteSource } from "../paste/paste-hooks.ts"
 import { AsyncPasteRunner } from "./async-paste-runner.ts"
 import { PasteAssembler } from "./paste-assembler.ts"
@@ -1278,52 +1279,4 @@ export class EditorKeyDispatcher {
   }
 }
 
-/** The byte after ESC that starts a string control (OSC, DCS, SOS, PM, APC). */
-const STRING_CONTROL_INTRO = new Set(["]", "P", "X", "^", "_"])
-
-/**
- * Remove whole escape sequences from `s`: CSI (`ESC [` params, final byte),
- * SS3 (`ESC O` + one char), string controls (`ESC ]`, `ESC P`, ... up to BEL
- * or `ESC \\`), and `ESC` + one char. An incomplete sequence at the end is
- * removed too. Other bytes stay as they are.
- */
-export function stripEscapeSequences(s: string): string {
-  if (!s.includes("\x1b")) return s
-  let out = ""
-  let i = 0
-  while (i < s.length) {
-    const esc = s.indexOf("\x1b", i)
-    if (esc === -1) {
-      out += s.slice(i)
-      break
-    }
-    out += s.slice(i, esc)
-    const intro = s[esc + 1]
-    if (intro === undefined) break
-    if (intro === "[") {
-      let j = esc + 2
-      while (j < s.length) {
-        const k = s.charCodeAt(j)
-        if (k >= 0x40 && k <= 0x7e) {
-          j++
-          break
-        }
-        // A byte that cannot be in a CSI ends it (and stays as text).
-        if (k < 0x20 || k > 0x3f) break
-        j++
-      }
-      i = j
-    } else if (intro === "O") {
-      i = Math.min(s.length, esc + 3)
-    } else if (STRING_CONTROL_INTRO.has(intro)) {
-      const bel = s.indexOf("\x07", esc + 2)
-      const st = s.indexOf("\x1b\\", esc + 2)
-      const ends = [bel === -1 ? -1 : bel + 1, st === -1 ? -1 : st + 2].filter((n) => n !== -1)
-      i = ends.length > 0 ? Math.min(...ends) : s.length
-    } else {
-      const cp = s.codePointAt(esc + 1) ?? 0
-      i = esc + 1 + (cp > 0xffff ? 2 : 1)
-    }
-  }
-  return out
-}
+export { stripEscapeSequences }

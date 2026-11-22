@@ -239,6 +239,8 @@ describe("EditorController — whole-paste assembly (U10)", () => {
     expect(stripEscapeSequences("a\x1b]0;title\x1b\\b")).toBe("ab")
     expect(stripEscapeSequences("a\x1bxb")).toBe("ab")
     expect(stripEscapeSequences("a\x1b[12")).toBe("a")
+    // The C1 CSI (U+009B) is a one-byte CSI: its params go with it.
+    expect(stripEscapeSequences("a\x9b31mb")).toBe("ab")
     expect(stripEscapeSequences("plain")).toBe("plain")
   })
 
