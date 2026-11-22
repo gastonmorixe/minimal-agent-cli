@@ -7,7 +7,10 @@
  *   store onto the process sid (`SessionStore.fork`, as `bootSessionStores`
  *   does), which links `<sid>.files/**`. The replay of the forked session
  *   shows the chip (with the size: the file is known), and the next send of
- *   the resumed session (`resumeFrom`) expands the old ref.
+ *   the resumed session (`resumeFrom`) expands the old ref. The unsent
+ *   draft (resume prefill) and the abort restore show the chip in the
+ *   editor, and the buffer keeps the codec form. A NEW paste after the fork
+ *   saves under `<newSid>.files/paste/`.
  * - I6 (mid-turn drain): a paste during a turn goes in the input queue as a
  *   ref. The next round takes it (`inputQueue`), and the wire of that round
  *   has the paste text; the JSONL keeps the ref.
@@ -20,7 +23,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -33,6 +36,8 @@ import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
 import { registerTestProvider } from "@minimal-agent/core/testing/provider-fixture"
 
+import { formatRestoredMessages } from "../editor/queue-restore.ts"
+import { make } from "../editor-controller.fixtures.ts"
 import { InteractiveSession } from "../interactive-session.ts"
 import { loadPluginUi } from "../plugins-ui/ui-loader.ts"
 import { replayToScrollback } from "../session-replay.ts"
@@ -266,5 +271,60 @@ describe.skipIf(!HAVE_PLUGIN)("paste plugin through the CLI chain (I5, I6)", () 
     const spans = fresh.chips.spansOf(ref, loader.sideband())
     expect(spans).toHaveLength(1)
     expect(spans[0]!.label).toBe(`[Paste #${id} 18B 3L]`)
+  })
+
+  // Last in the file: it forks the store again.
+  test("I5: the draft prefill and the abort restore show the chip; a new paste saves under the new sid", () => {
+    const sb = loader.sideband()
+    const oldRef = sb.render("paste", { attrs: { id: "old01", bytes: 33, lines: 2 } })
+    // The earlier session ends with a user message and no reply: the draft.
+    const src = SessionStore.open({
+      sid: SRC_SID,
+      dir: sessionsDir,
+      cwd: root,
+      ...BASE,
+      existsOk: true,
+    })
+    src.appendUser([{ type: "text", text: `retry ${oldRef}` }])
+    rmSync(store.path, { force: true })
+    rmSync(join(sessionsDir, `${store.sid}.files`), { recursive: true, force: true })
+    store = SessionStore.fork({
+      srcSid: SRC_SID,
+      dstSid: store.sid,
+      dir: sessionsDir,
+      cwd: root,
+      ...BASE,
+    })
+    const draft = loadSession(store.sid, sessionsDir, { sideband: sb }).pendingDraft
+    expect(draft).toBe(`retry ${oldRef}`)
+    const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
+    // The resume prefill: live-repl.ts sets the draft before start.
+    const pre = make({ spanSource: (l) => chain.chips.spansOf(l, sb), columns: 200 })
+    pre.ctrl.setBuffer(draft!)
+    pre.ctrl.start()
+    expect(pre.ctrl.buffer().toString()).toBe(`retry ${oldRef}`)
+    const shown = pre.compositor.last()!.lines.map(plain).join("\n")
+    expect(shown).toContain("retry [Paste #old01 33B")
+    expect(shown).toContain("#old01 33B 2L]")
+    expect(shown).not.toContain('old01"')
+    pre.ctrl.stop()
+    // The abort restore: the in-flight text and a queued text go back to the buffer.
+    const restored = formatRestoredMessages([draft!, "queued"])
+    const ab = make({ spanSource: (l) => chain.chips.spansOf(l, sb), columns: 200 })
+    ab.ctrl.start()
+    ab.ctrl.setBuffer(restored)
+    expect(ab.ctrl.buffer().toString()).toBe(`1. retry ${oldRef}\n2. queued`)
+    const after = ab.compositor.last()!.lines.map(plain).join("\n")
+    expect(after).toContain("1. retry [Paste #old01 33B")
+    expect(after).toContain("#old01 33B 2L]")
+    ab.ctrl.stop()
+    // A new paste after the fork saves under the new sid, not the source sid.
+    const outcome = chain.hooks.run(chain.hooks.event("after fork A\nafter fork B", "bracketed"))
+    expect(outcome?.kind).toBe("insert")
+    const id = /id="([0-9a-z]{5})"/.exec((outcome as { text: string }).text)?.[1]
+    expect(id).toBeDefined()
+    const file = join(sessionsDir, `${store.sid}.files`, "paste", `${id}.txt`)
+    expect(readFileSync(file, "utf8")).toBe("after fork A\nafter fork B")
+    expect(existsSync(join(sessionsDir, `${SRC_SID}.files`, "paste", `${id}.txt`))).toBe(false)
   })
 })

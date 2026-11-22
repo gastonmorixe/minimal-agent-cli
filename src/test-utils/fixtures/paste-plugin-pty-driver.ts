@@ -8,6 +8,9 @@
  *   the text hook and the chip label;
  * - `chain.bindSid` and `bootSessionStores` (the CLI boot path), so the
  *   session file exists BEFORE the first message;
+ * - the media hook (`createMediaPasteHook`, priority 90), as `live-repl.ts`
+ *   registers it, so the plugin hook runs after the real media hook. The
+ *   report has the media results (`null` for a text paste);
  * - an `EditorController` with the chain hooks and the chip spans.
  *
  * Then it pastes 129 lines (no message was sent before), presses Enter, and
@@ -33,6 +36,7 @@ import { registerTestProvider } from "@minimal-agent/core/testing/provider-fixtu
 import { buildTestCore } from "@minimal-agent/core/testing/test-core"
 
 import { EditorController } from "../../editor-controller.ts"
+import { createMediaPasteHook } from "../../paste/media-paste.ts"
 import { createPasteChain, pasteUiHost } from "../../paste/paste-chain.ts"
 import { loadPluginUi } from "../../plugins-ui/ui-loader.ts"
 import { bootSessionStores } from "../../startup/session-store-boot.ts"
@@ -106,6 +110,19 @@ async function main(): Promise<void> {
     logger: (m) => logs.push(m),
     ...pasteUiHost(chain, () => sidebandOf(loader)),
   })
+  // live-repl.ts registers the media hook (90) after the plugin UI loads.
+  const media = createMediaPasteHook()
+  const mediaOutcomes: Array<string | null> = []
+  chain.hooks.register({
+    ...media,
+    onPaste: (ev) => {
+      const out = media.onPaste(ev)
+      mediaOutcomes.push(out === null ? null : out.kind)
+      return out
+    },
+  })
+  // The plugin text hook and the media hook.
+  const hookCount = chain.hooks.size
   // main.ts order: bind the sid, then boot the session stores.
   const sid = chain.bindSid(getSessionId(), getSessionId)
   const bootOut: string[] = []
@@ -227,6 +244,8 @@ async function main(): Promise<void> {
     jsonl,
     logs,
     bootOut,
+    hookCount,
+    mediaOutcomes,
   }
   process.stdout.write(
     `\nPASTE-PLUGIN-PTY ${Buffer.from(JSON.stringify(report)).toString("base64")}\n`,

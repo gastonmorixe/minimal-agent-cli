@@ -199,7 +199,13 @@ describe("paste ghost frames — real Bun.Terminal PTY integration", () => {
           files: Array<{ name: string; mode: number; text: string }>
           sent: string[]
           jsonl: string
+          hookCount: number
+          mediaOutcomes: Array<string | null>
         }
+        // The media hook (90) runs first and passes a text paste on (null),
+        // so the plugin hook still gives the paste chip.
+        expect(r.hookCount).toBe(2)
+        expect(r.mediaOutcomes).toEqual([null])
         // The screen shows the chip label, not the pasted lines.
         expect(r.screen).toContain("[Paste #")
         expect(r.screen).toContain("129L")
