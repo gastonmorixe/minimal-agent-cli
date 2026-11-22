@@ -24,12 +24,13 @@ import {
   isTypableKeyCode,
   parseCsiUKey,
   parseXtermOtherKey,
+  trailingPrefixLength,
 } from "../input/key-codec.ts"
 
 import type { PasteHookRegistry, PasteSource } from "../paste/paste-hooks.ts"
 import { AsyncPasteRunner } from "./async-paste-runner.ts"
 import { PasteAssembler } from "./paste-assembler.ts"
-import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from "./types.ts"
+import { BRACKETED_PASTE_START } from "./types.ts"
 
 /**
  * The editor capabilities the key dispatcher drives. Implemented by
@@ -102,6 +103,9 @@ export interface KeyDispatchHost {
   isStarted(): boolean
 }
 
+/** The default idle timeout of a bracketed paste with no end marker. */
+export const PASTE_IDLE_TIMEOUT_MS = 3000
+
 /** Options for {@link EditorKeyDispatcher}. */
 export interface KeyDispatchOptions {
   /**
@@ -117,6 +121,13 @@ export interface KeyDispatchOptions {
    * synchronous one-paint-per-chunk behavior (tests).
    */
   pasteCoalesceMs?: number
+  /**
+   * Idle timeout of a bracketed paste, in ms (default
+   * {@link PASTE_IDLE_TIMEOUT_MS}). When no byte comes for this time and the
+   * end marker did not come, the paste goes in as literal text (no chain run)
+   * with one `paste.unterminated` warning, so later typing is not hidden.
+   */
+  pasteIdleMs?: number
   /**
    * `setTimeout` injection for the bare-Esc / double-Esc / paste-coalesce
    * timers (fake-timer tests). The dispatcher round-trips the returned
@@ -170,6 +181,15 @@ export class EditorKeyDispatcher {
   private readonly assembler: PasteAssembler
   /** True while the "pasting N kB" status row is set. */
   private pasteStatusShown = false
+  /** The paste idle timer (see {@link KeyDispatchOptions.pasteIdleMs}). */
+  private pasteIdleTimer: unknown = null
+  private readonly pasteIdleMs: number
+  /**
+   * A partial `ESC[200~` at the end of a paste tail, held for the next read.
+   * When the next read completes it, a new paste starts. Else it is dropped
+   * (the tail is inert: an escape sequence there never runs as a key).
+   */
+  private startHold = ""
 
   constructor(
     private readonly host: KeyDispatchHost,
@@ -195,6 +215,7 @@ export class EditorKeyDispatcher {
     this.bareEscapeMs = opts.bareEscapeMs
     this.doubleEscapeMs = opts.doubleEscapeMs
     this.pasteCoalesceMs = opts.pasteCoalesceMs ?? 16
+    this.pasteIdleMs = opts.pasteIdleMs ?? PASTE_IDLE_TIMEOUT_MS
     this.setT = opts.setTimeout ?? ((cb, ms) => setTimeout(cb, ms))
     // The default branch narrows `h` back to a real Timeout via the
     // host-typed clearTimeout. Tests inject their own pair so the shape
@@ -234,7 +255,18 @@ export class EditorKeyDispatcher {
 
   /** Append a stdin chunk and consume as much of `pending` as possible. */
   onData(chunk: string | Buffer): void {
-    const input = typeof chunk === "string" ? chunk : chunk.toString("utf8")
+    let input = typeof chunk === "string" ? chunk : chunk.toString("utf8")
+    if (this.startHold) {
+      const s = this.startHold + input
+      this.startHold = ""
+      if (BRACKETED_PASTE_START.startsWith(s)) {
+        this.startHold = s
+        return
+      }
+      // A completed start marker starts the next paste; else the held bytes
+      // were an inert tail sequence and are dropped.
+      if (s.startsWith(BRACKETED_PASTE_START)) input = s
+    }
     // Two literal Escapes are never a terminal control sequence. Confirm both
     // immediately, rather than treating the second byte as an unknown escape.
     if (input === "\x1b\x1b" && this.pending.length === 0) {
@@ -260,27 +292,65 @@ export class EditorKeyDispatcher {
   }
 
   /**
-   * Drop bracketed-paste mode. Called by the controller's `stop()` so a
-   * stopped editor doesn't resume mid-paste.
+   * Clear pending input, delayed Escape routes and the paste state. The
+   * controller's `stop()` calls it, so a stopped editor does not resume
+   * mid-paste and no pending paste paint or idle timer fires after teardown.
    */
-  resetPasteState(): void {
-    this.bracketedPaste = false
-    this.assembler.abort()
-    // A stopped editor must not fire a pending coalesced paste paint:
-    // the trailing timer would repaint a dead live area after teardown.
-    this.clearPasteStatus()
-  }
-
-  /** Clear pending input and delayed Escape routes. */
   dispose(): void {
     this.asyncPaste.bumpEpoch() // drop an async paste still in flight
     this.cancelBareEscapeTimer()
     if (this.doubleEscapeTimer !== null) this.clearT(this.doubleEscapeTimer)
     this.doubleEscapeTimer = null
     this.pending = ""
+    this.startHold = ""
     this.bracketedPaste = false
     this.assembler.abort()
+    this.clearPasteIdleTimer()
     this.clearPasteStatus()
+  }
+
+  /** Enter bracketed-paste mode and start the idle timer. */
+  private beginPaste(): void {
+    this.bracketedPaste = true
+    this.armPasteIdleTimer()
+  }
+
+  /** (Re)start the idle timer of the paste in progress. */
+  private armPasteIdleTimer(): void {
+    this.clearPasteIdleTimer()
+    if (this.pasteIdleMs <= 0) return
+    this.pasteIdleTimer = this.setT(() => {
+      this.pasteIdleTimer = null
+      this.firePasteIdle()
+    }, this.pasteIdleMs)
+    ;(this.pasteIdleTimer as { unref?: () => void }).unref?.()
+  }
+
+  private clearPasteIdleTimer(): void {
+    if (this.pasteIdleTimer !== null) {
+      this.clearT(this.pasteIdleTimer)
+      this.pasteIdleTimer = null
+    }
+  }
+
+  /**
+   * The end marker did not come in time: finish the paste as LITERAL text (no
+   * chain run, so the user sees what went in), clear the status row, and send
+   * one `paste.unterminated` warning. The next bytes are keys again.
+   */
+  private firePasteIdle(): void {
+    if (!this.bracketedPaste) return
+    const bytes = this.assembler.bytes
+    const text = this.assembler.abandon()
+    this.bracketedPaste = false
+    this.clearPasteStatus()
+    this.host
+      .pasteHooks()
+      .warn("paste.unterminated", "The paste had no end marker; it went in as plain text", {
+        bytes,
+      })
+    this.insertLiteral(text)
+    if (this.host.isStarted()) this.host.repaint()
   }
 
   /** Clear the "pasting N kB" row and drop a pending coalesced paste paint. */
@@ -395,6 +465,8 @@ export class EditorKeyDispatcher {
     // (no terminator consumed yet). Those repaints go through the
     // trailing coalesce instead of painting synchronously per chunk.
     let pasteDirty = false
+    /** True when a paste ended in this read: paint now, even if a next paste started. */
+    let pasteEnded = false
     while (this.pending.length > 0) {
       if (this.bracketedPaste) {
         // A bracketed paste while the quit-confirm modal is open means
@@ -403,11 +475,14 @@ export class EditorKeyDispatcher {
           host.feedFsm({ kind: "printable", at: host.now() })
         }
         const r = this.consumeBracketedPaste()
-        if (r) {
+        if (r === "ended") {
           dirty = true
+          pasteEnded = true
+        } else if (r === "status") {
           // A paste in progress (no end marker yet) only changed the status
           // row: burst-coalesce it. At the end marker, paint now.
-          if (this.bracketedPaste) pasteDirty = true
+          dirty = true
+          pasteDirty = true
         }
         continue
       }
@@ -701,7 +776,7 @@ export class EditorKeyDispatcher {
         continue
       }
     }
-    if (pasteDirty) {
+    if (pasteDirty && !pasteEnded) {
       // Mid-burst paste chunk: schedule ONE trailing paint for the whole
       // burst instead of one full live-area repaint per stdin chunk.
       this.schedulePasteRepaint()
@@ -767,7 +842,7 @@ export class EditorKeyDispatcher {
       const seq = input.slice(0, end + 1)
       this.pending = input.slice(end + 1)
       if (seq === BRACKETED_PASTE_START) {
-        this.bracketedPaste = true
+        this.beginPaste()
         return "ignore"
       }
       // Legacy shift+tab (back-tab). Most terminals emit ESC[Z for it.
@@ -1072,25 +1147,32 @@ export class EditorKeyDispatcher {
 
   /**
    * Feed the pending bytes of a bracketed paste to the assembler. The paste
-   * chain runs ONE time, at the end marker, with the whole text (D5). After
-   * the end marker, the rest of the same chunk goes in as sanitized literal
-   * text, not as keys (so a CR there is a newline, not a submit). Returns
-   * true when the buffer or the paste status row changed.
+   * chain runs ONE time, at the end marker, with the whole text (D5).
+   *
+   * After the end marker, the rest of the same read is split at each
+   * `ESC[200~`: the part before it is the inert tail (see
+   * {@link insertPasteTail}), and the part after it is a NEW paste, which
+   * goes back to `pending` so the loop in `consumePending` gives it to the
+   * assembler. One read can hold N pastes. Returns "status" when only the
+   * "pasting N kB" row (or an over-cap spill) changed, "ended" when a paste
+   * ended and the buffer or the row changed, else "none".
    */
-  private consumeBracketedPaste(): boolean {
+  private consumeBracketedPaste(): "status" | "ended" | "none" {
     const { done, rest, spill } = this.assembler.push(this.pending)
     this.pending = ""
     // Over the size cap: the text goes in now as literal text (never dropped).
     let changed = spill.length > 0 && this.insertLiteral(spill)
     if (!done) {
-      if (this.assembler.bytes === 0) return changed
+      this.armPasteIdleTimer()
+      if (this.assembler.bytes === 0) return changed ? "status" : "none"
       // Count bytes only, never scan the text (S-2).
       const kb = Math.max(1, Math.round(this.assembler.bytes / 1000))
       this.host.setPasteStatus(`pasting ${kb} kB`)
       this.pasteStatusShown = true
-      return true
+      return "status"
     }
     this.bracketedPaste = false
+    this.clearPasteIdleTimer()
     const overflowed = this.assembler.overflowed
     const text = this.assembler.finish()
     // The end paint (consumePending) clears the status row and shows the
@@ -1099,10 +1181,30 @@ export class EditorKeyDispatcher {
     this.clearPasteStatus()
     if (overflowed) changed = this.insertLiteral(text) || changed
     else changed = this.insertPasted(text, "bracketed") || changed
-    // The rest of the chunk is literal text; stray paste markers in it are dropped.
-    const tail = rest.replaceAll(BRACKETED_PASTE_START, "").replaceAll(BRACKETED_PASTE_END, "")
-    if (tail.length > 0) changed = this.insertLiteral(tail) || changed
-    return changed
+    const next = rest.indexOf(BRACKETED_PASTE_START)
+    if (next === -1) {
+      // A start marker split across reads: hold its first bytes (onData).
+      const keep = trailingPrefixLength(rest, BRACKETED_PASTE_START)
+      this.startHold = rest.slice(rest.length - keep)
+      changed = this.insertPasteTail(rest.slice(0, rest.length - keep)) || changed
+    } else {
+      changed = this.insertPasteTail(rest.slice(0, next)) || changed
+      this.beginPaste()
+      this.pending = rest.slice(next + BRACKETED_PASTE_START.length)
+    }
+    return changed ? "ended" : "none"
+  }
+
+  /**
+   * The tail rule (plan D11.1): the text after an end marker, in the same
+   * read, is INERT literal text, never keys. A clipboard that holds a fake end
+   * marker and a CR must not submit. Whole ESC sequences (CSI, SS3, OSC/DCS
+   * strings, ESC + one char) are dropped, C0 controls other than LF and TAB
+   * are dropped, and a CR or CRLF becomes one newline. The next read is keys.
+   */
+  private insertPasteTail(tail: string): boolean {
+    if (tail.length === 0) return false
+    return this.insertLiteral(stripEscapeSequences(tail))
   }
 
   /**
@@ -1174,4 +1276,54 @@ export class EditorKeyDispatcher {
     flush()
     return changed
   }
+}
+
+/** The byte after ESC that starts a string control (OSC, DCS, SOS, PM, APC). */
+const STRING_CONTROL_INTRO = new Set(["]", "P", "X", "^", "_"])
+
+/**
+ * Remove whole escape sequences from `s`: CSI (`ESC [` params, final byte),
+ * SS3 (`ESC O` + one char), string controls (`ESC ]`, `ESC P`, ... up to BEL
+ * or `ESC \\`), and `ESC` + one char. An incomplete sequence at the end is
+ * removed too. Other bytes stay as they are.
+ */
+export function stripEscapeSequences(s: string): string {
+  if (!s.includes("\x1b")) return s
+  let out = ""
+  let i = 0
+  while (i < s.length) {
+    const esc = s.indexOf("\x1b", i)
+    if (esc === -1) {
+      out += s.slice(i)
+      break
+    }
+    out += s.slice(i, esc)
+    const intro = s[esc + 1]
+    if (intro === undefined) break
+    if (intro === "[") {
+      let j = esc + 2
+      while (j < s.length) {
+        const k = s.charCodeAt(j)
+        if (k >= 0x40 && k <= 0x7e) {
+          j++
+          break
+        }
+        // A byte that cannot be in a CSI ends it (and stays as text).
+        if (k < 0x20 || k > 0x3f) break
+        j++
+      }
+      i = j
+    } else if (intro === "O") {
+      i = Math.min(s.length, esc + 3)
+    } else if (STRING_CONTROL_INTRO.has(intro)) {
+      const bel = s.indexOf("\x07", esc + 2)
+      const st = s.indexOf("\x1b\\", esc + 2)
+      const ends = [bel === -1 ? -1 : bel + 1, st === -1 ? -1 : st + 2].filter((n) => n !== -1)
+      i = ends.length > 0 ? Math.min(...ends) : s.length
+    } else {
+      const cp = s.codePointAt(esc + 1) ?? 0
+      i = esc + 1 + (cp > 0xffff ? 2 : 1)
+    }
+  }
+  return out
 }

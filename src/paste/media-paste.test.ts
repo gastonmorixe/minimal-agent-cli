@@ -86,6 +86,26 @@ describe("media paste hook", () => {
     ])
   })
 
+  it("a clipboard image over the size floor emits media.rejected and gives no token", async () => {
+    const { diagnostics, warns } = spyDiagnostics()
+    const registry = createMediaRegistry()
+    const png = new Uint8Array(24 + 6 * 1024 * 1024)
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0)
+    png.set([0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52], 8)
+    png[19] = 2
+    png[23] = 2
+    const hook = createMediaPasteHook({
+      diagnostics,
+      registry: () => registry,
+      intercept: () => null,
+      readImage: async () => ({ bytes: png }),
+    })
+    const out = hook.onPaste(ev(""))
+    if (out?.kind !== "defer") throw new Error("expected defer")
+    expect(await out.run()).toBeNull()
+    expect(warns.map((w) => w.source)).toEqual(["media.rejected"])
+  })
+
   it("J1: an empty clipboard is not a failure (no warning)", async () => {
     const { diagnostics, warns } = spyDiagnostics()
     const hook = createMediaPasteHook({

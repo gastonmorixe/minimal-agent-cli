@@ -5,7 +5,12 @@
 import { describe, expect, it } from "bun:test"
 
 import { make } from "../editor-controller.fixtures.ts"
-import { type PasteEvent, type PasteHook, PasteHookRegistry } from "./paste-hooks.ts"
+import {
+  interceptorHook,
+  type PasteEvent,
+  type PasteHook,
+  PasteHookRegistry,
+} from "./paste-hooks.ts"
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0))
 
@@ -156,6 +161,32 @@ describe("EditorController — paste chain outcomes (U11)", () => {
     await tick()
     expect(calls).toBe(0)
     expect(ctrl.buffer().toString()).toBe("text")
+    ctrl.stop()
+  })
+})
+
+describe("legacy adapters", () => {
+  it("an interceptor that gives its input unchanged declines (null)", () => {
+    const h = interceptorHook((p) => p)
+    expect(h.onPaste({ text: "  ", source: "bracketed", sid: undefined })).toBeNull()
+    expect(
+      interceptorHook(() => "[T]").onPaste({ text: "x", source: "bracketed", sid: undefined }),
+    ).toEqual({ kind: "insert", text: "[T]" })
+  })
+
+  it("an identity interceptor and a blank paste run the async read once", async () => {
+    const { ctrl, stdin } = make()
+    let reads = 0
+    ctrl.setPasteInterceptor((p) => p)
+    ctrl.setAsyncClipboardImageHandler(async () => {
+      reads++
+      return "[Image #1]"
+    })
+    ctrl.start()
+    stdin.send("\x1b[200~ \x1b[201~")
+    await tick()
+    expect(reads).toBe(1)
+    expect(ctrl.buffer().toString()).toBe(" [Image #1]")
     ctrl.stop()
   })
 })

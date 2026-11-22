@@ -10,6 +10,9 @@
  *   partial marker tail (at most 5 code units) and joins it to the next chunk.
  *   It never scans the collected text again.
  * - The text after the end marker in the same chunk is given back as `rest`.
+ * - A nested start marker (`ESC[200~`) in the paste text is removed (some
+ *   terminals and the PTY driver repeat it in each chunk). Hooks never see a
+ *   raw marker. A start marker split across chunks is held like the end tail.
  * - Over the size cap (default 32 MB), the assembler stops the collect step.
  *   It sends one warning and gives the text back as `spill`, to insert as
  *   literal text. The paste is never dropped, and the chain does not run.
@@ -18,7 +21,7 @@
  */
 
 import { trailingPrefixLength } from "../input/key-codec.ts"
-import { BRACKETED_PASTE_END } from "./types.ts"
+import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from "./types.ts"
 
 /** The default collect cap: 32 MB of UTF-8. */
 export const PASTE_ASSEMBLY_CAP_BYTES = 32 * 1024 * 1024
@@ -78,11 +81,15 @@ export class PasteAssembler {
       body = s.slice(0, idx)
       rest = s.slice(idx + BRACKETED_PASTE_END.length)
     } else {
-      const keep = trailingPrefixLength(s, BRACKETED_PASTE_END)
+      const keep = Math.max(
+        trailingPrefixLength(s, BRACKETED_PASTE_END),
+        trailingPrefixLength(s, BRACKETED_PASTE_START),
+      )
       body = s.slice(0, s.length - keep)
       this.tail = s.slice(s.length - keep)
     }
     const done = idx !== -1
+    if (body.includes(BRACKETED_PASTE_START)) body = body.replaceAll(BRACKETED_PASTE_START, "")
     if (body.length > 0) {
       this.count += Buffer.byteLength(body, "utf8")
       if (!this.over) this.parts.push(body)
@@ -113,6 +120,16 @@ export class PasteAssembler {
    */
   finish(): string {
     const text = this.over ? this.heldCr : this.parts.join("")
+    this.reset()
+    return text
+  }
+
+  /**
+   * Take the text of a paste that has no end marker (the idle timeout), with
+   * the held marker tail, and reset. Over the cap, only the held part is left.
+   */
+  abandon(): string {
+    const text = (this.over ? this.heldCr : this.parts.join("")) + this.tail
     this.reset()
     return text
   }

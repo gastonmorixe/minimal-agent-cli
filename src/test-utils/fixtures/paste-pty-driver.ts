@@ -138,8 +138,8 @@ async function run(): Promise<void> {
   // the whole-paste assembler (paste plugin v3, D1): the buffer stays empty
   // and only the "pasting N kB" status row changes, through the trailing
   // paste-paint coalesce. The terminator paints the whole paste at once.
-  // (Each chunk repeats the start marker; the assembler keeps it as text,
-  // the same as before the assembly, when each chunk inserted it literally.)
+  // (Each chunk repeats the start marker; the assembler removes a nested
+  // start marker, so the hooks and the buffer never see it.)
   const chunks: string[] = []
   const per = Math.ceil(payload.length / 12)
   for (let i = 0; i < payload.length; i += per) chunks.push(payload.slice(i, i + per))

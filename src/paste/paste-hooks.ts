@@ -158,8 +158,15 @@ export class PasteHookRegistry {
 }
 
 /**
- * Adapter for the legacy sync interceptor: a non-null result is an insert.
- * Priority 90, the slot of the media hook.
+ * Adapter for the legacy sync interceptor: a result that is not null and not
+ * the input unchanged is an insert. Priority 90, the slot of the media hook.
+ *
+ * An interceptor that gives its input back unchanged declined the paste (the
+ * old rule: `text.trim() === "" && intercepted === text` ran the async read).
+ * So the adapter gives `null`, and the async adapter (89) can run.
+ *
+ * With both legacy adapters, Ctrl+V runs the interceptor two times: one time
+ * on "" (step 1 of the Ctrl+V order) and one time on the clipboard text.
  */
 export function interceptorHook(fn: (pasted: string) => string | null): PasteHook {
   return {
@@ -167,7 +174,7 @@ export function interceptorHook(fn: (pasted: string) => string | null): PasteHoo
     priority: 90,
     onPaste: (ev) => {
       const text = fn(ev.text)
-      return text == null ? null : { kind: "insert", text }
+      return text == null || text === ev.text ? null : { kind: "insert", text }
     },
   }
 }
