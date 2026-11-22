@@ -18,12 +18,14 @@
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import { getGlobalEventBus } from "@minimal-agent/core/host/global-bus"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
+import { sidebandOf } from "@minimal-agent/core/host/sideband"
 import { AutoAskController } from "@minimal-agent/core/host-kit/auto-ask"
 import type { ModeManager } from "@minimal-agent/core/host-kit/modes"
 import type { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import type { ResolvedLiveAreaSlot } from "@minimal-agent/core/plugin-api/types/plugin"
 import { isDebugRequested } from "../cli/debug-gate.ts"
 import type { CliUserConfig } from "../config/terminal-config.ts"
+import type { ChipRegistry } from "../paste/chip-registry.ts"
 import { clipboardText } from "../paste/clipboard.ts"
 import { createMediaPasteHook } from "../paste/media-paste.ts"
 import { cliPasteChain } from "../paste/paste-chain.ts"
@@ -68,6 +70,11 @@ export interface LiveAreaReplOptions {
    * row of its own instead of joining the open row of a streaming response.
    */
   scrollbackSink: ScrollbackDiagnosticSink | null
+  /**
+   * The chip registry (D2). Default: `cliPasteChain().chips`, the process
+   * registry. The editor shows each inline sideband node as a chip.
+   */
+  chips?: ChipRegistry
 }
 
 /**
@@ -92,6 +99,8 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     pendingDraft,
     scrollbackSink,
   } = opts
+  const chips = opts.chips ?? cliPasteChain().chips
+  const sideband = sidebandOf(loader)
   const { Compositor } = await import("../ui/compositor.ts")
   const { EditorController } = await import("../editor-controller.ts")
   const { StdioInterceptor } = await import("../ui/stdio-interceptor.ts")
@@ -190,7 +199,12 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     ...(hasPlugins ? { hooks: loader.hooks() } : {}),
     // The process paste chain (made in main.ts before the plugin UI loads).
     pasteHooks: pasteChain.hooks,
+    // Atomic chips (D2): the buffer keeps the codec form, the editor paints
+    // and moves each inline node as one chip. No codec: no spans.
+    spanSource: (line) => chips.spansOf(line, sideband),
   })
+  // A chip label registered later (D3 plugins) changes the spans.
+  const disposeChipWatch = chips.subscribe(() => editor.buffer().invalidateSpans())
   // Media ingestion: the media paste hook (priority 90, src/paste/media-paste.ts).
   // A dropped image path (or, on Linux, a blank paste while an image sits on
   // the clipboard) becomes a `[Image #id WxH size]` token instead of literal
@@ -331,6 +345,7 @@ export async function runLiveAreaRepl(opts: LiveAreaReplOptions): Promise<void> 
     // Unsubscribe before the compositor inside runReplLiveArea goes away.
     dumpHandle?.dispose()
     disposeMediaPaste()
+    disposeChipWatch()
     disposeCacheBreakRows()
     restoreDiagnosticWriter()
     interceptor.uninstall()

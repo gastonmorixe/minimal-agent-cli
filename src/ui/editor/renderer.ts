@@ -23,7 +23,21 @@ import {
 } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { BufferStyleSpan } from "../../editor/types.ts"
 import type { EditorBuffer } from "../../input/editor-buffer.ts"
+import { CHIP_SGR, type ChipSpan } from "../../paste/chip-registry.ts"
 import { ansiStyle as c } from "../../terminal-kit/ansi.ts"
+import {
+  colInChunks,
+  cursorInChunks,
+  EDITOR_TAB_STOP,
+  type LineCell,
+  lineCells,
+  NO_CHIP_SPANS,
+  rowsOfChunks,
+  tabCells,
+  wrapCells,
+} from "./line-cells.ts"
+
+export { EDITOR_TAB_STOP }
 
 export interface EditorRendererOptions {
   prompt: string
@@ -180,7 +194,9 @@ export class EditorRenderer {
       const prompt = isFirstLogical ? this.prompt : this.continuationPrompt
       const promptW = isFirstLogical ? this.promptWidth : this.continuationPromptWidth
       const lineText = buf.lines[logical]
-      const cells = lineCells(lineText)
+      // Chips paint as their label. Show-hidden paints the raw tag.
+      const spans = this.showHidden ? NO_CHIP_SPANS : spansOf(buf, logical)
+      const cells = lineCells(lineText, spans)
       // Style of each code point of this line, or null when no span covers it.
       const styleAt = lineAbsStarts
         ? resolveLineStyles(codePointCount(lineText), lineAbsStarts[logical]!, styles)
@@ -197,7 +213,10 @@ export class EditorRenderer {
         )
         if (logical === buf.row) {
           cursorRow = i
-          cursorCol = promptW + buf.col + tabExtraCells(lineText, buf.col)
+          cursorCol =
+            spans.length > 0
+              ? cursorInChunks([cells], buf.col, promptW, Number.POSITIVE_INFINITY).col
+              : promptW + buf.col + tabExtraCells(lineText, buf.col)
           cursorPlaced = true
         }
         continue
@@ -214,7 +233,14 @@ export class EditorRenderer {
         lines.push((k === 0 ? prompt : "") + painted)
       }
 
-      if (logical === buf.row) {
+      if (logical === buf.row && spans.length > 0) {
+        // Chip layout: the cursor sits before the cell of the next unit.
+        const at = cursorInChunks(chunks, buf.col, promptW, cols)
+        if (at.phantom) lines.push("")
+        cursorRow = startPhysical + at.row
+        cursorCol = at.col
+        cursorPlaced = true
+      } else if (logical === buf.row) {
         const colW = displayWidthOfChars(lineText, buf.col)
         const total = promptW + colW
         const atExactFill = total > 0 && total % cols === 0
@@ -265,6 +291,13 @@ export class EditorRenderer {
     let total = 0
     for (let i = 0; i < buf.lines.length; i++) {
       const promptW = i === 0 ? this.promptWidth : this.continuationPromptWidth
+      const spans = this.showHidden ? NO_CHIP_SPANS : spansOf(buf, i)
+      if (spans.length > 0) {
+        const chunks = wrapCells(lineCells(buf.lines[i], spans), columns, promptW)
+        const atEnd = i === buf.row && buf.col === codePointCount(buf.lines[i])
+        total += rowsOfChunks(chunks, promptW, columns, atEnd)
+        continue
+      }
       const w = promptW + editorLineWidth(buf.lines[i])
       let rows = wrapRows(w, columns)
       // Phantom row when the cursor sits at end of an exact-fill line —
@@ -291,7 +324,8 @@ function codePointCount(text: string): number {
 }
 
 /**
- * Cells between tab stops in the editor. The renderer paints a tab as spaces
+ * `EDITOR_TAB_STOP` (in `line-cells.ts`, re-exported here): cells between
+ * tab stops in the editor. The renderer paints a tab as spaces
  * up to the next stop, counted from the start of the line content (after the
  * prompt), so the same text has the same shape on every row.
  *
@@ -304,12 +338,6 @@ function codePointCount(text: string): number {
  * more copy of the frame on screen (user report Nov 20 2026, a paste of
  * `cat -n` text).
  */
-export const EDITOR_TAB_STOP = 8
-
-/** Cells a tab uses when it starts `contentCol` cells into the line content. */
-function tabCells(contentCol: number): number {
-  return EDITOR_TAB_STOP - (contentCol % EDITOR_TAB_STOP)
-}
 
 /**
  * Display width of the first `charCount` code points of `text`, with each tab
@@ -387,9 +415,19 @@ export function computeCursorVisualPos(
   col: number,
   promptW: number,
   cols: number,
+  spans: readonly ChipSpan[] = NO_CHIP_SPANS,
 ): { visualRow: number; visualCol: number; rowsInLine: number } {
   if (cols <= 0) {
     return { visualRow: 0, visualCol: promptW, rowsInLine: 1 }
+  }
+  if (spans.length > 0) {
+    // Chip layout: the same display-cell map as the renderer.
+    const chunks = wrapCells(lineCells(text, spans), cols, promptW)
+    const at = cursorInChunks(chunks, col, promptW, cols)
+    // A phantom row parks at the end of the last row, as below.
+    return at.phantom
+      ? { visualRow: chunks.length - 1, visualCol: cols, rowsInLine: chunks.length }
+      : { visualRow: at.row, visualCol: at.col, rowsInLine: chunks.length }
   }
   const colCells = displayWidthOfChars(text, col)
   const totalCells = promptW + colCells
@@ -429,8 +467,13 @@ export function findColAtVisualPos(
   targetVisualCol: number,
   promptW: number,
   cols: number,
+  spans: readonly ChipSpan[] = NO_CHIP_SPANS,
 ): number {
   if (cols <= 0 || targetVisualRow < 0) return 0
+  if (spans.length > 0) {
+    const chunks = wrapCells(lineCells(text, spans), cols, promptW)
+    return colInChunks(chunks, targetVisualRow, targetVisualCol, promptW, codePointCount(text))
+  }
   // Total cells from line start to target visual position.
   const rowStartCells = targetVisualRow * cols
   // First row starts after the prompt; later rows start at col 0.
@@ -454,77 +497,6 @@ export function findColAtVisualPos(
     i += ch.length
   }
   return col
-}
-
-/**
- * One painted unit of a logical line. Most code points give one cell entry of
- * their display width (0 for a combining mark, 2 for a wide glyph). A tab
- * gives one entry of width 1 for each cell to its next stop, so a wrap can
- * fall inside it.
- */
-interface LineCell {
-  /** Text to paint: the code point, or one space for a cell of a tab. */
-  text: string
-  /** Index of the source code point in the logical line. */
-  cp: number
-  /** Display width in terminal cells. */
-  width: number
-  /** `head` for the first cell of a tab, `fill` for its other cells. */
-  tab?: "head" | "fill"
-}
-
-/** Split a logical line into {@link LineCell}s, with tabs expanded. */
-function lineCells(text: string): LineCell[] {
-  const cells: LineCell[] = []
-  let col = 0
-  let index = 0
-  for (let i = 0; i < text.length; ) {
-    const cp = text.codePointAt(i)
-    if (cp === undefined) break
-    const ch = String.fromCodePoint(cp)
-    i += ch.length
-    if (cp === 0x09) {
-      const n = tabCells(col)
-      for (let k = 0; k < n; k++) {
-        cells.push({ text: " ", cp: index, width: 1, tab: k === 0 ? "head" : "fill" })
-      }
-      col += n
-    } else {
-      const width = codePointWidth(cp)
-      cells.push({ text: ch, cp: index, width })
-      col += width
-    }
-    index += 1
-  }
-  return cells
-}
-
-/**
- * Split `cells` into chunks such that each chunk's display width fits within
- * the available cells of its physical row. The first chunk is sized for
- * `cols - firstPromptW` cells (because the prompt occupies the head of the
- * first physical row); subsequent chunks get the full `cols` width.
- *
- * Always returns at least one chunk (possibly empty) so the caller can
- * still emit the prompt-only row for empty buffers.
- */
-function wrapCells(cells: readonly LineCell[], cols: number, firstPromptW: number): LineCell[][] {
-  const result: LineCell[][] = []
-  let cap = Math.max(1, cols - firstPromptW)
-  let cur: LineCell[] = []
-  let curW = 0
-  for (const cell of cells) {
-    if (curW + cell.width > cap) {
-      result.push(cur)
-      cur = []
-      curW = 0
-      cap = cols
-    }
-    cur.push(cell)
-    curW += cell.width
-  }
-  if (result.length === 0 || cur.length > 0) result.push(cur)
-  return result
 }
 
 /**
@@ -586,11 +558,13 @@ function paintCells(
 ): string {
   let out = ""
   let i = 0
+  const styleOf = (cell: LineCell): string | null =>
+    cell.chip ? CHIP_SGR : styleAt ? (styleAt[cell.cp] ?? null) : null
   while (i < cells.length) {
-    const style = styleAt ? (styleAt[cells[i]!.cp] ?? null) : null
+    const style = styleOf(cells[i]!)
     let run = ""
     let j = i
-    while (j < cells.length && (styleAt ? (styleAt[cells[j]!.cp] ?? null) : null) === style) {
+    while (j < cells.length && styleOf(cells[j]!) === style) {
       run += cellText(cells[j]!, showHidden)
       j++
     }
@@ -601,7 +575,7 @@ function paintCells(
 }
 
 function cellText(cell: LineCell, showHidden: boolean): string {
-  if (!showHidden) return cell.text
+  if (!showHidden || cell.chip) return cell.text
   if (cell.tab === "head") return HIDDEN_TAB
   if (cell.tab === "fill") return " "
   return cell.text === " " ? HIDDEN_SPACE : cell.text
@@ -618,3 +592,24 @@ const HIDDEN_SPACE = c.dim("\u00b7")
 
 /** Faint `→` (U+2192 RIGHTWARDS ARROW) for the first cell of a tab in show-hidden mode. */
 const HIDDEN_TAB = c.dim("\u2192")
+
+/** The chip spans of `row` of `buf`, or none for a buffer with no span support. */
+function spansOf(buf: EditorBuffer, row: number): readonly ChipSpan[] {
+  return typeof buf.spansOfRow === "function" ? buf.spansOfRow(row) : NO_CHIP_SPANS
+}
+
+/**
+ * Physical rows of one logical line, with the same wrap as the renderer
+ * (chips included). `cols <= 0` gives 1.
+ */
+export function visualRowsInLine(
+  text: string,
+  promptW: number,
+  cols: number,
+  spans: readonly ChipSpan[] = NO_CHIP_SPANS,
+): number {
+  if (cols <= 0) return 1
+  if (spans.length > 0) return wrapCells(lineCells(text, spans), cols, promptW).length
+  const width = promptW + editorLineWidth(text)
+  return width <= 0 ? 1 : Math.max(1, Math.ceil(width / cols))
+}

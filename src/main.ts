@@ -729,6 +729,10 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   setGlobalEventBus(loader.bus())
   // The paste hook chain and its lazy sid getter exist BEFORE the plugin UI
   // loads (B-3), so D3 can pass `pasteChain.hooks` and `pasteChain.sid` to it.
+  // The chain also holds the process chip registry (D2): D3 passes
+  // `pasteChain.chips` to the loader (`ctx.chips`). The editor, the scrollback
+  // and the replay read the same object. No label is registered here: until a
+  // plugin registers one, a chip shows the fallback label.
   const pasteChain = cliPasteChain()
   // The UI part of each accepted plugin (S35): live-area slots from the
   // `ui` block, granted `ctx.tui`. Core loads only the headless part.
@@ -1228,6 +1232,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
         formatterCmd,
         codeHighlighter,
         // The codec reads the mode-change blocks and cuts tool annotations.
+        // Chips use `cliPasteChain().chips`, the registry made above.
         sideband: sidebandOf(loader),
         toolTimeTracker,
         toolStartTimes,

@@ -15,6 +15,7 @@
 import type { Hooks } from "@minimal-agent/core/host-kit/hooks"
 import type { AbortBus } from "../bus/abort-bus.ts"
 import type { FsmOptions } from "../bus/abort-quit-fsm.ts"
+import type { SpanSource } from "../input/editor-buffer.ts"
 import type { InputCaptureStack } from "../input/input-capture-stack.ts"
 import type { PasteHookRegistry } from "../paste/paste-hooks.ts"
 
@@ -304,6 +305,12 @@ export interface EditorControllerOptions {
    * chain (`paste/paste-chain.ts`). Default: a new, empty chain.
    */
   pasteHooks?: PasteHookRegistry
+  /**
+   * The atomic chip spans of one buffer line (paste plugin v3, D2). The CLI
+   * passes `chips.spansOf(line, sideband)` (`paste/chip-registry.ts`).
+   * Default: no spans, each code point is one unit.
+   */
+  spanSource?: SpanSource
 }
 
 /**

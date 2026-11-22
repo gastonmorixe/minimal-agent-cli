@@ -300,6 +300,7 @@ export class EditorController extends EventEmitter {
       () => (this.output as { columns?: number }).columns,
     )
     this.pasteHooks = opts.pasteHooks ?? new PasteHookRegistry()
+    if (opts.spanSource) this.buf.setSpanSource(opts.spanSource)
     this.dispatcher = new EditorKeyDispatcher(this.makeDispatchHost(), {
       bareEscapeMs: opts.bareEscapeMs ?? 20,
       doubleEscapeMs: opts.doubleEscapeMs ?? 500,
@@ -398,7 +399,8 @@ export class EditorController extends EventEmitter {
     let visualRow = 0
     let rowsInLogicalLine = 1
     if (cols && cols > 0) {
-      const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols)
+      const spans = this.buf.spansOfRow(this.buf.row)
+      const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols, spans)
       visualRow = cur.visualRow
       rowsInLogicalLine = cur.rowsInLine
     }
@@ -829,7 +831,8 @@ export class EditorController extends EventEmitter {
     if (!cols || cols <= 0) return true
     const line = this.buf.lines[0] ?? ""
     const promptW = this.renderer.promptDisplayWidthForRow(0)
-    return computeCursorVisualPos(line, this.buf.col, promptW, cols).visualRow === 0
+    const at = computeCursorVisualPos(line, this.buf.col, promptW, cols, this.buf.spansOfRow(0))
+    return at.visualRow === 0
   }
 
   /**

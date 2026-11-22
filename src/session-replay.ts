@@ -35,6 +35,8 @@ import type {
 } from "@minimal-agent/core/sdk/messages"
 import { buildCompactNoticeBlock } from "./commands/compact.ts"
 import { formatMarkdownLines } from "./commands/compact-stream.ts"
+import { type ChipRegistry, paintChip } from "./paste/chip-registry.ts"
+import { cliPasteChain } from "./paste/paste-chain.ts"
 import {
   deriveDisplayFallback,
   type ReplaySidecarTask,
@@ -115,6 +117,14 @@ export interface ReplayOptions {
    * no annotation cut.
    */
   sideband?: SidebandReader | null
+
+  /**
+   * The chip registry (paste plugin v3 D2). Each top-level
+   * inline to-model node of a user message (a paste ref, a peer mention)
+   * shows as its chip label, as in the live editor. Display only. Default:
+   * the process registry (`cliPasteChain().chips`). No codec: plain text.
+   */
+  chips?: ChipRegistry
 
   /**
    * Optional time-hint tracker shared with the live Agent. When provided
@@ -265,6 +275,7 @@ export async function replayToScrollback(
   const formatterCmd = opts.formatterCmd
   const codeHighlighter = opts.codeHighlighter ?? null
   const sideband = opts.sideband ?? NO_SIDEBAND
+  const chips = opts.chips ?? cliPasteChain().chips
   const toolTimeTracker = opts.toolTimeTracker ?? null
   const toolStartTimes = opts.toolStartTimes ?? null
   const userTimestamps = opts.userTimestamps ?? null
@@ -422,7 +433,8 @@ export async function replayToScrollback(
         const arrow = modeManager
           ? modePromptPrefixForId(modeManager, activeModeId, baseArrow)
           : baseArrow
-        const lines = [`${arrow}${text}`]
+        // Chips: display only, the record keeps the codec form.
+        const lines = [`${arrow}${chips.renderText(text, sideband, paintChip)}`]
         const renderedLines =
           showSubmittedAt && msgTs ? prefixSubmittedAtLines(lines, msgTs) : lines
         closeCard()

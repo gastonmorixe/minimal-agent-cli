@@ -9,8 +9,19 @@
  * All position units are unicode code points (matching `Array.from(line)`),
  * so emoji and other multi-code-unit characters count as one column.
  *
+ * Atomic spans (paste plugin v3, D2): an injected span source gives the chip
+ * spans of a line (`paste/chip-registry.ts`). A span moves, deletes and counts
+ * as one unit, and the cursor never stops inside a span.
+ *
  * @module editor-buffer
  */
+
+import type { ChipSpan } from "../paste/chip-registry.ts"
+
+/** The atomic spans of one line, in code points. A source must be pure. */
+export type SpanSource = (line: string) => readonly ChipSpan[]
+
+const NO_SPANS: readonly ChipSpan[] = []
 
 /**
  * Multiline text buffer plus cursor, with all mutation methods (insert,
@@ -22,6 +33,51 @@ export class EditorBuffer {
   private linesValue: string[] = [""]
   private rowValue = 0
   private colValue = 0
+  private spanSource: SpanSource | null = null
+  /** The spans of each row, with the line text they were computed for. */
+  private spanCache: ({ text: string; spans: readonly ChipSpan[] } | undefined)[] = []
+
+  /**
+   * Make an empty buffer.
+   *
+   * @param spanSource - The atomic span source. Omitted: no spans (each code
+   *   point is one unit, the old behavior).
+   */
+  constructor(spanSource?: SpanSource) {
+    this.spanSource = spanSource ?? null
+  }
+
+  /**
+   * Install (or with `null`, remove) the span source. Drops the span cache and
+   * moves the cursor out of a span.
+   */
+  setSpanSource(source: SpanSource | null): void {
+    this.spanSource = source
+    this.invalidateSpans()
+  }
+
+  /**
+   * Compute the spans of each line again, for example after a chip label
+   * change. The cursor moves back out of a span.
+   */
+  invalidateSpans(): void {
+    this.spanCache = []
+    this.snapCursor("back")
+  }
+
+  /**
+   * The atomic spans of `row`, sorted, not overlapping and inside the line.
+   * The buffer computes them again when the line text changes.
+   */
+  spansOfRow(row: number): readonly ChipSpan[] {
+    const text = this.linesValue[row]
+    if (this.spanSource === null || text === undefined || text.length === 0) return NO_SPANS
+    const hit = this.spanCache[row]
+    if (hit !== undefined && hit.text === text) return hit.spans
+    const spans = this.computeSpans(text)
+    this.spanCache[row] = { text, spans }
+    return spans
+  }
 
   get lines(): readonly string[] {
     return this.linesValue
@@ -31,17 +87,25 @@ export class EditorBuffer {
     return this.rowValue
   }
 
+  /** Clamps to the buffer, then moves the cursor back out of a span (W-1). */
   set row(value: number) {
     this.rowValue = Math.max(0, Math.min(value, this.linesValue.length - 1))
     this.colValue = Math.min(this.colValue, this.lineLength(this.rowValue))
+    this.snapCursor("back")
   }
 
   get col(): number {
     return this.colValue
   }
 
+  /**
+   * Clamps to the line, then moves the cursor out of a span (W-1): to its end
+   * when the cursor moves right, else to its start.
+   */
   set col(value: number) {
+    const previous = this.colValue
     this.colValue = Math.max(0, Math.min(value, this.lineLength(this.rowValue)))
+    this.snapCursor(this.colValue > previous ? "forward" : "back")
   }
 
   toString(): string {
@@ -62,6 +126,7 @@ export class EditorBuffer {
     this.linesValue = [""]
     this.rowValue = 0
     this.colValue = 0
+    this.spanCache = []
   }
 
   insert(text: string): boolean {
@@ -69,6 +134,7 @@ export class EditorBuffer {
     const [before, after] = this.splitAt(this.linesValue[this.rowValue], this.colValue)
     this.linesValue[this.rowValue] = before + text + after
     this.colValue += this.charLength(text)
+    this.snapCursor("forward")
     return true
   }
 
@@ -82,12 +148,14 @@ export class EditorBuffer {
 
   deleteBackward(): boolean {
     if (this.colValue > 0) {
+      const start = this.spanEndingAt(this.rowValue, this.colValue)?.start ?? this.colValue - 1
       this.linesValue[this.rowValue] = this.removeRange(
         this.linesValue[this.rowValue],
-        this.colValue - 1,
+        start,
         this.colValue,
       )
-      this.colValue -= 1
+      this.colValue = start
+      this.snapCursor("back")
       return true
     }
     if (this.rowValue === 0) return false
@@ -97,6 +165,7 @@ export class EditorBuffer {
     this.linesValue.splice(this.rowValue - 1, 2, previous + current)
     this.rowValue -= 1
     this.colValue = previousLength
+    this.snapCursor("back")
     return true
   }
 
@@ -104,17 +173,20 @@ export class EditorBuffer {
     const line = this.linesValue[this.rowValue]
     const lineLength = this.charLength(line)
     if (this.colValue < lineLength) {
-      this.linesValue[this.rowValue] = this.removeRange(line, this.colValue, this.colValue + 1)
+      const end = this.spanStartingAt(this.rowValue, this.colValue)?.end ?? this.colValue + 1
+      this.linesValue[this.rowValue] = this.removeRange(line, this.colValue, end)
+      this.snapCursor("back")
       return true
     }
     if (this.rowValue >= this.linesValue.length - 1) return false
     this.linesValue.splice(this.rowValue, 2, line + this.linesValue[this.rowValue + 1])
+    this.snapCursor("back")
     return true
   }
 
   moveLeft(): boolean {
     if (this.colValue > 0) {
-      this.colValue -= 1
+      this.colValue = this.spanEndingAt(this.rowValue, this.colValue)?.start ?? this.colValue - 1
       return true
     }
     if (this.rowValue === 0) return false
@@ -126,7 +198,7 @@ export class EditorBuffer {
   moveRight(): boolean {
     const lineLength = this.lineLength(this.rowValue)
     if (this.colValue < lineLength) {
-      this.colValue += 1
+      this.colValue = this.spanStartingAt(this.rowValue, this.colValue)?.end ?? this.colValue + 1
       return true
     }
     if (this.rowValue >= this.linesValue.length - 1) return false
@@ -139,6 +211,7 @@ export class EditorBuffer {
     if (this.rowValue === 0) return false
     this.rowValue -= 1
     this.colValue = Math.min(this.colValue, this.lineLength(this.rowValue))
+    this.snapCursor("back")
     return true
   }
 
@@ -146,6 +219,7 @@ export class EditorBuffer {
     if (this.rowValue >= this.linesValue.length - 1) return false
     this.rowValue += 1
     this.colValue = Math.min(this.colValue, this.lineLength(this.rowValue))
+    this.snapCursor("back")
     return true
   }
 
@@ -194,6 +268,7 @@ export class EditorBuffer {
       2,
       this.linesValue[this.rowValue] + this.linesValue[this.rowValue + 1],
     )
+    this.snapCursor("back")
     return true
   }
 
@@ -201,6 +276,7 @@ export class EditorBuffer {
     if (this.colValue === 0) return false
     this.linesValue[this.rowValue] = this.sliceChars(this.linesValue[this.rowValue], this.colValue)
     this.colValue = 0
+    this.snapCursor("back")
     return true
   }
 
@@ -220,6 +296,7 @@ export class EditorBuffer {
     }
     this.rowValue = startRow
     this.colValue = startCol
+    this.snapCursor("back")
     return true
   }
 
@@ -248,13 +325,17 @@ export class EditorBuffer {
         c = this.lineLength(r)
         continue
       }
+      if (this.spanEndingAt(r, c)) break
       const chars = this.lineChars(r)
       if (!this.isWhitespace(chars[c - 1])) break
       c -= 1
     }
+    // A span is one word of its own: the scan stops at its edges.
+    const span = this.spanEndingAt(r, c)
+    if (span) return [r, span.start]
+    const chars = this.lineChars(r)
     while (c > 0) {
-      const chars = this.lineChars(r)
-      if (this.isWhitespace(chars[c - 1])) break
+      if (this.isWhitespace(chars[c - 1]) || this.spanEndingAt(r, c)) break
       c -= 1
     }
     return [r, c]
@@ -276,18 +357,66 @@ export class EditorBuffer {
         c = 0
         continue
       }
+      if (this.spanStartingAt(r, c)) break
       const chars = this.lineChars(r)
       if (!this.isWhitespace(chars[c])) break
       c += 1
     }
-    while (true) {
-      const lineLen = this.lineLength(r)
-      if (c === lineLen) break
-      const chars = this.lineChars(r)
-      if (this.isWhitespace(chars[c])) break
+    const span = this.spanStartingAt(r, c)
+    if (span) return [r, span.end]
+    const chars = this.lineChars(r)
+    while (c < chars.length) {
+      if (this.isWhitespace(chars[c]) || this.spanStartingAt(r, c)) break
       c += 1
     }
     return [r, c]
+  }
+
+  /** The span of `row` that ends at `col`, if any. */
+  private spanEndingAt(row: number, col: number): ChipSpan | undefined {
+    for (const s of this.spansOfRow(row)) if (s.end === col) return s
+    return undefined
+  }
+
+  /** The span of `row` that starts at `col`, if any. */
+  private spanStartingAt(row: number, col: number): ChipSpan | undefined {
+    for (const s of this.spansOfRow(row)) if (s.start === col) return s
+    return undefined
+  }
+
+  /**
+   * Move the cursor out of a span that holds it: to the span end
+   * (`forward`) or to its start (`back`). No span: no change.
+   */
+  private snapCursor(direction: "forward" | "back"): void {
+    for (const s of this.spansOfRow(this.rowValue)) {
+      if (this.colValue > s.start && this.colValue < s.end) {
+        this.colValue = direction === "forward" ? s.end : s.start
+        return
+      }
+    }
+  }
+
+  /** The valid spans of `text` from the source: sorted, inside the line, no overlap. */
+  private computeSpans(text: string): readonly ChipSpan[] {
+    let raw: readonly ChipSpan[]
+    try {
+      raw = this.spanSource?.(text) ?? NO_SPANS
+    } catch {
+      return NO_SPANS
+    }
+    if (raw.length === 0) return NO_SPANS
+    const length = this.charLength(text)
+    const sorted = [...raw].sort((a, b) => a.start - b.start)
+    const out: ChipSpan[] = []
+    let last = 0
+    for (const s of sorted) {
+      if (!Number.isInteger(s.start) || !Number.isInteger(s.end)) continue
+      if (s.start < last || s.end <= s.start || s.end > length) continue
+      out.push(s)
+      last = s.end
+    }
+    return out.length === 0 ? NO_SPANS : out
   }
 
   private lineChars(row: number): string[] {

@@ -10,6 +10,7 @@ import type { Hooks } from "@minimal-agent/core/host-kit/hooks"
 import type { AbortBus } from "./bus/abort-bus.ts"
 
 import { EditorController } from "./editor-controller.ts"
+import type { SpanSource } from "./input/editor-buffer.ts"
 
 /** Fake raw-mode TTY stdin: records mode flips and lets tests inject bytes via `send`. */
 export class FakeTTYInput extends EventEmitter {
@@ -91,6 +92,8 @@ export function make(
     hooks?: Hooks
     /** Resize coalescing window; default 0 (synchronous) for tests. */
     resizeDebounceMs?: number
+    /** Atomic chip spans of a line (D2). */
+    spanSource?: SpanSource
   } = {},
 ) {
   const stdin = new FakeTTYInput()
@@ -117,6 +120,7 @@ export function make(
     ...(opts.armedTickMs !== undefined ? { armedTickMs: opts.armedTickMs } : {}),
     ...(opts.nowFn ? { nowFn: opts.nowFn } : {}),
     ...(opts.hooks ? { hooks: opts.hooks } : {}),
+    ...(opts.spanSource ? { spanSource: opts.spanSource } : {}),
   })
   return { ctrl, stdin, output, compositor }
 }

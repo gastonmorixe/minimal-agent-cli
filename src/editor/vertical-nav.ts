@@ -15,8 +15,8 @@
 import type { EditorBuffer } from "../input/editor-buffer.ts"
 import {
   computeCursorVisualPos,
-  editorLineWidth,
   findColAtVisualPos,
+  visualRowsInLine,
 } from "../ui/editor/renderer.ts"
 
 /**
@@ -102,12 +102,13 @@ export class VerticalNavigator {
     }
     const line = this.buf.lines[this.buf.row]
     const promptW = this.promptWidthForRow(this.buf.row)
-    const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols)
+    const spans = this.buf.spansOfRow(this.buf.row)
+    const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols, spans)
     if (this.desiredVisualCol === null) this.desiredVisualCol = cur.visualCol
     const target = this.desiredVisualCol
     if (cur.visualRow > 0) {
       // Same logical line, one wrap chunk up.
-      const newCol = findColAtVisualPos(line, cur.visualRow - 1, target, promptW, cols)
+      const newCol = findColAtVisualPos(line, cur.visualRow - 1, target, promptW, cols, spans)
       if (newCol === this.buf.col) {
         this.recordVerticalEndpoint()
         return false
@@ -124,10 +125,17 @@ export class VerticalNavigator {
     const prevRow = this.buf.row - 1
     const prevLine = this.buf.lines[prevRow]
     const prevPromptW = this.promptWidthForRow(prevRow)
-    const prevWidth = prevPromptW + editorLineWidth(prevLine)
-    const prevRowCount = prevWidth <= 0 ? 1 : Math.max(1, Math.ceil(prevWidth / cols))
+    const prevSpans = this.buf.spansOfRow(prevRow)
+    const prevRowCount = visualRowsInLine(prevLine, prevPromptW, cols, prevSpans)
     const targetVisualRow = prevRowCount - 1
-    const newCol = findColAtVisualPos(prevLine, targetVisualRow, target, prevPromptW, cols)
+    const newCol = findColAtVisualPos(
+      prevLine,
+      targetVisualRow,
+      target,
+      prevPromptW,
+      cols,
+      prevSpans,
+    )
     this.buf.row = prevRow
     // EditorBuffer's `row` setter clamps `col`; we then set col explicitly
     // (the setter clamps to the line length, which is what we want when
@@ -153,12 +161,13 @@ export class VerticalNavigator {
     }
     const line = this.buf.lines[this.buf.row]
     const promptW = this.promptWidthForRow(this.buf.row)
-    const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols)
+    const spans = this.buf.spansOfRow(this.buf.row)
+    const cur = computeCursorVisualPos(line, this.buf.col, promptW, cols, spans)
     if (this.desiredVisualCol === null) this.desiredVisualCol = cur.visualCol
     const target = this.desiredVisualCol
     if (cur.visualRow < cur.rowsInLine - 1) {
       // Same logical line, one wrap chunk down.
-      const newCol = findColAtVisualPos(line, cur.visualRow + 1, target, promptW, cols)
+      const newCol = findColAtVisualPos(line, cur.visualRow + 1, target, promptW, cols, spans)
       if (newCol === this.buf.col) {
         this.recordVerticalEndpoint()
         return false
@@ -175,7 +184,8 @@ export class VerticalNavigator {
     const nextRow = this.buf.row + 1
     const nextLine = this.buf.lines[nextRow]
     const nextPromptW = this.promptWidthForRow(nextRow)
-    const newCol = findColAtVisualPos(nextLine, 0, target, nextPromptW, cols)
+    const nextSpans = this.buf.spansOfRow(nextRow)
+    const newCol = findColAtVisualPos(nextLine, 0, target, nextPromptW, cols, nextSpans)
     this.buf.row = nextRow
     this.buf.col = newCol
     this.recordVerticalEndpoint()

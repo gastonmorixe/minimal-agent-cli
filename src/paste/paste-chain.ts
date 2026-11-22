@@ -10,12 +10,18 @@
  * @module paste/paste-chain
  */
 
+import { ChipRegistry } from "./chip-registry.ts"
 import { PasteHookRegistry } from "./paste-hooks.ts"
 
 /** The paste registry and the lazy session id getter of one CLI process. */
 export interface CliPasteChain {
   /** The paste hook chain. The editor runs it; plugins register on it (D3). */
   readonly hooks: PasteHookRegistry
+  /**
+   * The chip registry (D2). The editor, the scrollback and the replay show
+   * each inline sideband node with it; plugins register labels on it (D3).
+   */
+  readonly chips: ChipRegistry
   /** The lazy sid getter: `undefined` until {@link bindSid}. */
   readonly sid: () => string | undefined
   /**
@@ -31,6 +37,7 @@ export function createPasteChain(): CliPasteChain {
   const sid = () => source()
   return {
     hooks: new PasteHookRegistry({ sid }),
+    chips: new ChipRegistry(),
     sid,
     bindSid(value, live) {
       source = live ?? (() => value)
