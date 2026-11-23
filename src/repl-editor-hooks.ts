@@ -31,6 +31,8 @@ export interface EditorHooksEditor {
   closeOverlay?: (owner: string) => void
   isOverlayOwner?: (owner: string) => boolean
   setPrompt?: (prompt: string, continuationPrompt?: string) => void
+  /** The editor buffer: `displayText` shows a raw text with chip labels. */
+  buffer?: () => { displayText(text: string): string }
 }
 
 /**
@@ -218,7 +220,9 @@ export function registerEditorPluginHooks(
         if (r.disabled !== undefined && typeof r.disabled !== "boolean") return
         items.push({
           value: r.id,
-          label: r.label,
+          // Display only: a paste ref in a prompt row (the history-edit
+          // picker) shows as its chip label. The row id stays the same.
+          label: editor.buffer?.().displayText(r.label) ?? r.label,
           ...(r.hint === undefined ? {} : { hint: r.hint }),
           ...(r.disabled === undefined ? {} : { disabled: r.disabled }),
         })

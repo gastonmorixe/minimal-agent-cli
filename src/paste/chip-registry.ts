@@ -227,6 +227,39 @@ export class ChipRegistry {
 }
 
 /**
+ * `text` with each chip span of each line replaced by its label (plain, no
+ * SGR). `spansOf` gives the spans of one line, in code points, as the editor
+ * `spanSource` does. Display only: never send or store the result.
+ */
+export function applyChipSpans(
+  text: string,
+  spansOf: ((line: string) => readonly ChipSpan[]) | null | undefined,
+): string {
+  if (!spansOf || text.length === 0) return text
+  return text
+    .split("\n")
+    .map((line) => {
+      let spans: readonly ChipSpan[]
+      try {
+        spans = spansOf(line)
+      } catch {
+        return line
+      }
+      if (spans.length === 0) return line
+      const cps = Array.from(line)
+      let out = ""
+      let at = 0
+      for (const s of spans) {
+        if (s.start < at || s.end <= s.start) continue
+        out += cps.slice(at, s.start).join("") + s.label
+        at = s.end
+      }
+      return out + cps.slice(at).join("")
+    })
+    .join("\n")
+}
+
+/**
  * The label of a node with no registered label: the body when it is short
  * and on one line, else `[<kind>]`.
  */

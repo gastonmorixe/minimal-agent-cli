@@ -12,9 +12,11 @@ import { inspectSessionArtifacts } from "@minimal-agent/core/host/session-artifa
 import { resolveSessionTarget } from "@minimal-agent/core/host/session-index"
 import { createSessionsReadApi } from "@minimal-agent/core/host/sessions-read"
 import { loadSidebandOnly, type SidebandOnlyOptions } from "@minimal-agent/core/host/sideband"
+import { defaultSessionsDir } from "@minimal-agent/core/host-kit/session-store"
 import { writeStdoutSafely } from "../infra/safe-stdout.ts"
 import { formatSessionArtifacts } from "./session-artifacts-format.ts"
 import { formatSessionAsMarkdown, formatSessionAsXml } from "./session-dump.ts"
+import { pasteFileReader } from "./session-dump-paste.ts"
 
 export interface DumpCommandInput {
   target: string
@@ -26,6 +28,8 @@ export interface DumpCommandInput {
    * codec renders the data-URI stubs. Omitted: core discovery defaults.
    */
   pluginRoots?: SidebandOnlyOptions["roots"]
+  /** The sessions dir of the paste files. Omitted: the default sessions dir. */
+  sessionsDir?: string
 }
 
 /** Thrown for user-facing `dump` failures (bad target, no sessions); the CLI prints the message without a stack. */
@@ -42,7 +46,8 @@ export async function runDumpCommand(input: DumpCommandInput): Promise<void> {
     throw new DumpCommandError("no saved sessions found to dump")
   }
 
-  const sessions = createSessionsReadApi()
+  const sessionsDir = input.sessionsDir ?? defaultSessionsDir()
+  const sessions = createSessionsReadApi({ dir: sessionsDir })
   const data = await sessions.records(sid)
   if (!data) {
     throw new DumpCommandError(`no session file on disk for sid ${JSON.stringify(sid)}`)
@@ -52,7 +57,11 @@ export async function runDumpCommand(input: DumpCommandInput): Promise<void> {
   const sb = await loadSidebandOnly(
     input.pluginRoots === undefined ? {} : { roots: input.pluginRoots },
   )
+  // Paste refs show the file text (read only, from the same sessions dir).
+  const opts = { readPaste: pasteFileReader(sessionsDir, sid) }
   await writeStdoutSafely(
-    input.format === "xml" ? formatSessionAsXml(data, sb) : formatSessionAsMarkdown(data, sb),
+    input.format === "xml"
+      ? formatSessionAsXml(data, sb, opts)
+      : formatSessionAsMarkdown(data, sb, opts),
   )
 }

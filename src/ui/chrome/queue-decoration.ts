@@ -103,8 +103,12 @@ const QUEUE_SELECTED_MARKER = "▌"
  * Build the per-row preview text from a single queue entry: whitespace
  * collapsed, then display-width-aware truncation with a `(+Nch)` hint.
  */
-function buildPreview(entry: string): string {
-  const oneLine = entry.replace(/\s+/g, " ").trim()
+function buildPreview(entry: string, display?: (text: string) => string): string {
+  // Display form first (a paste ref becomes its chip label), so the
+  // collapse and the width cut see the text that the user sees. The
+  // mapper must give plain text (no SGR): the cut counts cells.
+  const shown = display ? display(entry) : entry
+  const oneLine = shown.replace(/\s+/g, " ").trim()
   if (displayWidth(oneLine) <= QUEUE_PREVIEW_W) return oneLine
   const truncated = truncateDisplayWidth(oneLine, QUEUE_PREVIEW_W, "")
   // Code-point count (matches user mental model of "characters", not cells).
@@ -176,13 +180,13 @@ function buildHintRow(): string {
 }
 
 /** Build the plain (non-interactive) block, with the `↑ edit` affordance. */
-function buildPlainBlock(queue: readonly string[]): string[] {
+function buildPlainBlock(queue: readonly string[], display?: (text: string) => string): string[] {
   const count = queue.length
   const lines: string[] = [buildPlainHeader(count)]
   const visibleCount = Math.min(QUEUE_MAX_VISIBLE_ITEMS, count)
   const hasOverflow = count > QUEUE_MAX_VISIBLE_ITEMS
   for (let i = 0; i < visibleCount; i++) {
-    const preview = buildPreview(queue[i])
+    const preview = buildPreview(queue[i], display)
     // Closing curve `╰` on the LAST visible row IFF no overflow tail
     // is appended below. With overflow, every item row stays `┊` and
     // the overflow tail carries `╰` instead.
@@ -203,7 +207,12 @@ function buildPlainBlock(queue: readonly string[]): string[] {
  * trailing hint row. Every item row uses `┊` (the hint row carries the
  * closing `╰`).
  */
-function buildNavBlock(queue: readonly string[], selectedIndex: number, cols?: number): string[] {
+function buildNavBlock(
+  queue: readonly string[],
+  selectedIndex: number,
+  cols?: number,
+  display?: (text: string) => string,
+): string[] {
   const count = queue.length
   const sel = Math.max(0, Math.min(count - 1, selectedIndex))
   const lines: string[] = [buildHeader(count)]
@@ -222,7 +231,7 @@ function buildNavBlock(queue: readonly string[], selectedIndex: number, cols?: n
     lines.push(`  ${dim("┊")}  ${faintWhite(`↑ ${start} more`)}`)
   }
   for (let i = start; i < end; i++) {
-    const preview = buildPreview(queue[i])
+    const preview = buildPreview(queue[i], display)
     if (i === sel) {
       lines.push(buildSelectedRow(i + 1, preview, cols))
     } else {
@@ -240,13 +249,22 @@ function buildNavBlock(queue: readonly string[], selectedIndex: number, cols?: n
  * Build the decoration lines (header + item rows + optional overflow
  * tail). With `opts.selectedIndex` set, renders the interactive
  * navigation variant (selection bar + action hint) instead.
+ *
+ * `opts.display` (optional) maps each raw queue text to the text the user
+ * sees, for example a paste ref to its chip label. It runs before the
+ * whitespace collapse and the width cut, and must give plain text. The
+ * queue keeps the raw text.
  */
 export function buildQueueDecorationLines(
   queue: readonly string[],
-  opts: { selectedIndex?: number | null; cols?: number } = {},
+  opts: {
+    selectedIndex?: number | null
+    cols?: number
+    display?: (text: string) => string
+  } = {},
 ): string[] {
   if (queue.length === 0) return []
   const selectedIndex = opts.selectedIndex ?? null
-  if (selectedIndex === null) return buildPlainBlock(queue)
-  return buildNavBlock(queue, selectedIndex, opts.cols)
+  if (selectedIndex === null) return buildPlainBlock(queue, opts.display)
+  return buildNavBlock(queue, selectedIndex, opts.cols, opts.display)
 }

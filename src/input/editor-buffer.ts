@@ -16,7 +16,7 @@
  * @module editor-buffer
  */
 
-import type { ChipSpan } from "../paste/chip-registry.ts"
+import { applyChipSpans, type ChipSpan } from "../paste/chip-registry.ts"
 
 /** The atomic spans of one line, in code points. A source must be pure. */
 export type SpanSource = (line: string) => readonly ChipSpan[]
@@ -54,6 +54,15 @@ export class EditorBuffer {
   setSpanSource(source: SpanSource | null): void {
     this.spanSource = source
     this.invalidateSpans()
+  }
+
+  /**
+   * `text` as the editor shows it: each span of each line is its plain label
+   * (no SGR). Display only, for the views outside the buffer (queue widget,
+   * abort echo, plugin picker rows). No span source: `text` unchanged.
+   */
+  displayText(text: string): string {
+    return applyChipSpans(text, this.spanSource)
   }
 
   /**

@@ -47,6 +47,15 @@ import { SIBLING_REPO_ROOT, siblingPluginPresent } from "../test-utils/sibling-r
 const PANE_COLS = 60
 const PANE_ROWS = 24
 
+/** One paste node, as the driver parses it with the codec. */
+interface PasteNode {
+  selfClosing: boolean
+  attrs: Record<string, string>
+  body: string | null
+  /** True when the node is the whole text. */
+  whole: boolean
+}
+
 function haveBunTerminal(): boolean {
   return typeof Bun.spawn === "function"
 }
@@ -185,6 +194,8 @@ describe("paste ghost frames — real Bun.Terminal PTY integration", () => {
             COLUMNS: String(PANE_COLS),
             HOME: home,
             MINIMAL_AGENT_HOME: home,
+            // No config file: the paste plugin defaults (line numbers on).
+            MINIMAL_AGENT_CONFIG: join(home, "no-config.jsonc"),
             PASTE_PTY_PLUGINS: SIBLING_REPO_ROOT,
           },
           "src/test-utils/fixtures/paste-plugin-pty-driver.ts",
@@ -201,6 +212,8 @@ describe("paste ghost frames — real Bun.Terminal PTY integration", () => {
           jsonl: string
           hookCount: number
           mediaOutcomes: Array<string | null>
+          bufferNodes: PasteNode[]
+          sentNodes: PasteNode[][]
         }
         // The media hook (90) runs first and passes a text paste on (null),
         // so the plugin hook still gives the paste chip.
@@ -210,18 +223,34 @@ describe("paste ghost frames — real Bun.Terminal PTY integration", () => {
         expect(r.screen).toContain("[Paste #")
         expect(r.screen).toContain("129L")
         expect(r.screen).not.toContain("line 128 of the paste")
-        // The buffer holds one self-closing ref (codec form).
-        expect(r.buffer).toMatch(/^<[^>]*paste id="[^"]+" bytes="\d+" lines="129"\s*\/>$/)
+        // The buffer holds one self-closing ref and nothing else (parsed by the codec).
+        expect(r.bufferNodes).toHaveLength(1)
+        const ref = r.bufferNodes[0]!
+        expect(ref.whole).toBe(true)
+        expect(ref.selfClosing).toBe(true)
+        expect(ref.attrs.id).toMatch(/^[0-9a-z]+$/)
+        expect(ref.attrs.lines).toBe("129")
+        expect(Number(ref.attrs.bytes)).toBe(Buffer.byteLength(r.expected, "utf8"))
         expect(r.submitted).toBe(r.buffer)
         // One 0600 file with the whole paste (CR as LF).
         expect(r.files).toHaveLength(1)
         expect(r.files[0]!.mode).toBe(0o600)
         expect(r.files[0]!.text).toBe(r.expected)
-        // The stub provider got the full text inside the paste tag.
+        // The stub provider got one full paste block (parsed by the codec) with
+        // line numbers (`plugins.paste.lineNumbers`, default on).
         expect(r.sent).toHaveLength(1)
-        expect(r.sent[0]).toContain("line 0 of the paste\nline 1 of the paste")
-        expect(r.sent[0]).toContain("line 128 of the paste")
-        expect(r.sent[0]).toMatch(/<[^>]*paste id="[^"]+"[^>]*>\n?line 0 of the paste/)
+        expect(r.sentNodes[0]).toHaveLength(1)
+        const block = r.sentNodes[0]![0]!
+        expect(block.selfClosing).toBe(false)
+        expect(block.attrs.id).toBe(ref.attrs.id)
+        expect(block.attrs.lines).toBe("129")
+        expect(block.attrs.numbered).toBe("true")
+        const numbered = r.expected
+          .replace(/\n$/, "")
+          .split("\n")
+          .map((l, i) => `${i + 1}\t${l}`)
+          .join("\n")
+        expect(block.body?.replace(/^\n/, "").replace(/\n+$/, "")).toBe(numbered)
         // The JSONL has the ref only.
         expect(r.jsonl).toContain(JSON.stringify(r.buffer).slice(1, -1))
         expect(r.jsonl).not.toContain("line 128 of the paste")

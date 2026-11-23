@@ -60,10 +60,17 @@ let loader: PluginLoader
 let chain: CliPasteChain
 let store: SessionStore
 
+/** The config path before this file: the test pins the paste config. */
+const prevConfig = process.env.MINIMAL_AGENT_CONFIG
+
 beforeAll(async () => {
   if (!HAVE_PLUGIN) return
   root = mkdtempSync(join(tmpdir(), "paste-cli-integ-"))
   sessionsDir = join(root, "sessions")
+  // A config path with no file: the paste plugin uses its defaults (line
+  // numbers on, collapse 4 lines or 1200 bytes, floor 120), not the config
+  // of the developer.
+  process.env.MINIMAL_AGENT_CONFIG = join(root, "no-config.jsonc")
   // The earlier process: its session file and one paste under its sid.
   SessionStore.open({ sid: SRC_SID, dir: sessionsDir, cwd: root, ...BASE })
   const earlier = createSessionFilesApi({ sessionsDir, pluginId: "paste" })
@@ -102,6 +109,8 @@ beforeAll(async () => {
 })
 
 afterAll(() => {
+  if (prevConfig === undefined) delete process.env.MINIMAL_AGENT_CONFIG
+  else process.env.MINIMAL_AGENT_CONFIG = prevConfig
   if (root) rmSync(root, { recursive: true, force: true })
 })
 
@@ -212,13 +221,17 @@ describe.skipIf(!HAVE_PLUGIN)("paste plugin through the CLI chain (I5, I6)", () 
     await drain(session.run("next") as never)
     expect(sent).toHaveLength(1)
     const wire = JSON.stringify(sent[0])
-    expect(wire).toContain("old paste line A\\nold paste line B")
+    // Line numbers are on by default (the test pins the default config).
+    expect(wire).toContain("1\\told paste line A\\n2\\told paste line B")
     expect(wire).not.toContain(JSON.stringify(oldRef).slice(1, -1))
   })
 
   test("I6: a ref queued during a turn expands on the next round", async () => {
     // A paste in the editor during the turn: the chain saves it and gives the ref.
-    const text = Array.from({ length: 5 }, (_, i) => `queued paste ${i}`).join("\n")
+    // Long lines: the default collapse limits keep a small paste as text.
+    const text = Array.from({ length: 5 }, (_, i) => `queued paste ${i} ${"x".repeat(40)}`).join(
+      "\n",
+    )
     const outcome = chain.hooks.run(chain.hooks.event(text, "bracketed"))
     expect(outcome?.kind).toBe("insert")
     const ref = (outcome as { text: string }).text
@@ -240,7 +253,7 @@ describe.skipIf(!HAVE_PLUGIN)("paste plugin through the CLI chain (I5, I6)", () 
     // Round 1: no queued text yet.
     expect(JSON.stringify(sent[0])).not.toContain("queued paste")
     // Round 2: the queued ref is expanded on the wire.
-    expect(lastUserText(sent[1]!)).toContain("queued paste 0\nqueued paste 1")
+    expect(lastUserText(sent[1]!)).toMatch(/1\tqueued paste 0 x+\n2\tqueued paste 1/)
     expect(lastUserText(sent[1]!)).toContain("queued paste 4")
     // The JSONL keeps the ref, not the paste text.
     const jsonl = readFileSync(store.path, "utf8")
@@ -261,16 +274,18 @@ describe.skipIf(!HAVE_PLUGIN)("paste plugin through the CLI chain (I5, I6)", () 
     // The same open call as bootSessionStores (a new session, no message yet).
     const opened = SessionStore.open({ sid, dir: sessionsDir, cwd: root, ...BASE })
     expect(readFileSync(opened.path, "utf8").trim().split("\n")).toHaveLength(1)
-    const outcome = fresh.hooks.run(fresh.hooks.event("first\nsecond\nthird", "bracketed"))
+    // Over the default collapse limits: 4 lines and 120 bytes or more.
+    const pasted = `${"first ".repeat(10)}\nsecond\nthird\n${"fourth ".repeat(10)}`
+    const outcome = fresh.hooks.run(fresh.hooks.event(pasted, "bracketed"))
     expect(outcome?.kind).toBe("insert")
     const ref = (outcome as { text: string }).text
     const id = /id="([0-9a-z]{5})"/.exec(ref)?.[1]
     expect(id).toBeDefined()
     const file = join(sessionsDir, `${sid}.files`, "paste", `${id}.txt`)
-    expect(readFileSync(file, "utf8")).toBe("first\nsecond\nthird")
+    expect(readFileSync(file, "utf8")).toBe(pasted)
     const spans = fresh.chips.spansOf(ref, loader.sideband())
     expect(spans).toHaveLength(1)
-    expect(spans[0]!.label).toBe(`[Paste #${id} 18B 3L]`)
+    expect(spans[0]!.label).toBe(`[Paste #${id} 144B 4L]`)
   })
 
   // Last in the file: it forks the store again.
@@ -319,12 +334,14 @@ describe.skipIf(!HAVE_PLUGIN)("paste plugin through the CLI chain (I5, I6)", () 
     expect(after).toContain("#old01 33B 2L]")
     ab.ctrl.stop()
     // A new paste after the fork saves under the new sid, not the source sid.
-    const outcome = chain.hooks.run(chain.hooks.event("after fork A\nafter fork B", "bracketed"))
+    // Over the default collapse limits (1200 bytes).
+    const pasted = `after fork A\n${"after fork B ".repeat(100)}`
+    const outcome = chain.hooks.run(chain.hooks.event(pasted, "bracketed"))
     expect(outcome?.kind).toBe("insert")
     const id = /id="([0-9a-z]{5})"/.exec((outcome as { text: string }).text)?.[1]
     expect(id).toBeDefined()
     const file = join(sessionsDir, `${store.sid}.files`, "paste", `${id}.txt`)
-    expect(readFileSync(file, "utf8")).toBe("after fork A\nafter fork B")
+    expect(readFileSync(file, "utf8")).toBe(pasted)
     expect(existsSync(join(sessionsDir, `${SRC_SID}.files`, "paste", `${id}.txt`))).toBe(false)
   })
 })

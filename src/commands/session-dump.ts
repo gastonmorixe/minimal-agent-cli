@@ -2,6 +2,12 @@ import type { MetaRecord } from "@minimal-agent/core/host-kit/session-store"
 import type { ContentBlock, Message, TextBlock } from "@minimal-agent/core/sdk/messages"
 
 import { type ScrubSideband, scrubEmbeddedPayloads } from "./embedded-payload-scrub-port.ts"
+import {
+  type PasteReader,
+  type PasteSideband,
+  pasteMarkdown,
+  pasteXml,
+} from "./session-dump-paste.ts"
 
 /** Data a dump needs: the meta record and the model-facing messages. */
 export interface DumpSessionData {
@@ -10,6 +16,31 @@ export interface DumpSessionData {
 }
 
 type LoadedSession = DumpSessionData
+
+/** The sideband slice of a dump: the data-URI scrub and the paste refs. */
+export type DumpSideband = ScrubSideband & PasteSideband
+
+/** Dump options. */
+export interface DumpOptions {
+  /**
+   * Reads the file of a paste ref (`pasteFileReader`). Without it, a paste
+   * ref in user text shows as `[Paste #<id> missing]`.
+   */
+  readPaste?: PasteReader
+}
+
+/** A reader that finds no file: each paste ref shows as missing. */
+const NO_PASTE: PasteReader = () => null
+
+/** User text with each paste ref as its label and file text (markdown). */
+function userTextMarkdown(text: string, sb: DumpSideband, opts: DumpOptions): string {
+  return pasteMarkdown(text, sb, opts.readPaste ?? NO_PASTE)
+}
+
+/** User text with each paste ref as a `paste` element (XML content). */
+function userTextXml(text: string, sb: DumpSideband, opts: DumpOptions): string {
+  return pasteXml(text, sb, opts.readPaste ?? NO_PASTE, escapeXml)
+}
 
 /**
  * Redact oversized `data:*;base64,...` URIs in tool_result text for human
@@ -24,9 +55,14 @@ function scrubDumpText(s: string, sb: ScrubSideband): string {
  * Format a session as a human-readable Markdown string.
  *
  * @param session - The meta record and the messages.
- * @param sb - The sideband slice for the data-URI scrub (`loadSidebandOnly()`).
+ * @param sb - The sideband slice for the data-URI scrub and the paste refs (`loadSidebandOnly()`).
+ * @param opts - The paste file reader.
  */
-export function formatSessionAsMarkdown(session: LoadedSession, sb: ScrubSideband): string {
+export function formatSessionAsMarkdown(
+  session: LoadedSession,
+  sb: DumpSideband,
+  opts: DumpOptions = {},
+): string {
   let out = ""
 
   if (session.meta) {
@@ -39,12 +75,17 @@ export function formatSessionAsMarkdown(session: LoadedSession, sb: ScrubSideban
   for (const msg of session.messages) {
     const role = msg.role === "user" ? "User" : "Assistant"
     out += `## ${role}\n\n`
+    const isUser = msg.role === "user"
 
     if (typeof msg.content === "string") {
-      out += msg.content + "\n\n"
+      out += (isUser ? userTextMarkdown(msg.content, sb, opts) : msg.content) + "\n\n"
     } else {
       for (const block of msg.content) {
-        out += formatBlockAsMarkdown(block, sb) + "\n\n"
+        const md =
+          isUser && block.type === "text"
+            ? userTextMarkdown(block.text, sb, opts)
+            : formatBlockAsMarkdown(block, sb)
+        out += md + "\n\n"
       }
     }
   }
@@ -137,9 +178,14 @@ function formatBlockAsMarkdown(block: ContentBlock, sb: ScrubSideband): string {
  * Format a session as a structured XML string.
  *
  * @param session - The meta record and the messages.
- * @param sb - The sideband slice for the data-URI scrub (`loadSidebandOnly()`).
+ * @param sb - The sideband slice for the data-URI scrub and the paste refs (`loadSidebandOnly()`).
+ * @param opts - The paste file reader.
  */
-export function formatSessionAsXml(session: LoadedSession, sb: ScrubSideband): string {
+export function formatSessionAsXml(
+  session: LoadedSession,
+  sb: DumpSideband,
+  opts: DumpOptions = {},
+): string {
   let out = ""
 
   if (session.meta) {
@@ -150,12 +196,18 @@ export function formatSessionAsXml(session: LoadedSession, sb: ScrubSideband): s
 
   for (const msg of session.messages) {
     out += `  <turn role="${escapeXml(msg.role)}">\n`
+    const isUser = msg.role === "user"
 
     if (typeof msg.content === "string") {
-      out += `    <text>${escapeXml(msg.content)}</text>\n`
+      const body = isUser ? userTextXml(msg.content, sb, opts) : escapeXml(msg.content)
+      out += `    <text>${body}</text>\n`
     } else {
       for (const block of msg.content) {
-        out += formatBlockAsXml(block, 4, sb) + "\n"
+        const xml =
+          isUser && block.type === "text"
+            ? `    <text>${userTextXml(block.text, sb, opts)}</text>`
+            : formatBlockAsXml(block, 4, sb)
+        out += xml + "\n"
       }
     }
     out += `  </turn>\n`

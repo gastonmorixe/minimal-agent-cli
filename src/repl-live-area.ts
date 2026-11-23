@@ -121,6 +121,9 @@ export async function runReplLiveArea(
   const statusBus = opts.statusBus ?? GLOBAL_STATUS_BUS
   const modeManager = agent.modes?.() ?? null
   const showSubmittedAt = submittedAtEnabled(opts.scrollbackSubmittedAt)
+  // A raw user text as the user sees it: each paste ref is its chip label
+  // (plain). Display only, for the queue widget and the abort echo.
+  const displayText = (text: string): string => editor.buffer?.().displayText(text) ?? text
 
   // Wire mode cycling (Shift+Tab forward, Ctrl+Shift+Tab back) to the
   // editor. Mirrors the legacy `runRepl` wiring so users get the same UX
@@ -499,15 +502,9 @@ export async function runReplLiveArea(
       else queueNavIndex = Math.max(0, Math.min(queue.length - 1, queueNavIndex))
     }
     const cols = opts.output?.columns ?? process.stdout.columns
-    for (const ql of buildQueueDecorationLines(
-      queue.map((q) => q.text),
-      {
-        selectedIndex: queueNavIndex,
-        cols,
-      },
-    )) {
-      lines.push(ql)
-    }
+    const texts = queue.map((q) => q.text)
+    const opt = { selectedIndex: queueNavIndex, cols, display: displayText }
+    for (const ql of buildQueueDecorationLines(texts, opt)) lines.push(ql)
     editor.setDecorationLines(lines)
   }
 
@@ -1407,7 +1404,10 @@ export async function runReplLiveArea(
         // needed : the editor's own redraw is the proof.
         const activeMode = modeManager?.active()
         const modeLabel = activeMode?.label ?? activeMode?.id ?? null
-        compositor.writeStream(`${formatAbortedEcho(text, { activeModeLabel: modeLabel })}\n`)
+        // Display form: a paste ref shows as its chip label, never the raw tag.
+        compositor.writeStream(
+          `${formatAbortedEcho(displayText(text), { activeModeLabel: modeLabel })}\n`,
+        )
         if (agent.rollbackPendingTurn) agent.rollbackPendingTurn()
         // Dequeue EVERYTHING back to the prompt: the in-flight text first,
         // then any messages still queued behind it, so an abort never
