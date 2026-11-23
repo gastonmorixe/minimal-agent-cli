@@ -64,6 +64,7 @@ const ROWS: ReadonlyArray<readonly [string, ToolPresentation]> = [
   ["SecurityStatus", { icon: "▣", color: "gold" }], // ma-security-plugin
   ["SessionHistory", { icon: "↺", color: "violet" }], // ma-session-history-plugin
   ["SessionInfo", { icon: "◷", color: "cyan" }], // ma-session-info-plugin
+  ["SessionTitle", { icon: "✎", color: "gold" }], // ma-title-plugin
   ["Skill", { icon: "✦", color: "violet" }], // ma-skills-plugin
   ["Speak", { icon: "♪", color: "sky" }], // ma-speak-plugin
   ["SpeakStatus", { icon: "◎", color: "violet" }], // ma-speak-plugin
