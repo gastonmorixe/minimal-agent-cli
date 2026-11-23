@@ -233,7 +233,17 @@ async function main(): Promise<void> {
     }
   }
   const jsonl = store ? readFileSync(store.path, "utf8") : ""
+  // The paste nodes, parsed with the codec: the test checks fields, not tag text.
+  const pasteNodes = (text: string) =>
+    sideband.find(text, { kinds: ["paste"] }).map((n) => ({
+      selfClosing: n.selfClosing,
+      attrs: n.attrs,
+      body: n.body ?? null,
+      whole: n.span.start === 0 && n.span.end === text.length,
+    }))
   const report = {
+    bufferNodes: pasteNodes(buffer),
+    sentNodes: sent.map(pasteNodes),
     sid,
     expected: payload.replace(/\r/g, "\n"),
     screen,

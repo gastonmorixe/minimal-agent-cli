@@ -327,6 +327,12 @@ export interface ReplEditor {
    */
   setBuffer?(text: string): void
   /**
+   * Optional. The editor buffer. Its `displayText` gives a raw user text as
+   * the editor shows it: each chip span (a paste ref) is its plain label.
+   * Display only. The queue widget and the abort echo use it.
+   */
+  buffer?(): { displayText(text: string): string }
+  /**
    * Optional. Take MODAL ownership of the input line for an interactive
    * command overlay (/config, /usage). While owned, the editor hides the
    * prompt row + cursor, blocks `submit()`, and routes every key (including
