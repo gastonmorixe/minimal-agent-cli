@@ -286,14 +286,14 @@ describe("session label", () => {
   test("a break of another session names it", () => {
     const row = stripAnsi(
       formatCacheBreakRow(
-        { ...ttlExpired(), sessionId: "8f2f6f8c-0000-4000" },
+        { ...ttlExpired(), sessionId: "8f2f6f8c-a00b-43f8" },
         { ownSessionId: own },
       ),
     )
     expect(row).toContain("· session 8f2f6f8c ·")
   })
   test("no own id: no label", () => {
-    const row = stripAnsi(formatCacheBreakRow({ ...ttlExpired(), sessionId: "8f2f6f8c-0000" }))
+    const row = stripAnsi(formatCacheBreakRow({ ...ttlExpired(), sessionId: "8f2f6f8c-a00b" }))
     expect(row).not.toContain("session ")
   })
 })

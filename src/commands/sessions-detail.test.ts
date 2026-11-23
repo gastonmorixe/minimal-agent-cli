@@ -351,7 +351,7 @@ describe("resolveSessionsArg (item 29)", () => {
   test("a sid prefix needs 4+ hex characters", () => {
     expect(looksLikeSidPrefix("92d3")).toBe(true)
     expect(looksLikeSidPrefix("e0f")).toBe(false)
-    expect(looksLikeSidPrefix("92d3247e-0000")).toBe(true)
+    expect(looksLikeSidPrefix("92d3247e-1111")).toBe(true)
     expect(looksLikeSidPrefix("auth")).toBe(false)
     expect(looksLikeSidPrefix("2026-05")).toBe(true)
   })

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // DO NOT disable max-lines !!!
 // It's here for a reason: so I force you to decouple and split files into
-// better and smaller chunks. - Alex
+// better and smaller chunks. - the owner
 
 /**
  * Minimal-agent CLI — the `main()` composition root.

@@ -98,7 +98,7 @@ let lastStartupRow: { lines: string[] } | null = null
 export function printStartupHeader(): void {
   if (!SHOW_HEADER) return
   const by = c.faintWhite(c.italic("by"))
-  const author = c.faintWhite(c.italic("Alex Example"))
+  const author = c.faintWhite(c.italic("@gastonmorixe"))
   const sep = c.faintWhite("·")
   const url = c.faintWhite(c.italic("github.com/gastonmorixe/minimal-agent"))
   // Rounded tree: ╭ for the opener, │ for body rows, ╰ to close.

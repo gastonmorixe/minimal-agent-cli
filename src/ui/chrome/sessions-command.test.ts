@@ -136,6 +136,14 @@ describe("P3 review fixes (chrome)", () => {
 // P4b item 2: grandchildren. The list shows depth 1 and 2 with tree arms;
 // deeper levels collapse into one `… +N deeper · sessions <sid8>` row.
 
+// Fixed fake 8-hex handles for the first fixture rows (the rest repeat the digit).
+const FAKE_HEX: Record<number, string> = {
+  1: "ba0ad20f",
+  2: "d17b0257",
+  3: "f730cc8c",
+  5: "c7c11b04",
+}
+
 describe("P4b: sub-agent tree depth in the list", () => {
   const T = Date.UTC(2026, 10, 19, 11, 0)
   const item = (
@@ -143,7 +151,7 @@ describe("P4b: sub-agent tree depth in the list", () => {
     title: string,
     over: Partial<SessionListItem> = {},
   ): SessionListItem => ({
-    sid: `${String(n).repeat(8)}-1111-4000-8000-000000000000`,
+    sid: `${FAKE_HEX[n] ?? String(n).repeat(8)}-1111-4000-8000-000000000000`,
     createdAtMs: T + n * 60_000,
     durationMs: 60_000,
     title,
@@ -267,7 +275,7 @@ describe("P4b: sub-agent tree depth in the list", () => {
 describe("X3a: saved titles in the list", () => {
   const T = Date.UTC(2026, 10, 19, 11, 0)
   const item = (n: number, over: Partial<SessionListItem>): SessionListItem => ({
-    sid: `${String(n).repeat(8)}-1111-4000-8000-000000000000`,
+    sid: `${FAKE_HEX[n] ?? String(n).repeat(8)}-1111-4000-8000-000000000000`,
     createdAtMs: T + n * 60_000,
     durationMs: 60_000,
     title: "",
