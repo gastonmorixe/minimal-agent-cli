@@ -26,7 +26,7 @@
  */
 
 import { createSessionFilesApi } from "@minimal-agent/core/host/session-files"
-import { NO_SIDEBAND, type SidebandApi } from "@minimal-agent/core/host/sideband"
+import { NO_SIDEBAND, type SidebandApi, sidebandForPlugin } from "@minimal-agent/core/host/sideband"
 import { processDiagnostics } from "@minimal-agent/core/host-kit/media"
 import type {
   SessionFileCreate,
@@ -188,7 +188,9 @@ function pasteExtension(
           const files = filesFor(ev.sid)
           const out = h.onPaste({
             ...ev,
-            sideband: host.sideband?.() ?? NO_SIDEBAND,
+            // The plugin view: a display call opens a read scope for an old
+            // sid only when the plugin has `sessions:read`.
+            sideband: sidebandForPlugin(host.sideband?.() ?? NO_SIDEBAND, plugin.capabilities),
             ...(files ? { files } : {}),
           })
           if (out == null) return null

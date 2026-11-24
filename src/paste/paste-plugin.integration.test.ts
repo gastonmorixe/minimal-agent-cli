@@ -31,7 +31,7 @@ import { createAgentContext } from "@minimal-agent/core/host/agent-context"
 import { createSessionFilesApi } from "@minimal-agent/core/host/session-files"
 import { getSessionId } from "@minimal-agent/core/host/session-id"
 import { loadSession } from "@minimal-agent/core/host/session-restore"
-import { sidebandOf } from "@minimal-agent/core/host/sideband"
+import { sidebandForPlugin, sidebandOf } from "@minimal-agent/core/host/sideband"
 import { PluginLoader } from "@minimal-agent/core/host-kit/plugin-loader"
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
 import { registerTestProvider } from "@minimal-agent/core/testing/provider-fixture"
@@ -39,6 +39,7 @@ import { registerTestProvider } from "@minimal-agent/core/testing/provider-fixtu
 import { formatRestoredMessages } from "../editor/queue-restore.ts"
 import { make } from "../editor-controller.fixtures.ts"
 import { InteractiveSession } from "../interactive-session.ts"
+import { cliUiExtensions } from "../plugins-ui/cli-ui-extensions.ts"
 import { loadPluginUi } from "../plugins-ui/ui-loader.ts"
 import { replayToScrollback } from "../session-replay.ts"
 import { resumeTargetOf } from "../startup/session-store-boot.ts"
@@ -286,6 +287,36 @@ describe.skipIf(!HAVE_PLUGIN)("paste plugin through the CLI chain (I5, I6)", () 
     const spans = fresh.chips.spansOf(ref, loader.sideband())
     expect(spans).toHaveLength(1)
     expect(spans[0]!.label).toBe(`[Paste #${id} 144B 4L]`)
+  })
+
+  test("a UI paste hook gets the plugin view of the loader sideband, not the host API", () => {
+    const host = loader.sideband()
+    const fresh = createPasteChain()
+    const seen: unknown[] = []
+    for (const [id, capabilities] of [
+      ["no-read", ["sessions:files"]],
+      ["with-read", ["sessions:read"]],
+    ] as const) {
+      const ext = cliUiExtensions(
+        pasteUiHost(fresh, () => host),
+        { id, capabilities, permissions: ["ui:paste"], sidebandKinds: [] },
+        () => {},
+      )
+      ext.paste!.registerHook({
+        id: "probe",
+        onPaste: (ev) => {
+          seen.push(ev.sideband)
+          return null
+        },
+      })
+    }
+    fresh.hooks.run(fresh.hooks.event("x", "bracketed"))
+    // The paste kind has a display handler, so the plugin view is a new object.
+    expect(host.hasDisplay("paste")).toBe(true)
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toBe(sidebandForPlugin(host, ["sessions:files"]))
+    expect(seen[0]).not.toBe(host)
+    expect(seen[1]).toBe(host)
   })
 
   // Last in the file: it forks the store again.

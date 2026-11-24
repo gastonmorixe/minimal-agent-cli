@@ -6,7 +6,7 @@ status: living
 scope: cli
 working-dir: "."
 created-at: "2026-08-07T13:45:26-0400"
-updated-at: "2026-11-20T00:00:00-0500"
+updated-at: "2026-11-23T00:00:00-0500"
 format: "Keep a Changelog (pragmatic, date-stamped)"
 ---
 
@@ -20,6 +20,22 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 ## [Unreleased]
 
 ### Added
+
+- `sessions dump` shows sideband refs in user text through the display
+  handlers (`loadSidebandOnly` with `display`). A paste ref becomes its chip
+  label and, when the file is there, the file text in a fenced block. The
+  XML form is `<display kind label [missing] [truncated]>`. A block with a
+  `sideband` mark (not `undefined` and not `null`) keeps its raw text, the
+  same rule as the SessionHistory dump. `session-dump-paste.ts` is removed.
+  The dump target comes from the index of the same `sessionsDir`.
+
+### Changed
+
+- The XML dump removes each char that XML 1.0 does not allow (`xmlSafe` in
+  `escapeXml`): C0 controls other than TAB, LF and CR, U+FFFE, U+FFFF and a
+  lone surrogate. This is on all XML output (tool results, assistant text,
+  user text). Before, these chars went into the XML as they were. The
+  SessionHistory dump does the same, so the two XML texts stay equal.
 
 - `--debug --verbose` request dump: each annotation at the end of a
   `tool_result` (output preview, raw output footer, active-mode stamp,

@@ -136,3 +136,56 @@ export const fixtures: Record<string, unknown[]> = {
     { kind: "assistant", ts: T, stopReason: "end_turn", content: [{ type: "text", text: "end" }] },
   ],
 }
+
+/** The sid of the paste parity fixture. */
+export const PASTE_FX = "fx-paste"
+
+/** The paste files of {@link PASTE_FX}: `<id>.txt` to its text (one CRLF body). */
+export const pasteFiles: Record<string, string> = {
+  abc12: "first line\nhas ``` fence\n",
+  crlf1: "one\r\ntwo\r\n",
+}
+
+/**
+ * The paste parity fixture: a found paste, a missing paste, a bad id, two
+ * refs in one text, a CRLF body, and a compaction block (harness mark)
+ * whose ref must stay raw. `ref` renders a paste ref (the codec).
+ *
+ * @param ref - Renders the ref of paste `id`.
+ */
+export function pasteFixture(ref: (id: string) => string): unknown[] {
+  return [
+    meta(PASTE_FX),
+    { kind: "user", ts: T, id: "u0", content: "old turn" },
+    { kind: "assistant", ts: T, stopReason: "end_turn", content: [{ type: "text", text: "a0" }] },
+    {
+      kind: "compact",
+      ts: T,
+      reason: "manual",
+      compactKind: "local",
+      messagesBefore: 2,
+      messagesAfter: 2,
+      replacementMessages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `summary ${ref("abc12")}`, sideband: { kind: "compaction" } },
+          ],
+        },
+        { role: "assistant", content: "ack" },
+      ],
+    },
+    { kind: "user", ts: T, id: "u1", content: `found ${ref("abc12")} end` },
+    { kind: "assistant", ts: T, stopReason: "end_turn", content: [{ type: "text", text: "a1" }] },
+    {
+      kind: "user",
+      ts: T,
+      id: "u2",
+      content: [
+        { type: "text", text: `missing ${ref("zzz99")} bad ${ref("BAD!")}` },
+        { type: "text", text: `${ref("abc12")}\n${ref("crlf1")}` },
+      ],
+    },
+    { kind: "assistant", ts: T, stopReason: "end_turn", content: [{ type: "text", text: "a2" }] },
+  ]
+}

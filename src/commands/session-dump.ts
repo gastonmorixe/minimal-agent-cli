@@ -1,13 +1,13 @@
+import type { SidebandApi } from "@minimal-agent/core/host/sideband"
 import type { MetaRecord } from "@minimal-agent/core/host-kit/session-store"
+import {
+  displayMarkdown,
+  displayXml,
+  xmlSafe,
+} from "@minimal-agent/core/plugin-api/utils/display-format"
 import type { ContentBlock, Message, TextBlock } from "@minimal-agent/core/sdk/messages"
 
 import { type ScrubSideband, scrubEmbeddedPayloads } from "./embedded-payload-scrub-port.ts"
-import {
-  type PasteReader,
-  type PasteSideband,
-  pasteMarkdown,
-  pasteXml,
-} from "./session-dump-paste.ts"
 
 /** Data a dump needs: the meta record and the model-facing messages. */
 export interface DumpSessionData {
@@ -17,29 +17,52 @@ export interface DumpSessionData {
 
 type LoadedSession = DumpSessionData
 
-/** The sideband slice of a dump: the data-URI scrub and the paste refs. */
-export type DumpSideband = ScrubSideband & PasteSideband
+/**
+ * The sideband slice of a dump: the data-URI scrub and the display of the
+ * sideband refs in user text. `display` is optional: a slice with no
+ * `display` keeps the user text as is.
+ */
+export type DumpSideband = ScrubSideband & Partial<Pick<SidebandApi, "display">>
 
 /** Dump options. */
 export interface DumpOptions {
   /**
-   * Reads the file of a paste ref (`pasteFileReader`). Without it, a paste
-   * ref in user text shows as `[Paste #<id> missing]`.
+   * The dumped sid. The display handlers read the files of this session
+   * (for example a paste). Absent: a handler uses the attrs only.
    */
-  readPaste?: PasteReader
+  sid?: string
 }
 
-/** A reader that finds no file: each paste ref shows as missing. */
-const NO_PASTE: PasteReader = () => null
+/** The display segments of a user text, or null when no node has a display. */
+function displaySegments(text: string, sb: DumpSideband, opts: DumpOptions) {
+  if (sb.display === undefined || text.length === 0) return null
+  const r = sb.display(
+    text,
+    opts.sid === undefined ? { mode: "full" } : { mode: "full", sid: opts.sid },
+  )
+  return r.changed ? r.segments : null
+}
 
-/** User text with each paste ref as its label and file text (markdown). */
+/** User text with each sideband ref as its display (markdown). No display: the text as is. */
 function userTextMarkdown(text: string, sb: DumpSideband, opts: DumpOptions): string {
-  return pasteMarkdown(text, sb, opts.readPaste ?? NO_PASTE)
+  const segs = displaySegments(text, sb, opts)
+  return segs === null ? text : displayMarkdown(segs)
 }
 
-/** User text with each paste ref as a `paste` element (XML content). */
+/** User text with each sideband ref as a `display` element (XML content). */
 function userTextXml(text: string, sb: DumpSideband, opts: DumpOptions): string {
-  return pasteXml(text, sb, opts.readPaste ?? NO_PASTE, escapeXml)
+  const segs = displaySegments(text, sb, opts)
+  return segs === null ? escapeXml(text) : displayXml(segs, escapeXml)
+}
+
+/**
+ * True for user text that a person wrote: a text block with no harness
+ * `sideband` mark (a compaction or a hook note keeps its raw form). A
+ * `null` mark is no mark: the same rule as the SessionHistory dump and the
+ * paste send hook.
+ */
+function isUserText(block: ContentBlock): block is TextBlock {
+  return block.type === "text" && (block.sideband === undefined || block.sideband === null)
 }
 
 /**
@@ -55,8 +78,8 @@ function scrubDumpText(s: string, sb: ScrubSideband): string {
  * Format a session as a human-readable Markdown string.
  *
  * @param session - The meta record and the messages.
- * @param sb - The sideband slice for the data-URI scrub and the paste refs (`loadSidebandOnly()`).
- * @param opts - The paste file reader.
+ * @param sb - The sideband slice for the data-URI scrub and the display of sideband refs (`loadSidebandOnly()`).
+ * @param opts - The dumped sid (for the display handlers).
  */
 export function formatSessionAsMarkdown(
   session: LoadedSession,
@@ -82,7 +105,7 @@ export function formatSessionAsMarkdown(
     } else {
       for (const block of msg.content) {
         const md =
-          isUser && block.type === "text"
+          isUser && isUserText(block)
             ? userTextMarkdown(block.text, sb, opts)
             : formatBlockAsMarkdown(block, sb)
         out += md + "\n\n"
@@ -178,8 +201,8 @@ function formatBlockAsMarkdown(block: ContentBlock, sb: ScrubSideband): string {
  * Format a session as a structured XML string.
  *
  * @param session - The meta record and the messages.
- * @param sb - The sideband slice for the data-URI scrub and the paste refs (`loadSidebandOnly()`).
- * @param opts - The paste file reader.
+ * @param sb - The sideband slice for the data-URI scrub and the display of sideband refs (`loadSidebandOnly()`).
+ * @param opts - The dumped sid (for the display handlers).
  */
 export function formatSessionAsXml(
   session: LoadedSession,
@@ -204,7 +227,7 @@ export function formatSessionAsXml(
     } else {
       for (const block of msg.content) {
         const xml =
-          isUser && block.type === "text"
+          isUser && isUserText(block)
             ? `    <text>${userTextXml(block.text, sb, opts)}</text>`
             : formatBlockAsXml(block, 4, sb)
         out += xml + "\n"
@@ -283,8 +306,9 @@ function formatBlockAsXml(block: ContentBlock, indent: number, sb: ScrubSideband
   }
 }
 
+/** XML escape. It also removes each char that XML 1.0 does not allow (`xmlSafe`). */
 function escapeXml(unsafe: string): string {
-  return unsafe
+  return xmlSafe(unsafe)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
