@@ -367,6 +367,12 @@ export function loginFailureText(code: LoginFailureCode): string {
 export function loginEventText(ev: LoginEvent): string {
   switch (ev.kind) {
     case "device-code":
+      // A loopback login (Google Antigravity) gets the code through the
+      // browser redirect, so the provider sends no code on purpose. A code
+      // line with no code under it tells the user to share nothing.
+      if (ev.userCode.trim().length === 0) {
+        return `Open this page to sign in:\n  ${ev.verificationUrl}\nSign in with your browser. This window finishes on its own.`
+      }
       return `Open this page to sign in:\n  ${ev.verificationUrl}\nEnter this one-time code:\n  ${ev.userCode}\nNever share this code with anyone.`
     case "device-waiting":
       return `Waiting for sign-in to finish…`
