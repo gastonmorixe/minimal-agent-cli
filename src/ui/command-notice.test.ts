@@ -45,6 +45,28 @@ describe("renderCommandNoticeBlock", () => {
     ])
   })
 
+  it("tints the frame glyphs with a dim form of the block color", () => {
+    // The intercom inbox block is magenta: its frame must not be dim cyan.
+    const rows = renderCommandNoticeBlock({
+      title: "Intercom",
+      body: ["hello"],
+      footer: "model",
+      color: "magenta",
+    })
+    const dimMagenta = "\x1b[2;35m"
+    expect(rows[0].startsWith(`  ${dimMagenta}╭`)).toBe(true)
+    for (const row of rows.slice(1, -1)) expect(row.startsWith(`  ${dimMagenta}│`)).toBe(true)
+    expect(rows[rows.length - 1].startsWith(`  ${dimMagenta}╰`)).toBe(true)
+    expect(rows.join("\n")).not.toContain("\x1b[2;36m")
+  })
+
+  it("keeps the dim cyan frame when the block has no color or an unknown color", () => {
+    for (const color of [undefined, "amber"]) {
+      const rows = renderCommandNoticeBlock({ title: "t", body: ["b"], color })
+      for (const row of rows) expect(row.startsWith("  \x1b[2;36m")).toBe(true)
+    }
+  })
+
   it("renders a compact close-only block when body and footer are omitted", () => {
     expect(
       renderCommandNoticeBlock({ title: "schedule", info: "no tasks" }).map(stripAnsi),

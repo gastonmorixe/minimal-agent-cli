@@ -14,6 +14,7 @@ import type { CommandNoticeBlock } from "@minimal-agent/core/plugin-api/types/pl
 import { displayWidth, wordWrap } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { c } from "./style/ansi.ts"
+import { frameTint } from "./tool-transcript/frame-tint.ts"
 
 /**
  * Cells the `"  │ "` gutter consumes on every body row (2 lead spaces + glyph +
@@ -103,15 +104,18 @@ export function renderCommandNoticeBlock(block: CommandNoticeBlock, cols?: numbe
   const title = c.bold(accent(block.title))
   const info = block.info ? `  ${c.dim(block.info)}` : ""
   const timestamp = block.timestamp ? `  ${c.dim(block.timestamp)}` : ""
-  const rows = [`  ${c.dimCyan("╭")} ${icon}${title}${info}${timestamp}`]
+  // The frame uses a dim form of the block color, the same as a tool block.
+  // No color or an unknown key keeps the dim cyan frame.
+  const tint = frameTint({ color: block.color })
+  const rows = [`  ${tint("╭")} ${icon}${title}${info}${timestamp}`]
 
   const body = block.body ?? []
   if (body.length > 0) {
     const width = noticeBodyWidth(cols)
-    rows.push(`  ${c.dimCyan("│")}`)
+    rows.push(`  ${tint("│")}`)
     for (const line of body) {
       if (line.length === 0) {
-        rows.push(`  ${c.dimCyan("│")}`)
+        rows.push(`  ${tint("│")}`)
         continue
       }
       // Wrap to the inner width so a long line never reaches the terminal's
@@ -120,11 +124,11 @@ export function renderCommandNoticeBlock(block: CommandNoticeBlock, cols?: numbe
       // emit verbatim (legacy behavior).
       const frags =
         width !== undefined && displayWidth(line) > width ? wordWrap(line, width) : [line]
-      for (const frag of frags) rows.push(`  ${c.dimCyan("│")} ${frag}`)
+      for (const frag of frags) rows.push(`  ${tint("│")} ${frag}`)
     }
-    rows.push(`  ${c.dimCyan("│")}`)
+    rows.push(`  ${tint("│")}`)
   }
 
-  rows.push(block.footer ? `  ${c.dimCyan("╰")} ${c.dim(block.footer)}` : `  ${c.dimCyan("╰")}`)
+  rows.push(block.footer ? `  ${tint("╰")} ${c.dim(block.footer)}` : `  ${tint("╰")}`)
   return rows
 }
