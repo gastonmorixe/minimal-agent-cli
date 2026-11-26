@@ -31,9 +31,11 @@ import {
   splitBashSegments,
 } from "../../cli/bash-split.ts"
 import { detectInlineScript, type InlineScript } from "../../cli/inline-script.ts"
+import type { AnsiWrapper } from "../../terminal-kit/ansi.ts"
 import { c } from "../style/ansi.ts"
 import { truncHint } from "../style/truncate-hint.ts"
 import { isNewFileDisplay, renderDiffRows, renderNewFileRows, renderReadRows } from "./diff-rows.ts"
+import { frameTint } from "./frame-tint.ts"
 import {
   TOOL_PREVIEW_GUTTER_WIDTH,
   TOOL_PREVIEW_WRAP_SAFETY_WIDTH,
@@ -54,6 +56,7 @@ export {
   formatDiagnosticsAnnotation,
   renderFindingsPanel,
 } from "./diagnostics-panel.ts"
+export { frameTint } from "./frame-tint.ts"
 export { TOOL_PREVIEW_GUTTER_WIDTH } from "./preview-width.ts"
 
 /**
@@ -851,7 +854,8 @@ export function toolContinuationIndentCells(toolName: string, iconText?: string)
  *
  * Live execution and session replay both use this helper so frame chrome,
  * width adjustment for the time suffix, continuation indentation, and
- * presentation color fallback stay byte-identical.
+ * presentation color fallback stay byte-identical. The frame glyphs get
+ * {@link frameTint} of `presentation`.
  */
 export function formatToolHeaderRows(opts: {
   tool: ToolUseBlock
@@ -913,14 +917,15 @@ export function formatToolHeaderRows(opts: {
       ? `${icon}${label}${dimTimeSuffix}`
       : `${icon}${label}${labelGap}${content}${dimTimeSuffix}`
 
-  const rows = [frameOpenRow(headerLine, cols)]
+  const tint = frameTint(presentation)
+  const rows = [frameOpenRow(headerLine, cols, tint)]
   if (headerOverride === undefined) {
     const indent = " ".repeat(toolContinuationIndentCells(tool.name, iconText))
     for (const cont of formatToolInputContinuation(tool, adjustedCols)) {
-      rows.push(frameBodyRow(`${indent}${c.dim(cont)}`, cols))
+      rows.push(frameBodyRow(`${indent}${c.dim(cont)}`, cols, tint))
     }
   }
-  rows.push(frameBodyRow(""))
+  rows.push(frameBodyRow("", undefined, tint))
   return rows
 }
 
@@ -931,20 +936,20 @@ export function frameHeaderChromeCells(iconText: string, label: string): number 
   )
 }
 
-/** The `  ╭ <line>` open row of a transcript frame, clamped to `cols`. */
-export function frameOpenRow(line: string, cols?: number): string {
-  return clampTranscriptRow(`  ${c.dimCyan("╭")} ${line}`, cols)
+/** The `  ╭ <line>` open row of a transcript frame, clamped to `cols`. `tint` paints the glyph. */
+export function frameOpenRow(line: string, cols?: number, tint: AnsiWrapper = c.dimCyan): string {
+  return clampTranscriptRow(`  ${tint("╭")} ${line}`, cols)
 }
 
 /** A `  │ <line>` body row of a transcript frame (bare gutter when `line` is empty). */
-export function frameBodyRow(line: string, cols?: number): string {
-  if (line.length === 0) return `  ${c.dimCyan("│")}`
-  return clampTranscriptRow(`  ${c.dimCyan("│")} ${line}`, cols)
+export function frameBodyRow(line: string, cols?: number, tint: AnsiWrapper = c.dimCyan): string {
+  if (line.length === 0) return `  ${tint("│")}`
+  return clampTranscriptRow(`  ${tint("│")} ${line}`, cols)
 }
 
 /** The `  ╰ <line>` closer of a transcript frame (bare glyph when `line` is empty). */
-export function frameCloseRow(line = ""): string {
-  return line.length === 0 ? `  ${c.dimCyan("╰")}` : `  ${c.dimCyan("╰")} ${line}`
+export function frameCloseRow(line = "", tint: AnsiWrapper = c.dimCyan): string {
+  return line.length === 0 ? `  ${tint("╰")}` : `  ${tint("╰")} ${line}`
 }
 
 /**
@@ -959,13 +964,15 @@ export function formatFrameHeaderRow(opts: {
   iconText?: string
   labelColor?: (s: string) => string
   cols?: number
+  /** Paints the `╭` glyph. Default: `c.dimCyan`. */
+  tint?: AnsiWrapper
 }): string {
   const color = opts.labelColor ?? c.orange
   const icon = `${c.bold(color(opts.iconText ?? DEFAULT_TOOL_ICON))} `
   const time =
     opts.timeText !== undefined && opts.timeText !== "" ? c.dim(` · ${opts.timeText}`) : ""
   const text = opts.text === "" ? "" : `  ${c.dim(opts.text)}`
-  return frameOpenRow(`${icon}${c.bold(color(opts.label))}${text}${time}`, opts.cols)
+  return frameOpenRow(`${icon}${c.bold(color(opts.label))}${text}${time}`, opts.cols, opts.tint)
 }
 
 /**
@@ -1373,7 +1380,8 @@ function wrapDisplayLine(
  *                  the truncated `content`.
  * The trailing options bag carries `tool` (line budget), `info`
  * (truncation facts for the footer), `footer` (display-mode footer
- * override), and `cols` (per-line clamp width).
+ * override), `cols` (per-line clamp width), and `tint` (frame glyph color,
+ * see {@link frameTint}).
  */
 export function formatToolPreview(
   content: string,
@@ -1397,8 +1405,11 @@ export function formatToolPreview(
      * is missing. Omitted: `NO_SIDEBAND`, which finds no annotation.
      */
     sideband?: SidebandReader
+    /** Paints the frame glyphs. Default: `c.dimCyan`. */
+    tint?: AnsiWrapper
   },
 ): string[] {
+  const tint = opts?.tint ?? c.dimCyan
   // If the tool provided a pre-rendered display string (e.g. ANSI-colored
   // unified diff from Edit/Write), render it as-is, line by line, with the
   // standard `│ ... └` connector gutter. Per-line clamp to the live
@@ -1417,7 +1428,7 @@ export function formatToolPreview(
     const body = footer === undefined ? display.replace(/\n$/, "") : display
     const dlines = body.length === 0 ? [] : body.split("\n")
     if (dlines.length === 0 && footer === undefined) {
-      out.push(`  ${c.dimCyan("╰")}`)
+      out.push(`  ${tint("╰")}`)
       return out
     }
     // Diff tools get a line-number gutter and wrap-then-cut rows (see
@@ -1440,17 +1451,13 @@ export function formatToolPreview(
         const isLastFrag = fi === fragments.length - 1
         const conn = footer === undefined && isLastLine && isLastFrag ? "╰" : "│"
         const fragLine = fragments[fi]
-        out.push(
-          fragLine.length === 0 ? `  ${c.dimCyan(conn)}` : `  ${c.dimCyan(conn)} ${fragLine}`,
-        )
+        out.push(fragLine.length === 0 ? `  ${tint(conn)}` : `  ${tint(conn)} ${fragLine}`)
       }
     }
     if (footer !== undefined) {
-      if (newFile && footer.length > 0) out.push(`  ${c.dimCyan("┊")}`)
+      if (newFile && footer.length > 0) out.push(`  ${tint("┊")}`)
       const footerLine = clampToolPreviewBodyLine(footer, bodyWidth)
-      out.push(
-        footerLine.length === 0 ? `  ${c.dimCyan("╰")}` : `  ${c.dimCyan("╰")} ${footerLine}`,
-      )
+      out.push(footerLine.length === 0 ? `  ${tint("╰")}` : `  ${tint("╰")} ${footerLine}`)
     }
     return out
   }
@@ -1527,11 +1534,11 @@ export function formatToolPreview(
     // Last rendered line is `╰` only when there's no footer below it.
     const isLast = i === totalRender - 1 && footerStat === null
     const connector = isLast ? "╰" : "│"
-    out.push(`  ${c.dimCyan(connector)} ${color(renderedLines[i])}`)
+    out.push(`  ${tint(connector)} ${color(renderedLines[i])}`)
   }
   if (footerStat !== null) {
-    out.push(`  ${c.dimCyan("┊")}`)
-    out.push(`  ${c.dimCyan("╰")} ${c.dim(footerStat)}`)
+    out.push(`  ${tint("┊")}`)
+    out.push(`  ${tint("╰")} ${c.dim(footerStat)}`)
   }
   return out
 }
@@ -1542,11 +1549,16 @@ export function formatToolPreview(
  * and a `╰ (refused by <mode>)` closer. The core tool loop owns the semantic
  * decision (which tool, which mode, what message); the box-drawing frame and
  * palette live here so core `src/loops/tool-round.ts` never imports the ANSI helpers.
+ * `tint` paints the frame glyphs (default `c.dimCyan`).
  */
-export function formatRefusalRows(message: string, refusedBy: string): string[] {
+export function formatRefusalRows(
+  message: string,
+  refusedBy: string,
+  tint: AnsiWrapper = c.dimCyan,
+): string[] {
   return [
-    `  ${c.dimCyan("│")} ${c.boldRed("⊘")} ${c.dim(message)}`,
-    `  ${c.dimCyan("╰")} ${c.dim(`(refused by ${refusedBy})`)}`,
+    `  ${tint("│")} ${c.boldRed("⊘")} ${c.dim(message)}`,
+    `  ${tint("╰")} ${c.dim(`(refused by ${refusedBy})`)}`,
   ]
 }
 
@@ -1555,9 +1567,10 @@ export function formatRefusalRows(message: string, refusedBy: string): string[] 
  * `╰ active mode: <label>`. The structured JSON result goes to the model;
  * this row just shows the user the mode was checked. Presentation-only, so
  * it lives in the host next to the rest of the tool-block chrome.
+ * `tint` paints the `╰` glyph (default `c.dimCyan`).
  */
-export function formatModeCloseRow(labelDisplay: string): string {
-  return `  ${c.dimCyan("╰")} ${c.dim(`active mode: ${labelDisplay}`)}`
+export function formatModeCloseRow(labelDisplay: string, tint: AnsiWrapper = c.dimCyan): string {
+  return `  ${tint("╰")} ${c.dim(`active mode: ${labelDisplay}`)}`
 }
 
 /**
@@ -1565,9 +1578,10 @@ export function formatModeCloseRow(labelDisplay: string): string {
  * The core streamer buffers the previous line and emits it through this
  * helper before buffering the next, so the box-drawing gutter + dim styling
  * stay in the host instead of being hand-built in core `src/loops/tool-round.ts`.
+ * `tint` paints the `│` glyph (default `c.dimCyan`).
  */
-export function formatStreamBodyRow(line: string): string {
-  return `  ${c.dimCyan("│")} ${c.dim(line)}`
+export function formatStreamBodyRow(line: string, tint: AnsiWrapper = c.dimCyan): string {
+  return `  ${tint("│")} ${c.dim(line)}`
 }
 
 /**
@@ -1600,8 +1614,11 @@ export function renderStreamedTail(opts: {
   isError?: boolean
   writeTranscript: (line: string) => void
   cols?: number
+  /** Paints the frame glyphs. Default: `c.dimCyan`. */
+  tint?: AnsiWrapper
 }): void {
   const { bufferedLastLine, streamedLineCount, budget, truncInfo, isError, writeTranscript } = opts
+  const tint = opts.tint ?? c.dimCyan
   const visibleCount = Math.min(streamedLineCount, budget)
   const color = isError ? c.red : c.dim
 
@@ -1621,18 +1638,18 @@ export function renderStreamedTail(opts: {
   // `bufferedLastLine` was already width-clamped in `flushLineToBuffer`.
   const writeLastLine = (connector: string) => {
     if (bufferedLastLine === null) {
-      writeTranscript(`  ${c.dimCyan(connector)}`)
+      writeTranscript(`  ${tint(connector)}`)
       return
     }
     writeTranscript(
       bufferedLastLine.length === 0
-        ? `  ${c.dimCyan(connector)}`
-        : `  ${c.dimCyan(connector)} ${color(bufferedLastLine)}`,
+        ? `  ${tint(connector)}`
+        : `  ${tint(connector)} ${color(bufferedLastLine)}`,
     )
   }
 
   if (bufferedLastLine === null) {
-    writeTranscript(`  ${c.dimCyan("╰")} ${c.dim(footer ?? "(no output)")}`)
+    writeTranscript(`  ${tint("╰")} ${c.dim(footer ?? "(no output)")}`)
     return
   }
 
@@ -1642,8 +1659,8 @@ export function renderStreamedTail(opts: {
   }
 
   writeLastLine("\u2502")
-  writeTranscript(`  ${c.dimCyan("┊")}`)
-  writeTranscript(`  ${c.dimCyan("╰")} ${c.dim(footer)}`)
+  writeTranscript(`  ${tint("┊")}`)
+  writeTranscript(`  ${tint("╰")} ${c.dim(footer)}`)
 }
 
 /**

@@ -9,6 +9,7 @@
 import type { SidebandApi } from "@minimal-agent/core/host/sideband"
 import { expandTabs } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { Finding, FindingSeverity } from "@minimal-agent/core/sdk/tool-lifecycle"
+import type { AnsiWrapper } from "../../terminal-kit/ansi.ts"
 import { c } from "../style/ansi.ts"
 import { wrapPreserving } from "./diff-rows.ts"
 import { toolPreviewBodyWidth } from "./preview-width.ts"
@@ -120,12 +121,15 @@ function findingRows(f: Finding, width: number | undefined): string[] {
  *
  * The rows reuse the exact gutter glyphs + palette of {@link formatToolPreview}
  * so diagnostics read as part of the same tool block, not a new widget.
+ * `opts.tint` paints the glyphs (default `c.dimCyan`). Give the tint of the
+ * tool block, so the fused frame has one color.
  */
 export function renderFindingsPanel(
   findings: Finding[],
-  opts: { cols?: number; maxRows?: number } = {},
+  opts: { cols?: number; maxRows?: number; tint?: AnsiWrapper } = {},
 ): string[] {
   if (findings.length === 0) return []
+  const tint = opts.tint ?? c.dimCyan
   const maxRows = opts.maxRows ?? DIAGNOSTICS_PANEL_MAX_ROWS
   const bodyWidth = toolPreviewBodyWidth(opts.cols)
 
@@ -139,10 +143,10 @@ export function renderFindingsPanel(
 
   const out: string[] = []
   for (const f of shown) {
-    for (const row of findingRows(f, bodyWidth)) out.push(`  ${c.dimCyan("│")} ${row}`)
+    for (const row of findingRows(f, bodyWidth)) out.push(`  ${tint("│")} ${row}`)
   }
   if (hidden > 0) {
-    out.push(`  ${c.dimCyan("┊")} ${c.dim(`+${hidden} more`)}`)
+    out.push(`  ${tint("┊")} ${c.dim(`+${hidden} more`)}`)
   }
 
   // Summary line. Badge by worst severity present.
@@ -152,7 +156,7 @@ export function renderFindingsPanel(
   if (infos > 0) parts.push(c.dim(`${infos} info`))
   const badge = errors > 0 ? c.boldRed("✘") : warnings > 0 ? c.gold("▲") : c.sky("●")
   const summary = `${badge} ${parts.join(` ${c.dim("·")} `)}`
-  out.push(`  ${c.dimCyan("╰")} ${summary}`)
+  out.push(`  ${tint("╰")} ${summary}`)
   return out
 }
 

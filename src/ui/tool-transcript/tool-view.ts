@@ -23,6 +23,7 @@ import type {
 } from "@minimal-agent/core/host-kit/tool-executor-adapter"
 import { expandTabs } from "@minimal-agent/core/plugin-api/utils/term-width"
 import type { ToolUseBlock } from "@minimal-agent/core/sdk/messages"
+import type { AnsiWrapper } from "../../terminal-kit/ansi.ts"
 import { c } from "../style/ansi.ts"
 import { diffSummary, displayPatch, newFileDisplay, newFileNumberedBody } from "./diff-rows.ts"
 import {
@@ -34,6 +35,7 @@ import {
   formatStreamBodyRow,
   formatToolHeaderRows,
   formatToolPreview,
+  frameTint,
   highlightReadBody,
   highlightUnifiedDiff,
   renderFindingsPanel,
@@ -120,6 +122,8 @@ function trailingCut(content: string, sb: SidebandReader): number {
 /** The live state of one tool call. */
 interface CallState {
   cols: number | undefined
+  /** The frame glyph color of this block, from the tool presentation (`frameTint`). */
+  tint: AnsiWrapper
   headerWritten: boolean
   suppressToolTime: boolean
   displayHeader: string | undefined
@@ -251,6 +255,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
     if (known) return known
     const state: CallState = {
       cols: opts.columns?.(),
+      tint: frameTint(opts.presentation.get(tool.name)),
       headerWritten: false,
       suppressToolTime: false,
       displayHeader: undefined,
@@ -303,7 +308,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
       return
     }
     if (state.bufferedLastLine !== null) {
-      emitRow(state, formatStreamBodyRow(state.bufferedLastLine))
+      emitRow(state, formatStreamBodyRow(state.bufferedLastLine, state.tint))
     }
     // Cheap pre-slice before the width math: a mega-line is already
     // ruined for the preview.
@@ -360,6 +365,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
       isError: ev.isError,
       writeTranscript: (line) => emitRow(state, line),
       cols: state.cols,
+      tint: state.tint,
     })
   }
 
@@ -463,10 +469,14 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
       ansiContent: contentHasAnsi,
       ...(previewBodyEnd === undefined ? {} : { bodyEnd: previewBodyEnd }),
       sideband,
+      tint: state.tint,
     })
     const panel =
       outcome.findings.length > 0
-        ? renderFindingsPanel(outcome.findings, state.cols ? { cols: state.cols } : {})
+        ? renderFindingsPanel(outcome.findings, {
+            ...(state.cols ? { cols: state.cols } : {}),
+            tint: state.tint,
+          })
         : []
     // The diagnostics panel owns the final `╰`. Re-open the preview's own
     // closer to a `│`, so the two blocks make one frame.
@@ -489,7 +499,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
       switch (event.type) {
         case "refused":
           writeHeader(tool, state)
-          for (const row of formatRefusalRows(event.message, event.refusedBy)) {
+          for (const row of formatRefusalRows(event.message, event.refusedBy, state.tint)) {
             emitRow(state, row)
           }
           endCall(tool, state)
@@ -502,7 +512,7 @@ export function createReplToolView(opts: ReplToolViewOptions): ReplToolView {
           return
         case "mode":
           writeHeader(tool, state)
-          emitRow(state, formatModeCloseRow(event.label))
+          emitRow(state, formatModeCloseRow(event.label, state.tint))
           endCall(tool, state)
           calls.delete(tool.id)
           return

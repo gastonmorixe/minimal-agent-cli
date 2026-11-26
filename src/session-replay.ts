@@ -63,6 +63,7 @@ import {
 import {
   formatToolHeaderRows,
   formatToolPreview,
+  frameTint,
   type ToolPresentation,
 } from "./ui/tool-transcript/format.ts"
 import type { ToolTimeTracker } from "./ui/tool-transcript/tool-time.ts"
@@ -504,6 +505,8 @@ export async function replayToScrollback(
             ? toolTimeTracker.format(startedAt)
             : undefined
         const pres = toolPresentation?.get(tu.name) ?? null
+        // The frame glyph color of this block. The live view uses the same.
+        const tint = frameTint(pres)
         const result = toolResultById.get(tu.id)
         const displays = toolDisplays?.get(tu.id) ?? null
         for (const [idx, row] of formatToolHeaderRows({
@@ -611,11 +614,12 @@ export async function replayToScrollback(
             footer: displays?.displayFooter,
             ansiContent: previewHasAnsi,
             sideband,
+            tint,
           })) {
             sink.write(`${line}\n`)
           }
         } else {
-          sink.write(`  ${c.dimCyan("╰")} ${c.dim("(no result on disk)")}\n`)
+          sink.write(`  ${tint("╰")} ${c.dim("(no result on disk)")}\n`)
         }
         tail = "card"
       }
