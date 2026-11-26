@@ -23,7 +23,7 @@
 #   5. The interactive REPL in tmux starts and stops at the credentials
 #      check (the fresh HOME has none). Skipped without tmux.
 #   6. Embedded plugins: with an EMPTY HOME and no plugin dir anywhere,
-#      `plugins` lists >= 40 plugins and `providers` lists 13.
+#      `plugins` lists >= 40 plugins and `providers` lists 14.
 #   7. A user-tier plugin with the id of an embedded one shadows it.
 #   8. `__run`: a path or an unknown id exits 64. `__run ma-bg/runner`
 #      reaches the runner (its missing-env error, exit 2).
@@ -318,10 +318,10 @@ if run_empty "plugins (empty HOME)" plugins; then
 fi
 if run_empty "providers (empty HOME)" providers; then
   n="$(plain "$OUT" | grep -oE '^ *[0-9]+ providers' | grep -oE '[0-9]+' | head -n 1)"
-  if [[ "$CODE" == "0" && "${n:-0}" == "13" ]]; then
-    pass "embedded: 13 providers with an empty HOME"
+  if [[ "$CODE" == "0" && "${n:-0}" == "14" ]]; then
+    pass "embedded: 14 providers with an empty HOME"
   else
-    failed "embedded: providers listed ${n:-none} (exit $CODE), want 13" "$OUT"
+    failed "embedded: providers listed ${n:-none} (exit $CODE), want 14" "$OUT"
   fi
 fi
 if [[ -e "$EMPTY_HOME/.minimal-agent/plugins" ]]; then
