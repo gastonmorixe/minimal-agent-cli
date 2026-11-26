@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test"
 import { displayWidth, stripAnsi } from "@minimal-agent/core/plugin-api/utils/term-width"
 
 import { coerceNoticeBlock, renderCommandNoticeBlock } from "./command-notice.ts"
+import { c } from "./style/ansi.ts"
 
 /**
  * Frame-integrity assertion: every interior row of a rendered notice must
@@ -47,14 +48,16 @@ describe("renderCommandNoticeBlock", () => {
 
   it("tints the frame glyphs with a dim form of the block color", () => {
     // The intercom inbox block is magenta: its frame must not be dim cyan.
+    // The empty body line ("") is a bare gutter row. It must be tinted too.
     const rows = renderCommandNoticeBlock({
       title: "Intercom",
-      body: ["hello"],
+      body: ["hello", "", "bye"],
       footer: "model",
       color: "magenta",
     })
     const dimMagenta = "\x1b[2;35m"
     expect(rows[0].startsWith(`  ${dimMagenta}╭`)).toBe(true)
+    expect(rows).toContain(`  ${dimMagenta}│\x1b[22;39m`)
     for (const row of rows.slice(1, -1)) expect(row.startsWith(`  ${dimMagenta}│`)).toBe(true)
     expect(rows[rows.length - 1].startsWith(`  ${dimMagenta}╰`)).toBe(true)
     expect(rows.join("\n")).not.toContain("\x1b[2;36m")
@@ -63,6 +66,18 @@ describe("renderCommandNoticeBlock", () => {
   it("keeps the dim cyan frame when the block has no color or an unknown color", () => {
     for (const color of [undefined, "amber"]) {
       const rows = renderCommandNoticeBlock({ title: "t", body: ["b"], color })
+      for (const row of rows) expect(row.startsWith("  \x1b[2;36m")).toBe(true)
+    }
+  })
+
+  it("ignores an inherited Object key as a color: gold label, dim cyan frame, no throw", () => {
+    // A `notification.emit` payload is untrusted. A key that only the
+    // prototype of `c` has must not reach the label paint.
+    const plain = renderCommandNoticeBlock({ title: "t", body: ["b"], footer: "f" })
+    expect(plain[0]).toContain(c.bold(c.gold("t")))
+    for (const color of ["valueOf", "toString", "__proto__", "hasOwnProperty", "constructor"]) {
+      const rows = renderCommandNoticeBlock({ title: "t", body: ["b"], footer: "f", color })
+      expect({ color, rows }).toEqual({ color, rows: plain })
       for (const row of rows) expect(row.startsWith("  \x1b[2;36m")).toBe(true)
     }
   })

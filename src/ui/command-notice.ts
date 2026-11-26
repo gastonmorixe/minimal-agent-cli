@@ -62,8 +62,12 @@ export function coerceNoticeBlock(input: unknown): CommandNoticeBlock | null {
   }
 }
 
+/**
+ * The label paint for a block color key. Only an own key of `c` counts, so a
+ * payload key like `valueOf` or `__proto__` gets gold, not an Object method.
+ */
 function colorize(color: string | undefined): (s: string) => string {
-  if (color && (c as Record<string, (s: string) => string>)[color]) {
+  if (color && Object.hasOwn(c, color)) {
     return (c as Record<string, (s: string) => string>)[color]
   }
   return c.gold

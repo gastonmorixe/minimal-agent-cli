@@ -37,8 +37,8 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-/** Write a plugin with one concurrency-safe tool. Returns the plugins dir. */
-function writeWavePlugin(): string {
+/** Write a plugin with one concurrency-safe tool `name`. Returns the plugins dir. */
+function writeWavePlugin(name = TOOL): string {
   const root = mkdtempSync(join(tmpdir(), "cli-concurrent-waves-"))
   dirs.push(root)
   const pluginsDir = join(root, "plugins")
@@ -58,7 +58,7 @@ function writeWavePlugin(): string {
             trigger: {
               type: "tool",
               tool: {
-                name: TOOL,
+                name,
                 description: "d",
                 input_schema: {
                   type: "object",
@@ -87,16 +87,16 @@ function writeWavePlugin(): string {
   return pluginsDir
 }
 
-/** Round 1: two calls (call 1 slow, call 2 fast). Round 2 ends the turn. */
-function scriptedSend(): BuildAgentCoreDeps["sendFn"] {
+/** Round 1: two calls of `name` (call 1 slow, call 2 fast). Round 2 ends the turn. */
+function scriptedSend(name = TOOL): BuildAgentCoreDeps["sendFn"] {
   let round = 0
   return async function* (_opts: SendOptions): AsyncGenerator<string, StreamedResponse, undefined> {
     round++
     if (round === 1) {
       return {
         blocks: [
-          { type: "tool_use", id: "call-1", name: TOOL, input: { ms: 400, tag: "ONE" } },
-          { type: "tool_use", id: "call-2", name: TOOL, input: { ms: 20, tag: "TWO" } },
+          { type: "tool_use", id: "call-1", name, input: { ms: 400, tag: "ONE" } },
+          { type: "tool_use", id: "call-2", name, input: { ms: 20, tag: "TWO" } },
         ],
         text: "",
         stopReason: "tool_use",
@@ -227,5 +227,38 @@ describe("InteractiveSession: concurrent tool calls with real core waves", () =>
     // Cap 1: the calls never overlap, and the tool row is the plain one.
     expect(seen.maxRunning).toBe(1)
     expect(labels).toContain(`Running ${TOOL}`)
+  })
+
+  it("paints the frame glyphs of a colored tool with its dim color (raw SGR)", async () => {
+    // IntercomSend is magenta in the static presentation map. A real session
+    // must paint every `╭ │ ╰` of its blocks dim magenta, never dim cyan.
+    const name = "IntercomSend"
+    const loader = await PluginLoader.load({
+      roots: { embedded: [writeWavePlugin(name)] },
+      logger: () => {},
+    })
+    const transcript: string[] = []
+    const session = await InteractiveSession.create({
+      auth: AUTH,
+      model: "test-model",
+      sendFn: scriptedSend(name),
+      loader,
+      modeManager: null,
+      store: null,
+      blobStore: null,
+      saveEcho: null,
+      turnAttachments: [],
+      writeTranscript: (line) => transcript.push(line),
+      statusPort: createStatusPort(new StatusBus()),
+      maxConcurrentToolCalls: 2,
+      ...textCoreDeps(),
+    })
+    const gen = session.run("go")
+    while (!(await gen.next()).done) {}
+
+    const DIM_MAGENTA = "\x1b[2;35m"
+    const opens = transcript.map((row) => /^\n? {2}(\x1b\[[\d;]*m)[╭│┊╰]/.exec(row)?.[1] ?? null)
+    expect(opens).toEqual(Array(6).fill(DIM_MAGENTA))
+    expect(transcript.join("\n")).not.toContain("\x1b[2;36m")
   })
 })

@@ -103,6 +103,15 @@ describe("formatToolHeaderRows frame tint", () => {
     for (const row of rows) expect(row).not.toContain(DIM_CYAN_OPEN)
   })
 
+  it("ignores an inherited Object key as a color: orange label, dim cyan frame, no throw", () => {
+    const plain = formatToolHeaderRows({ tool: editTool, presentation: {}, cols: 100 })
+    expect(plain[0]).toContain(c.bold(c.orange("Edit")))
+    for (const color of ["valueOf", "toString", "__proto__", "hasOwnProperty"]) {
+      const rows = formatToolHeaderRows({ tool: editTool, presentation: { color }, cols: 100 })
+      expect({ color, rows }).toEqual({ color, rows: plain })
+    }
+  })
+
   it("keeps dimCyan for a tool with no presentation", () => {
     for (const presentation of [undefined, null, { icon: "x" }]) {
       const rows = formatToolHeaderRows({ tool: editTool, presentation, cols: 100 })
@@ -154,6 +163,73 @@ describe("frame renderers take the tint", () => {
   })
 })
 
+describe("frame rows that only some inputs reach take the tint", () => {
+  // Each case pins one glyph site. A site that goes back to `c.dimCyan`
+  // gives a dim cyan open on that row, and the case fails.
+  const bash = (command: string): ToolUseBlock => ({
+    type: "tool_use",
+    id: "b1",
+    name: "Bash",
+    input: { command },
+  })
+  const orange = frameTint(TOOL_PRESENTATION.get("Bash"))
+  const DIM_ORANGE = "\x1b[2;38;5;208m"
+
+  it("header continuation rows of a multi-line Bash command (G2)", () => {
+    const rows = formatToolHeaderRows({
+      tool: bash("echo one\necho two\necho three"),
+      presentation: TOOL_PRESENTATION.get("Bash"),
+      cols: 100,
+    })
+    // Open row, 2 continuation rows, the bare gutter row.
+    expect(rows.length).toBe(4)
+    expect(orange("╭")).toBe(`${DIM_ORANGE}╭${CLOSE}`)
+    for (const row of rows) expect(frameOpen(row)).toBe(DIM_ORANGE)
+  })
+
+  it("the empty display closer (G3)", () => {
+    expect(formatToolPreview("", false, "", { tool: "Task", tint: gold })).toEqual([
+      `  ${gold("╰")}`,
+    ])
+  })
+
+  it("the cut row before the footer of a new-file Write (G4)", () => {
+    const display = `${c.dim("new file · 12 lines")}\n1\ta\n2\tb`
+    const rows = formatToolPreview("m", false, display, {
+      tool: "Write",
+      footer: c.dim("shown 10/12 L"),
+      tint: gold,
+    })
+    expect(rows.some((r) => r === `  ${gold("┊")}`)).toBe(true)
+    for (const row of rows) expect(frameOpen(row)).toBe(ANSI_CODES.DIM_GOLD)
+  })
+
+  it("the streamed tail with no buffered line (G5)", () => {
+    const out: string[] = []
+    renderStreamedTail({
+      bufferedLastLine: null,
+      streamedLineCount: 0,
+      budget: 10,
+      writeTranscript: (line) => out.push(line),
+      tint: gold,
+    })
+    expect(out).toEqual([`  ${gold("╰")} ${c.dim("(no output)")}`])
+  })
+
+  it("the +N more row of the diagnostics panel (G8)", () => {
+    const findings = Array.from({ length: 4 }, (_, i) => ({
+      severity: "warning" as const,
+      message: `unused ${i}`,
+      line: i + 1,
+      source: "lint",
+    }))
+    const rows = renderFindingsPanel(findings, { maxRows: 2, tint: gold })
+    const more = rows.find((r) => r.includes("+2 more"))
+    expect(more?.startsWith(`  ${gold("┊")} `)).toBe(true)
+    for (const row of rows) expect(frameOpen(row)).toBe(ANSI_CODES.DIM_GOLD)
+  })
+})
+
 describe("outer frame closer with a tint", () => {
   it("isOuterFrameClose matches a gold and a violet truecolor closer", () => {
     expect(isOuterFrameClose(frameCloseRow("", gold))).toBe(true)
@@ -165,6 +241,23 @@ describe("outer frame closer with a tint", () => {
 
   it("reopenFrameCloser keeps the tint", () => {
     expect(reopenFrameCloser(frameCloseRow("x", gold))).toBe(`  ${gold("│")} x`)
+  })
+})
+
+describe("replay frame rows that only some sessions reach", () => {
+  it("the (no result on disk) closer takes the tint of its tool (G1)", async () => {
+    const messages: Message[] = [
+      { role: "user", content: [{ type: "text", text: "go" }] },
+      { role: "assistant", content: [editTool] },
+    ]
+    let replay = ""
+    await replayToScrollback(
+      messages,
+      { write: (s: string) => (replay += s) },
+      { toolPresentation: toolPresentationMap() },
+    )
+    const closer = replay.split("\n").find((l) => l.includes("(no result on disk)"))
+    expect(closer).toBe(`  ${gold("╰")} ${c.dim("(no result on disk)")}`)
   })
 })
 
@@ -205,5 +298,111 @@ describe("live and replay frame parity", () => {
     expect(live[0]).toContain(sky("╭"))
     expect(live.at(-1)!.startsWith(`  ${sky("╰")}`)).toBe(true)
     expect(replay).toContain(`${live.join("\n")}\n`)
+  })
+
+  /** The live rows of one call: the events go to a real REPL tool view. */
+  async function liveRows(
+    tool: ToolUseBlock,
+    events: (
+      tool: ToolUseBlock,
+    ) => Parameters<ReturnType<typeof createReplToolView>["onToolEvent"]>[0][],
+  ): Promise<string[]> {
+    const rows: string[] = []
+    const view = createReplToolView({
+      writeTranscript: (line) => rows.push(line),
+      presentation: TOOL_PRESENTATION,
+      columns: () => process.stdout.columns,
+    })
+    for (const event of events(tool)) await view.onToolEvent(event)
+    return rows
+  }
+
+  /** The replay text of one call and its stored result. */
+  async function replayText(
+    tool: ToolUseBlock,
+    content: string,
+    isError: boolean,
+    display?: string,
+  ): Promise<string> {
+    const messages: Message[] = [
+      { role: "user", content: [{ type: "text", text: "go" }] },
+      { role: "assistant", content: [tool] },
+      {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: tool.id, content, is_error: isError }],
+      },
+    ]
+    let out = ""
+    await replayToScrollback(
+      messages,
+      { write: (s: string) => (out += s) },
+      {
+        toolPresentation: toolPresentationMap(),
+        ...(display === undefined ? {} : { toolDisplays: new Map([[tool.id, { display }]]) }),
+      },
+    )
+    return out
+  }
+
+  it("paints the same bytes for one Edit block with a diff display", async () => {
+    const display = `${c.dim("1 line changed")}\n@@ -1 +1 @@\n-a\n+b`
+    const outcome: ToolViewOutcome = {
+      content: "edited",
+      isError: false,
+      aborted: false,
+      findings: [],
+      display,
+    }
+    const live = await liveRows(editTool, (tool) => [
+      { type: "started", tool, pluginTool: false },
+      { type: "outcome", tool, outcome },
+    ])
+    const replay = await replayText(editTool, "edited", false, display)
+    for (const row of live) expect(frameOpen(row)).toBe(ANSI_CODES.DIM_GOLD)
+    expect(replay).toContain(`${live.join("\n")}\n`)
+  })
+
+  it("paints the same bytes for one streamed Bash block with a cut", async () => {
+    const tool: ToolUseBlock = {
+      type: "tool_use",
+      id: "s1",
+      name: "Bash",
+      input: { command: "seq 1 30" },
+    }
+    const content = Array.from({ length: 30 }, (_, i) => String(i + 1)).join("\n")
+    const outcome: ToolViewOutcome = { content, isError: false, aborted: false, findings: [] }
+    const live = await liveRows(tool, (t) => [
+      { type: "started", tool: t, pluginTool: false },
+      { type: "output", tool: t, chunk: `${content}\n` },
+      { type: "executed", tool: t, isError: false },
+      { type: "outcome", tool: t, outcome },
+    ])
+    const replay = await replayText(tool, content, false)
+    const orangeOpen = "\x1b[2;38;5;208m"
+    expect(live.some((r) => r.includes("┊"))).toBe(true)
+    for (const row of live) expect(frameOpen(row)).toBe(orangeOpen)
+    expect(replay).toContain(`${live.join("\n")}\n`)
+  })
+
+  it("paints the same header and frame color for one refused Bash call", async () => {
+    // Replay has no refusal row: the stored result is an error result, so
+    // the body differs. The header rows and the frame color must not.
+    const tool: ToolUseBlock = {
+      type: "tool_use",
+      id: "x1",
+      name: "Bash",
+      input: { command: "rm x" },
+    }
+    const live = await liveRows(tool, (t) => [
+      { type: "refused", tool: t, message: "Bash is not allowed", refusedBy: "ask" },
+    ])
+    const replay = await replayText(tool, "Bash is not allowed", true)
+    const replayRows = replay.split("\n")
+    const start = replayRows.findIndex((r) => r.includes("rm x"))
+    const block = replayRows.slice(start, replayRows.indexOf("", start + 1))
+    const orangeOpen = "\x1b[2;38;5;208m"
+    expect(live[0]).toBe(`\n${block[0]}`)
+    expect(live[1]).toBe(block[1])
+    for (const row of [...live, ...block]) expect(frameOpen(row)).toBe(orangeOpen)
   })
 })

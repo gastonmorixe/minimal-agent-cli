@@ -11,7 +11,7 @@
 import { type AnsiWrapper, combo } from "../../terminal-kit/ansi.ts"
 import { PALETTE, type PaletteName } from "../../terminal-kit/palette.ts"
 import { c } from "../style/ansi.ts"
-import type { ToolPresentation } from "./format.ts"
+import type { ToolPresentation } from "./tool-presentation-type.ts"
 
 /** The SGR close of a dim foreground frame glyph. Same as `c.dimCyan`. */
 const DIM_FG_CLOSE = "\x1b[22;39m"

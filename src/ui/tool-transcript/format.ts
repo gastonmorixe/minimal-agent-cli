@@ -41,6 +41,7 @@ import {
   TOOL_PREVIEW_WRAP_SAFETY_WIDTH,
   toolPreviewBodyWidth,
 } from "./preview-width.ts"
+import type { ToolPresentation } from "./tool-presentation-type.ts"
 
 // Colors a plain Edit/Write diff when no code highlighter runs (S41: core
 // emits the plain patch).
@@ -58,23 +59,7 @@ export {
 } from "./diagnostics-panel.ts"
 export { frameTint } from "./frame-tint.ts"
 export { TOOL_PREVIEW_GUTTER_WIDTH } from "./preview-width.ts"
-
-/**
- * Cosmetic per-tool presentation hints stripped from tool definitions before
- * they go on the model wire. The transcript renderer owns how these hints are
- * applied to the TUI frame.
- */
-export interface ToolPresentation {
-  /** Glyph drawn before the bold tool name in the transcript header. */
-  icon?: string
-  /** Palette key (a method name on `c`) for the icon + label color. */
-  color?: string
-  /**
-   * Input field whose value can headline the transcript header before the
-   * handler returns.
-   */
-  headerKey?: string
-}
+export type { ToolPresentation } from "./tool-presentation-type.ts"
 
 /**
  * Icon for a tool with no presentation row or no row icon (a user plugin,
@@ -867,8 +852,9 @@ export function formatToolHeaderRows(opts: {
   pathContext?: ToolHeaderPathContext
 }): string[] {
   const { tool, presentation, headerOverride, timeText, cols, pathContext } = opts
+  // Only an own key of `c` counts: an inherited key (`valueOf`) gets orange.
   const labelColor =
-    presentation?.color && (c as Record<string, (s: string) => string>)[presentation.color]
+    presentation?.color && Object.hasOwn(c, presentation.color)
       ? (c as Record<string, (s: string) => string>)[presentation.color]
       : c.orange
   const iconText = toolIcon(presentation)
@@ -964,15 +950,14 @@ export function formatFrameHeaderRow(opts: {
   iconText?: string
   labelColor?: (s: string) => string
   cols?: number
-  /** Paints the `╭` glyph. Default: `c.dimCyan`. */
-  tint?: AnsiWrapper
 }): string {
   const color = opts.labelColor ?? c.orange
   const icon = `${c.bold(color(opts.iconText ?? DEFAULT_TOOL_ICON))} `
   const time =
     opts.timeText !== undefined && opts.timeText !== "" ? c.dim(` · ${opts.timeText}`) : ""
   const text = opts.text === "" ? "" : `  ${c.dim(opts.text)}`
-  return frameOpenRow(`${icon}${c.bold(color(opts.label))}${text}${time}`, opts.cols, opts.tint)
+  // A tool header has its own tint. This generic header (`/dump`) keeps dim cyan.
+  return frameOpenRow(`${icon}${c.bold(color(opts.label))}${text}${time}`, opts.cols)
 }
 
 /**
