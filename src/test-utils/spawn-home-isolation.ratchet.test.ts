@@ -24,7 +24,11 @@
  * 6. No `HOME:` or `MINIMAL_AGENT_HOME:` key after the isolated spread takes
  *    its value from `process.env.HOME`, `process.env.MINIMAL_AGENT_HOME` or
  *    `homedir()`.
- * Rules 2-6 are per call, so one isolated test in a file does not hide a
+ * 7. The env does not spread `process.env` raw, also with a temp
+ *    `MINIMAL_AGENT_HOME`. The agent harness exports `MINIMAL_AGENT_*` keys
+ *    (effort, model, credential name) that change the child run. Spread
+ *    `cleanSpawnEnv()` or an `isolatedCliEnv()` env.
+ * Rules 2-7 are per call, so one isolated test in a file does not hide a
  * leaking sibling (e2e-smoke.test.ts had exactly that). Comments are blanked
  * out before every match.
  *
@@ -216,6 +220,7 @@ function declOf(file: string, name: string): string | null {
 const REAL_HOME_VALUE_RE =
   /process\.env(?:\.|\[\s*["'])(?:HOME|MINIMAL_AGENT_HOME)\b|\bhomedir\s*\(\s*\)/
 const PARENT_SPREAD_RE = /\.\.\.\s*(?:process\.env\b|cleanSpawnEnv\s*\()/
+const RAW_ENV_SPREAD_RE = /\.\.\.\s*process\.env\b(?![.[])/
 const HOME_KEY_RE = /(?<![\w$.])MINIMAL_AGENT_HOME\s*:/
 
 /** Why an env text (object literal or declaration) leaks, or null. */
@@ -234,6 +239,9 @@ function envTextLeak(env: string, isoNames: ReadonlySet<string>): string | null 
   }
   if (PARENT_SPREAD_RE.test(env) && isoSpreads.length === 0 && !HOME_KEY_RE.test(env)) {
     return "spreads the parent env and sets no MINIMAL_AGENT_HOME"
+  }
+  if (RAW_ENV_SPREAD_RE.test(env)) {
+    return "spreads process.env, so the agent MINIMAL_AGENT_* keys reach the child (use cleanSpawnEnv())"
   }
   return null
 }
@@ -305,7 +313,7 @@ describe("spawn home isolation (detector)", () => {
       `Bun.spawn(["bun", "src/index.ts"], { stdout: "pipe" })\n` +
       `Bun.spawn(["bun", "src/index.ts"], { env: { ...cleanSpawnEnv(), A: "1" } })\n` +
       `Bun.spawn(["bun", "src/index.ts"], { env: ISO.env })\n` +
-      `Bun.spawn(["bun", "src/index.ts"], { env: { ...process.env, MINIMAL_AGENT_HOME: h } })`
+      `Bun.spawn(["bun", "src/index.ts"], { env: { ...cleanSpawnEnv(), MINIMAL_AGENT_HOME: h } })`
     const calls = spawnCalls(file)
     expect(calls.map((c) => callLeak(c, file) !== null)).toEqual([true, true, false, false])
   })
@@ -340,8 +348,22 @@ describe("spawn home isolation (detector)", () => {
   test("accepts shorthand { env } or env: <name> built from the isolated env", () => {
     expect(leakOf(`const env = { ...ISO.env, A: "1" }\n${SPAWN}{ env })`)).toBeNull()
     expect(leakOf(`const env = ISO.env\n${SPAWN}{ env })`)).toBeNull()
-    const fn = `function spawnEnv(h) {\n  return { ...process.env, MINIMAL_AGENT_HOME: h }\n}\n`
+    const fn = `function spawnEnv(h) {\n  return { ...cleanSpawnEnv(), MINIMAL_AGENT_HOME: h }\n}\n`
     expect(leakOf(`${fn}${SPAWN}{ env: spawnEnv(home) })`)).toBeNull()
+    expect(leakOf(`${SPAWN}{ env: { ...cleanSpawnEnv(), MINIMAL_AGENT_HOME: h } })`)).toBeNull()
+  })
+
+  test("flags a raw process.env spread even with a temp MINIMAL_AGENT_HOME", () => {
+    // The agent harness exports MINIMAL_AGENT_EFFORT, _MODEL, _CREDENTIAL_NAME
+    // and more. A raw spread gives them to the child and changes its run.
+    const why = "spreads process.env"
+    const fn = `function spawnEnv(h) {\n  return { ...process.env, MINIMAL_AGENT_HOME: h }\n}\n`
+    expect(leakOf(`${fn}${SPAWN}{ env: spawnEnv(home) })`)).toContain(why)
+    expect(leakOf(`${SPAWN}{ env: { ...process.env, MINIMAL_AGENT_HOME: h } })`)).toContain(why)
+    expect(leakOf(`${SPAWN}{ env: { ...ISO.env, ...process.env } })`)).toContain(why)
+    expect(
+      leakOf(`const env = { ...process.env, MINIMAL_AGENT_HOME: h }\n${SPAWN}{ env })`),
+    ).toContain(why)
   })
 
   test("ignores a MINIMAL_AGENT_HOME that only sits in a comment", () => {

@@ -38,6 +38,7 @@ import {
 } from "node:fs"
 import { basename, join } from "node:path"
 
+import { cleanSpawnEnv } from "../e2e/clean-spawn-env.ts"
 import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 import { textPluginDirs } from "../test-utils/text-fixture-providers.ts"
 
@@ -112,7 +113,7 @@ async function runChild(args: string[], stdinText?: string) {
     stderr: "pipe",
     timeout: 30000,
     env: {
-      ...process.env,
+      ...cleanSpawnEnv(),
       ...tempHomeSpawnEnv(),
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",

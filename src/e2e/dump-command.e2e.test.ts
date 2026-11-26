@@ -5,6 +5,7 @@ import { join } from "node:path"
 
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
 import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
+import { cleanSpawnEnv } from "./clean-spawn-env.ts"
 
 async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
   if (!stream) return ""
@@ -38,7 +39,7 @@ describe("dump command architecture", () => {
         stdout: "pipe",
         stderr: "pipe",
         env: {
-          ...process.env,
+          ...cleanSpawnEnv(),
           ...tempHomeSpawnEnv(),
           HOME: home,
           // Clear any inherited MINIMAL_AGENT_HOME (the running harness sets it),
@@ -69,7 +70,7 @@ describe("dump command architecture", () => {
         stdout: "pipe",
         stderr: "pipe",
         env: {
-          ...process.env,
+          ...cleanSpawnEnv(),
           ...tempHomeSpawnEnv(),
           HOME: home,
           MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),
@@ -105,7 +106,7 @@ describe("dump command architecture", () => {
           stdout: "pipe",
           stderr: "pipe",
           env: {
-            ...process.env,
+            ...cleanSpawnEnv(),
             ...tempHomeSpawnEnv(),
             HOME: home,
             // Clear inherited MINIMAL_AGENT_HOME (see note above); else it wins
@@ -131,7 +132,7 @@ describe("dump command architecture", () => {
         stdout: "pipe",
         stderr: "pipe",
         env: {
-          ...process.env,
+          ...cleanSpawnEnv(),
           ...tempHomeSpawnEnv(),
           HOME: home,
           // Clear any inherited MINIMAL_AGENT_HOME (the running harness sets it),
@@ -188,7 +189,7 @@ describe("dump command architecture", () => {
         stdout: "pipe",
         stderr: "pipe",
         env: {
-          ...process.env,
+          ...cleanSpawnEnv(),
           ...tempHomeSpawnEnv(),
           HOME: home,
           MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),
@@ -230,7 +231,7 @@ describe("dump command architecture", () => {
         stdout: "pipe",
         stderr: "pipe",
         env: {
-          ...process.env,
+          ...cleanSpawnEnv(),
           ...tempHomeSpawnEnv(),
           HOME: home,
           MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),
@@ -281,7 +282,7 @@ describe("dump command architecture", () => {
         stdout: "pipe",
         stderr: "pipe",
         env: {
-          ...process.env,
+          ...cleanSpawnEnv(),
           ...tempHomeSpawnEnv(),
           HOME: home,
           MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),
@@ -316,7 +317,7 @@ describe("dump command architecture", () => {
           stdout: "pipe",
           stderr: "pipe",
           env: {
-            ...process.env,
+            ...cleanSpawnEnv(),
             ...tempHomeSpawnEnv(),
             HOME: home,
             MINIMAL_AGENT_HOME: join(home, ".minimal-agent"),

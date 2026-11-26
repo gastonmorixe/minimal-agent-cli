@@ -16,6 +16,7 @@ import { afterAll, describe, expect, it } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
+import { cleanSpawnEnv } from "../e2e/clean-spawn-env.ts"
 import { siblingPluginPresent } from "../test-utils/sibling-repo.ts"
 import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 
@@ -87,7 +88,7 @@ async function runCli(args: string[]) {
     stderr: "pipe",
     timeout: 30000,
     env: {
-      ...process.env,
+      ...cleanSpawnEnv(),
       ...tempHomeSpawnEnv(),
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",

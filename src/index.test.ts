@@ -16,6 +16,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { cleanSpawnEnv } from "./e2e/clean-spawn-env.ts"
 import { main } from "./main.ts"
 import { siblingPluginPresent } from "./test-utils/sibling-repo.ts"
 
@@ -34,10 +35,13 @@ const throwingExit = (code: number): never => {
   throw new ExitCalled(code)
 }
 
-/** Env for a spawned bin: test transport, a temp agent home, no network sync. */
+/**
+ * Env for a spawned bin: test transport, a temp agent home, no network sync.
+ * The base drops every `MINIMAL_AGENT_*` key of the parent shell.
+ */
 function spawnEnv(home: string): Record<string, string | undefined> {
   return {
-    ...process.env,
+    ...cleanSpawnEnv(),
     NODE_ENV: "test",
     MINIMAL_AGENT_HOME: home,
     MINIMAL_AGENT_NO_PLUGIN_SYNC: "1",

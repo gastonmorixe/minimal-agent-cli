@@ -22,6 +22,7 @@ import { join } from "node:path"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import type { BuildAgentCoreDeps } from "@minimal-agent/core/host-kit/build-agent-core"
 import { SessionStore } from "@minimal-agent/core/host-kit/session-store"
+import { cleanSpawnEnv } from "../e2e/clean-spawn-env.ts"
 import { InteractiveSession } from "../interactive-session.ts"
 import { tempHomeSpawnEnv } from "../test-utils/temp-home-env.ts"
 import type {
@@ -63,7 +64,7 @@ async function runChild(
     stderr: "pipe",
     timeout: 30000,
     env: {
-      ...process.env,
+      ...cleanSpawnEnv(),
       ...tempHomeSpawnEnv(),
       NODE_ENV: "test",
       MINIMAL_AGENT_TEST_AUTH: "1",

@@ -18,6 +18,8 @@ import {
 } from "@minimal-agent/core/host-kit/embedded-plugins"
 import { TABLE } from "#embedded-plugins"
 
+import { cleanSpawnEnv } from "../e2e/clean-spawn-env.ts"
+
 import {
   RUN_SOFTWARE_EXIT,
   RUN_USAGE_EXIT,
@@ -144,7 +146,7 @@ describe("src/index.ts __run from source", () => {
         stdout: "pipe",
         stderr: "pipe",
         timeout: 30000,
-        env: { ...process.env, MINIMAL_AGENT_HOME: home, MINIMAL_AGENT_NO_PLUGIN_SYNC: "1" },
+        env: { ...cleanSpawnEnv(), MINIMAL_AGENT_HOME: home, MINIMAL_AGENT_NO_PLUGIN_SYNC: "1" },
       })
       const [code, err] = await Promise.all([p.exited, new Response(p.stderr).text()])
       expect(code).toBe(64)
