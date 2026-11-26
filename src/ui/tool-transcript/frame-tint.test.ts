@@ -61,7 +61,7 @@ describe("frameTint", () => {
       {},
       { icon: "x" },
       { color: "" },
-      { color: "amber" }, // ChromeCDP: not a palette key
+      { color: "amber" }, // not a palette key
       { color: "bold" }, // a `c` key, not a color
       { color: "black" }, // a palette key with no `c` helper
       { color: "toString" },
@@ -75,13 +75,17 @@ describe("frameTint", () => {
   })
 
   it("gives each tool in the static map the dim form of its palette color", () => {
-    for (const [, pres] of TOOL_PRESENTATION) {
-      const open = frameOpen(`  ${frameTint(pres)("│")}`)
+    for (const [name, pres] of TOOL_PRESENTATION) {
       const key = pres.color ?? ""
-      const expected = Object.hasOwn(PALETTE, key)
-        ? `\x1b[2;${PALETTE[key as keyof typeof PALETTE].slice(2)}`
-        : DIM_CYAN_OPEN
-      expect(open).toBe(expected)
+      // A color key that is not a `c` helper and a palette name silently
+      // falls back (orange label, dim cyan frame). Every entry must be real.
+      expect({ name, key, known: Object.hasOwn(c, key) && Object.hasOwn(PALETTE, key) }).toEqual({
+        name,
+        key,
+        known: true,
+      })
+      const open = frameOpen(`  ${frameTint(pres)("│")}`)
+      expect(open).toBe(`\x1b[2;${PALETTE[key as keyof typeof PALETTE].slice(2)}`)
     }
   })
 })

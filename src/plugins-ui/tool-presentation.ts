@@ -41,7 +41,7 @@ const ROWS: ReadonlyArray<readonly [string, ToolPresentation]> = [
   ["BackgroundStatus", { icon: "◎", color: "violet" }], // ma-background-plugin
   ["BackgroundLogs", { icon: "▤", color: "sky" }], // ma-background-plugin
   ["BackgroundStop", { icon: "■", color: "red" }], // ma-background-plugin
-  ["ChromeCDP", { icon: "◉", color: "amber" }], // ma-chrome-cdp-plugin
+  ["ChromeCDP", { icon: "◉", color: "orange" }], // ma-chrome-cdp-plugin
   ["CompactContext", { icon: "✂", color: "violet" }], // ma-compact-plugin
   ["Computer", { icon: "◈", color: "cyan" }], // ma-computer-use-plugin
   ["DiffViewerShowDiff", { icon: "±", color: "lime" }], // ma-diff-view-plugin
