@@ -33,6 +33,7 @@ import type { ToolNamePolicy } from "@minimal-agent/core/sdk/tool-filter"
 
 import type { CliUserConfig } from "../config/terminal-config.ts"
 import { isDebugRequested } from "./debug-gate.ts"
+import { FLAGS_WITH_VALUES } from "./extract-prompt.ts"
 import { resolveHeaderFormat, resolveShowHeader } from "./non-interactive-defaults.ts"
 import { type OutputFormat, resolveOutputFormat } from "./output-format.ts"
 import { type PrintFormat, parsePrintFormat } from "./print-format.ts"
@@ -203,7 +204,7 @@ function readEffortFlag(args: readonly string[]): string | undefined {
     const got = next ? ` Got ${JSON.stringify(next)}.` : ""
     const hint =
       next?.startsWith("-") === true
-        ? " That looks like another flag; pass `--effort <level> --fast`."
+        ? ` That looks like another flag. Pass \`--effort <level>\` before ${JSON.stringify(next)}.`
         : ""
     throw new CliFlagError(`--effort requires a level (low, medium, high, xhigh).${got}${hint}`)
   }
@@ -276,6 +277,34 @@ function cacheAnchorCli(args: readonly string[]): { cli?: boolean } {
   return { cli: on > off }
 }
 
+type SelectionFlag = "--model" | "--provider" | "--credential-name"
+
+/** Read selection flags without interpreting prompt text or host-mode args as flags. */
+function readSelectionFlags(args: readonly string[]): Partial<Record<SelectionFlag, string>> {
+  const values: Partial<Record<SelectionFlag, string>> = {}
+  for (let i = 0; i < args.length; i++) {
+    const flag = args[i]
+    if (flag === "--host-mode") break
+    const next = args[i + 1]
+    if (flag === "--prompt") {
+      i++
+      continue
+    }
+    if (flag === "--model" || flag === "--provider" || flag === "--credential-name") {
+      // `sessions` validates its own model filter.
+      if (flag === "--model" && args.includes("--sessions")) continue
+      if (next === undefined || next.trim() === "" || next.startsWith("-")) {
+        throw new CliFlagError(`${flag} requires a value.`)
+      }
+      values[flag] ??= next
+      i++
+    } else if (FLAGS_WITH_VALUES.has(flag) && next !== undefined && !next.startsWith("-")) {
+      i++
+    }
+  }
+  return values
+}
+
 /** The raw token after `flag` (a leading dash is allowed). */
 function rawAfter(args: readonly string[], flag: string): string | undefined {
   const idx = args.indexOf(flag)
@@ -304,8 +333,9 @@ export function parseCliOptions(
   const profile = startupProfile?.profile
   const readFlagValue = makeReadFlagValue(args)
 
-  const model = valueAfter(args, "--model") ?? rawAfter(args, "--model")
-  const provider = valueAfter(args, "--provider")
+  const selection = readSelectionFlags(args)
+  const model = selection["--model"]
+  const provider = selection["--provider"]
   const endpoint = readFlagValue("--endpoint") ?? env.MINIMAL_AGENT_ENDPOINT ?? userConfig.endpoint
   const format =
     readFlagValue("--format") ??
@@ -340,7 +370,7 @@ export function parseCliOptions(
         .map((s) => s.trim())
         .filter((s) => s.length > 0)
     : userConfig.effortLevels
-  const cliCredentialName = valueAfter(args, "--credential-name")
+  const cliCredentialName = selection["--credential-name"]
 
   const wantListModels = args.includes("--list-models")
   const wantListModelsLive = args.includes("--list-models-live")

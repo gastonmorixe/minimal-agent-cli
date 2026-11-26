@@ -256,6 +256,21 @@ describe("normalizeArgs", () => {
     ])
   })
 
+  test.each(["models", "models-live"])("plural provider ID-first form: %s", (verb) => {
+    const expected = [`--list-${verb}`, "openai", "--json"]
+    expect(normalizeArgs(["provider", "openai", verb, "--json"])).toEqual(expected)
+    expect(normalizeArgs(["providers", verb, "openai", "--json"])).toEqual(expected)
+    expect(normalizeArgs(["providers", "openai", verb, "--json"])).toEqual(expected)
+  })
+
+  test("plural provider verbs take precedence over ID-first models", () => {
+    expect(normalizeArgs(["providers", "models", "models-live"])).toEqual([
+      "--list-models",
+      "models-live",
+    ])
+    expect(normalizeArgs(["providers", "list", "models"])).toEqual(["--list-providers", "models"])
+  })
+
   test("auth subcommands keep trailing flags after the verb", () => {
     // `minimal-agent login --email foo@bar` → `--login --email foo@bar`.
     // The subcommand recognizer only consumes the first positional;

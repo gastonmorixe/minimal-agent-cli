@@ -8,7 +8,7 @@
  * @module host/startup/provider-boot
  */
 
-import { CoreError } from "@minimal-agent/core/errors"
+import { CoreError, NoProviderCredentialsError } from "@minimal-agent/core/errors"
 import type { AuthResult } from "@minimal-agent/core/host/auth"
 import {
   discoverCredentialedProviders,
@@ -18,8 +18,8 @@ import {
 } from "@minimal-agent/core/host/auth-strategies"
 import type { UserConfig } from "@minimal-agent/core/host/config"
 import { Facility, getDiagnosticBus, Severity } from "@minimal-agent/core/host/diagnostics"
-import { findModelForProvider } from "@minimal-agent/core/host/model-registry"
-import { describeStartupAuth, resolveStartupAuth } from "@minimal-agent/core/host/provider-auth"
+import { findModelForProvider, listRegisteredModels } from "@minimal-agent/core/host/model-registry"
+import { resolveStartupAuth } from "@minimal-agent/core/host/provider-auth"
 import {
   canonicalProviderId,
   findProviderPlugin,
@@ -27,9 +27,8 @@ import {
 } from "@minimal-agent/core/host/provider-plugin"
 import { primeProviderSessionInfo } from "@minimal-agent/core/host/provider-session"
 import type { CliOptions } from "../cli/parse-argv.ts"
-import { printStartupRow } from "../ui/startup/tree.ts"
-import { c } from "../ui/style/ansi.ts"
-import { errorText, startupAuthText, storedProvidersHintText } from "./core-text.ts"
+import { errorText } from "./core-text.ts"
+import { credentialError, selectionError, unknownTargetError } from "./provider-startup-error.ts"
 import { resolveBootModel, resolveSingleStoredProviderBootModel } from "./resolve-boot-model.ts"
 import { resolveCredentialName } from "./resolve-credential-name.ts"
 
@@ -103,7 +102,7 @@ export async function resolveStartupProviderState(
   })
 
   if (bootModel.kind === "invalid") {
-    throw new Error(bootModel.reason)
+    throw selectionError(bootModel)
   }
 
   const selected =
@@ -114,7 +113,7 @@ export async function resolveStartupProviderState(
           suggestModelForProvider,
         )
   if (selected.kind === "invalid") {
-    throw new Error(`${selected.reason}. ${storedProvidersHintText(listStoredProviderFacts())}`)
+    throw selectionError(selected, listStoredProviderFacts())
   }
 
   const selectedModel = selected.model
@@ -125,13 +124,22 @@ export async function resolveStartupProviderState(
   publishGenericEndpointEnv(input.opts)
   const plugin = findProviderPlugin(selectedProviderId)
   if (!plugin) {
-    throw new Error(`unknown provider "${selectedProviderId}"`)
+    throw unknownTargetError(
+      selectedProviderId,
+      listProviderPlugins().map((p) => p.id),
+    )
   }
   if (!findModelForProvider(selectedModelBase, selectedProviderId)) {
     plugin.registerAdHocModel?.(selectedModelBase)
   }
   if (!findModelForProvider(selectedModelBase, selectedProviderId)) {
-    throw new Error(`unknown model "${selectedModelBase}" for provider "${selectedProviderId}"`)
+    const models = listRegisteredModels().filter((model) => model.providerId === selectedProviderId)
+    throw unknownTargetError(
+      selectedModelBase,
+      models.map((model) => model.id),
+      selectedProviderId,
+      selectedModel.match(/\[(1|2)m\]$/i)?.[0],
+    )
   }
 
   const cred = resolveCredentialName({
@@ -174,11 +182,19 @@ export async function resolveStartupProviderState(
       authHeader: input.opts.authHeader,
     })
   } catch (err) {
-    // Core throws typed errors with no text. The CLI shows the old wording.
+    if (err instanceof NoProviderCredentialsError) {
+      throw credentialError(
+        err,
+        errorText(err),
+        selectedProviderId,
+        selectedModelBase,
+        cred.credentialName,
+        err.credentialedProviders.some((p) => p.providerId === selectedProviderId),
+      )
+    }
     if (err instanceof CoreError) throw new Error(errorText(err), { cause: err })
     throw err
   }
-  printStartupRow("auth", startupAuthText(describeStartupAuth(auth, selectedProviderId), c.dim))
 
   return {
     selectedModel,

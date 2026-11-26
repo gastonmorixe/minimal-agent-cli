@@ -38,7 +38,6 @@ import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createAgentContext } from "@minimal-agent/core/host/agent-context"
-import { resolveAgentName } from "@minimal-agent/core/host/agent-identity"
 import { setBashCwdChangeListener } from "@minimal-agent/core/host/bash-cwd"
 import { loadModeUserOverrides } from "@minimal-agent/core/host/config"
 import { setGlobalEventBus } from "@minimal-agent/core/host/global-bus"
@@ -101,12 +100,17 @@ import { readEmbeddedPackageVersion } from "./startup/help.ts"
 import { withHostPorts } from "./startup/host-ports.ts"
 import { followLiveTarget } from "./startup/live-target.ts"
 import * as roots from "./startup/plugin-roots.ts"
+import { printProviderBanner } from "./startup/provider-banner.ts"
 import { resolveStartupProviderState, startProviderWarmups } from "./startup/provider-boot.ts"
 import {
   modelHidesReasoning,
   providerWantsQuotaProbe,
   signInStepLabel,
 } from "./startup/provider-presentation.ts"
+import {
+  formatProviderStartupError,
+  ProviderStartupError,
+} from "./startup/provider-startup-error.ts"
 import { peekResumeCredentialPin } from "./startup/resolve-credential-name.ts"
 import {
   loadResumeState,
@@ -147,7 +151,7 @@ import { buildReadyBanner } from "./ui/chrome/ready-banner.ts"
 import { resolveFormatter } from "./ui/formatter/auto.ts"
 import { applyFormatterDefaults } from "./ui/formatter/defaults.ts"
 import { resolveSpinnerPreset } from "./ui/spinner/named-presets.ts"
-import { printStartupHeader, printStartupRow, startStartupRowSpinner } from "./ui/startup/tree.ts"
+import { printStartupRow, startStartupRowSpinner } from "./ui/startup/tree.ts"
 import { c } from "./ui/style/ansi.ts"
 import { parseDiffWrapLines, setDiffWrapLines } from "./ui/tool-transcript/diff-rows.ts"
 import { ToolTimeTracker } from "./ui/tool-transcript/tool-time.ts"
@@ -214,7 +218,9 @@ export async function main(options: MainOptions = {}): Promise<number> {
   } catch (err) {
     if (shutdown.exitRequested()) throw err
     const wrote = writeStreamFailure(failure, err)
-    console.error(formatFatalError(err))
+    console.error(
+      err instanceof ProviderStartupError ? formatProviderStartupError(err) : formatFatalError(err),
+    )
     return endFailedRun(wrote, shutdown.exit)
   } finally {
     shutdown.end()
@@ -431,23 +437,6 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     })
   }
 
-  printStartupHeader()
-  printStartupRow("session", c.dim(getSessionId()))
-
-  // Resolve the per-session agent name ONCE, here, and reuse the value
-  // for both the startup `name` row below and the env publication further down
-  // (the `agent-identity` plugin reads MINIMAL_AGENT_AGENT_NAME). On by
-  // default (as if "auto"): every session gets a stable derived name unless
-  // the user opts out with an OFF sentinel, in which case the resolver returns
-  // undefined and no row is printed. See `src/agent-name.ts` for the
-  // resolution priority + the cache rationale.
-  const resolvedAgentName = resolveAgentName({
-    sessionId: getSessionId(),
-    configName: userConfig.agentName,
-    envName: env.MINIMAL_AGENT_AGENT_NAME,
-  })
-  if (resolvedAgentName) printStartupRow("name", c.dim(resolvedAgentName))
-
   // Diagnostic bus: attach the file sink as early as possible so even
   // plugin-load warnings land in `~/.minimal-agent/logs/ma-session-<sid>.log`.
   // The TUI surface attaches later from `runReplLiveArea` (it needs the
@@ -471,16 +460,8 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
     debug: opts.debug,
   })
 
-  // Plugin-sync startup row. The clone itself ran silently before provider
-  // discovery (above); now that the tree is open, surface the result.
-  if (pluginSyncResult) {
-    if (pluginSyncResult.status === "cloned") {
-      printStartupRow("plugins", `${c.dim("+")} ${c.dim(pluginSyncResult.label)}`)
-    } else if (pluginSyncResult.status === "failed" || pluginSyncResult.status === "skipped") {
-      // Quiet, non-fatal. Detail lands in the file log via the diagnostic bus
-      // (the loader still runs with embedded plugins only).
-      diag.notice("plugin-sync", pluginSyncResult.detail ?? pluginSyncResult.label)
-    }
+  if (pluginSyncResult?.status === "failed" || pluginSyncResult?.status === "skipped") {
+    diag.notice("plugin-sync", pluginSyncResult.detail ?? pluginSyncResult.label)
   }
   roots.reportPluginRoots(pluginMode, env, cwd, diag)
 
@@ -512,6 +493,13 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   })
   const { selectedModel, selectedModelBase, selectedProviderId, credentialName, auth } =
     providerState
+
+  // Do not open a session banner until the provider preflight has passed.
+  const resolvedAgentName = printProviderBanner(
+    providerState,
+    { configName: userConfig.agentName, envName: env.MINIMAL_AGENT_AGENT_NAME },
+    pluginSyncResult?.status === "cloned" ? pluginSyncResult.label : undefined,
+  )
 
   // Fire-and-forget provider warm-ups (bootstrap overlay probe + session-info
   // prime) for the SELECTED provider only, so a gpt-5.5 session never contacts

@@ -7,6 +7,7 @@
 
 import { describe, expect, test } from "bun:test"
 
+import { normalizeArgs } from "./cli-args.ts"
 import { CliFlagError, type CliToolFilter, parseCliOptions } from "./parse-argv.ts"
 
 const NO_ENV = {} as const
@@ -169,7 +170,48 @@ describe("parseCliOptions — generic endpoint flags", () => {
   })
 })
 
+describe("selection flag operands", () => {
+  const parse = (args: string[]) =>
+    parseCliOptions(normalizeArgs(args), NO_CFG, NO_ENV, NOOP_FORMATTER)
+
+  for (const flag of ["--model", "--provider", "--credential-name"]) {
+    test(`${flag} requires an operand`, () => {
+      for (const args of [[flag], [flag, "--debug"], [`${flag}=`]]) {
+        expect(() => parse(args)).toThrow(CliFlagError)
+        expect(() => parse(args)).toThrow(`${flag} requires`)
+      }
+    })
+  }
+
+  test("equals syntax works with an explicit resume target", () => {
+    expect(
+      parse([
+        "--resume-same-sid=last",
+        "--model=vendor/m",
+        "--provider=p",
+        "--credential-name=work",
+      ]),
+    ).toMatchObject({
+      effectiveResumeArg: "last",
+      model: "vendor/m",
+      provider: "p",
+      cliCredentialName: "work",
+    })
+  })
+
+  test("flag-shaped prompt text and host-mode arguments are not selection flags", () => {
+    expect(parse(["--prompt=--model"]).model).toBeUndefined()
+    expect(parse(["--host-mode", "acp", "--provider"]).hostModeId).toBe("acp")
+  })
+})
+
 describe("parseCliOptions — --effort vs --fast", () => {
+  test("names the actual next flag in the hint", () => {
+    expect(() => parseCliOptions(["--effort", "--debug"], NO_CFG, NO_ENV, NOOP_FORMATTER)).toThrow(
+      '`--effort <level>` before "--debug"',
+    )
+  })
+
   test("--effort high --fast keeps both flags", () => {
     const opts = parseCliOptions(["--effort", "high", "--fast"], NO_CFG, NO_ENV, NOOP_FORMATTER)
     expect(opts.effort).toBe("high")

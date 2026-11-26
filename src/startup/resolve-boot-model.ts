@@ -28,10 +28,10 @@ export interface ResolvedBootModelSelection {
   providerSource: BootSelectionSource
 }
 
-export interface InvalidBootModelSelection {
-  kind: "invalid"
-  reason: string
-}
+export type InvalidBootModelSelection = { kind: "invalid"; reason: string } & (
+  | { issue: "missing-provider" | "missing-model" | "no-suggested-model"; id: string }
+  | { issue: "no-credentials" | "no-usable-credentials" | "multiple-providers" }
+)
 
 export type ResolveBootModelResult =
   | ResolvedBootModelSelection
@@ -57,7 +57,7 @@ export function resolveBootModel(input: ResolveBootModelInput): ResolveBootModel
   const model = firstString(input.cliModel, input.envModel, input.configModel)
   const provider = firstString(input.cliProvider, input.envProvider, input.configProvider)
 
-  if (!model && !provider) return { kind: "unconfigured" }
+  if (model === undefined && provider === undefined) return { kind: "unconfigured" }
   if (model && provider) {
     return {
       kind: "explicit",
@@ -68,11 +68,20 @@ export function resolveBootModel(input: ResolveBootModelInput): ResolveBootModel
     }
   }
 
+  if (model) {
+    return {
+      kind: "invalid",
+      issue: "missing-provider",
+      id: model.value,
+      reason: `model "${model.value}" requires an explicit provider; pass --provider <id> too`,
+    }
+  }
+  const id = provider!.value
   return {
     kind: "invalid",
-    reason: model
-      ? `model "${model.value}" requires an explicit provider; pass --provider <id> too`
-      : `provider "${provider?.value}" requires an explicit model; pass --model <id> too`,
+    issue: "missing-model",
+    id,
+    reason: `provider "${id}" requires an explicit model; pass --model <id> too`,
   }
 }
 
@@ -90,14 +99,20 @@ export function resolveSingleStoredProviderBootModel(
 ): ResolvedBootModelSelection | InvalidBootModelSelection {
   const usable = candidates.filter((p) => p.credentialInfo?.usable !== false)
   if (usable.length !== 1) {
-    const reason =
+    const issue =
       candidates.length === 0
-        ? "no provider credentials found"
+        ? "no-credentials"
         : usable.length === 0
-          ? "no usable provider credentials found"
-          : "multiple provider credentials found"
+          ? "no-usable-credentials"
+          : "multiple-providers"
+    const reason = {
+      "no-credentials": "no provider credentials found",
+      "no-usable-credentials": "no usable provider credentials found",
+      "multiple-providers": "multiple provider credentials found",
+    }[issue]
     return {
       kind: "invalid",
+      issue,
       reason:
         `${reason}; set both model and provider in config, or pass ` +
         `--provider <id> --model <id>`,
@@ -109,6 +124,8 @@ export function resolveSingleStoredProviderBootModel(
   if (!model) {
     return {
       kind: "invalid",
+      issue: "no-suggested-model",
+      id: provider,
       reason:
         `provider "${provider}" has credentials but no suggested model; ` +
         `pass --provider ${provider} --model <id>`,

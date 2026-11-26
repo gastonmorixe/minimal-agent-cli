@@ -227,10 +227,10 @@ export function normalizeArgs(raw: string[]): string[] {
       //   providers login <providerId>    → --login --provider <providerId>
       //   providers logout <providerId>   → --logout --provider <providerId>
       //   providers list                  → --list-providers
-      //   providers <other>               → --list-providers (bare list)
-      // Bare `providers` (no verb, or a flag next) falls through to
-      // SUBCOMMANDS → --list-providers.
+      // The models verbs also work after the ID, as in `provider <id> models`.
+      // Other forms fall back to --list-providers.
       const second = raw[1]
+      const third = raw[2]
       if (second === "models") {
         out.push("--list-models")
         start = 2
@@ -263,6 +263,9 @@ export function normalizeArgs(raw: string[]): string[] {
           out.push("--provider", raw[2])
           start = 3
         }
+      } else if (second !== "list" && (third === "models" || third === "models-live")) {
+        out.push(`--list-${third}`, second)
+        start = 3
       } else {
         out.push("--list-providers")
         start = 2

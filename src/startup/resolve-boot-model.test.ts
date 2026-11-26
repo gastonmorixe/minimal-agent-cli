@@ -51,10 +51,14 @@ describe("resolveBootModel", () => {
   it("signals invalid when only one of model/provider is configured", () => {
     expect(resolveBootModel({ cliModel: "model-only" })).toEqual({
       kind: "invalid",
+      issue: "missing-provider",
+      id: "model-only",
       reason: 'model "model-only" requires an explicit provider; pass --provider <id> too',
     })
     expect(resolveBootModel({ cliProvider: "provider-only" })).toEqual({
       kind: "invalid",
+      issue: "missing-model",
+      id: "provider-only",
       reason: 'provider "provider-only" requires an explicit model; pass --model <id> too',
     })
   })
@@ -110,6 +114,7 @@ describe("resolveSingleStoredProviderBootModel", () => {
   it("does not choose a global default when no provider is stored", () => {
     expect(resolveSingleStoredProviderBootModel([], () => "global-default")).toEqual({
       kind: "invalid",
+      issue: "no-credentials",
       reason:
         "no provider credentials found; set both model and provider in config, or pass --provider <id> --model <id>",
     })
@@ -126,6 +131,7 @@ describe("resolveSingleStoredProviderBootModel", () => {
       ),
     ).toEqual({
       kind: "invalid",
+      issue: "multiple-providers",
       reason:
         "multiple provider credentials found; set both model and provider in config, or pass --provider <id> --model <id>",
     })
@@ -139,6 +145,7 @@ describe("resolveSingleStoredProviderBootModel", () => {
       ),
     ).toEqual({
       kind: "invalid",
+      issue: "no-usable-credentials",
       reason:
         "no usable provider credentials found; set both model and provider in config, or pass --provider <id> --model <id>",
     })
