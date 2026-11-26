@@ -553,7 +553,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
 
   // Print the model / service-tier / thinking / effort / cache-ttl banner
   // rows (pure presentation + provenance labels, in host/startup/startup-rows).
-  printStartupConfigRows({
+  printStartupConfigRows(selectedProviderId, {
     selectedModel,
     speedFast,
     serviceTier,
@@ -633,7 +633,7 @@ async function runEntrypoint(io: EntrypointIo, failure: StreamFailureState): Pro
   })
   // Publish the RESOLVED effort + fast-mode state into process.env as the
   // authoritative output the quota-status footer / session-info read.
-  publishResolvedRequestEnv(hidesReasoning, effort, speedFast)
+  publishResolvedRequestEnv(hidesReasoning, effort, speedFast, selectedModel, selectedProviderId)
   // The header template (flag > env > config) for the plugin that renders it.
   if (opts.headerFormat !== undefined) env.MINIMAL_AGENT_HEADER_FORMAT = opts.headerFormat
   else delete env.MINIMAL_AGENT_HEADER_FORMAT

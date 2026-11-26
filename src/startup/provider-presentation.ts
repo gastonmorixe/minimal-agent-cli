@@ -22,12 +22,30 @@
  */
 
 import { discoverCredentialedProviders } from "@minimal-agent/core/host/auth-strategies"
-import { findModel } from "@minimal-agent/core/host/model-registry"
+import { findModel, findModelForProvider } from "@minimal-agent/core/host/model-registry"
 import { findProviderPlugin } from "@minimal-agent/core/host/provider-plugin"
 
 /** Strip the optional `[1m]` / `[2m]` context-window variant suffix. */
 function baseModelId(modelId: string): string {
   return modelId.replace(/\[(1|2)m\]/gi, "")
+}
+
+/** The effort that a display shows when the registry does not know the model. */
+export const FALLBACK_DEFAULT_EFFORT = "medium"
+
+/**
+ * The effort that the model uses when the caller sends none: the model's own
+ * `capabilities.effort.default`. The lookup is provider-scoped when
+ * `providerId` is set (a bare id can be in more than one catalog), then
+ * unscoped. An unknown model, or a model with no default, gives "medium".
+ */
+export function modelDefaultEffort(modelId: string, providerId?: string): string {
+  const base = baseModelId(modelId)
+  const entry =
+    (providerId !== undefined ? findModelForProvider(base, providerId) : undefined) ??
+    findModel(base)
+  const value = entry?.capabilities.effort.default
+  return value !== undefined && value !== "" ? value : FALLBACK_DEFAULT_EFFORT
 }
 
 /**

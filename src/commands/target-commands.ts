@@ -32,6 +32,7 @@ import type { AgentCore } from "@minimal-agent/core/sdk/agent-core"
 import { normalizeModelForAPI } from "@minimal-agent/core/sdk/transport-types"
 
 import { errorText } from "../startup/core-text.ts"
+import { modelDefaultEffort } from "../startup/provider-presentation.ts"
 
 /** The part of the live core the commands use. */
 export type TargetCore = Pick<AgentCore, "getTarget" | "switchTarget" | "setModel" | "setEffort">
@@ -85,6 +86,11 @@ function effortLevelsOf(model: string, providerId: string | undefined): readonly
   )
 }
 
+/** `default (high)`: the word `default` with the model's own default level. */
+function defaultLabel(model: string, providerId: string | undefined): string {
+  return `default (${modelDefaultEffort(normalizeModelForAPI(model), providerId)})`
+}
+
 const notice = (lines: string[]): CommandResult => ({ kind: "notice", lines })
 const failure = (message: string): CommandResult => ({ kind: "error", message })
 
@@ -99,7 +105,7 @@ function describeTarget(providerId: string | undefined, credentialName?: string)
 function changedLines(core: TargetCore, before: ReturnType<TargetCore["getTarget"]>): string[] {
   const now = core.getTarget()
   const lines = [
-    `✓ ${describeTarget(now.providerId, now.credentialName)} · ${now.model} · effort ${now.effort ?? "default"}`,
+    `✓ ${describeTarget(now.providerId, now.credentialName)} · ${now.model} · effort ${now.effort ?? defaultLabel(now.model, now.providerId)}`,
   ]
   if (now.model !== before.model && before.providerId !== now.providerId) {
     lines.push(`  model changed from "${before.model}" (the new provider does not have it)`)
@@ -257,7 +263,7 @@ function runEffort(deps: TargetCommandDeps, argv: string): CommandResult {
     return notice([
       `Effort levels of ${before.model}:`,
       ...levels.map((l) => `  ${l === before.effort ? "●" : "○"} ${l}`),
-      `  ${before.effort === undefined ? "●" : "○"} default`,
+      `  ${before.effort === undefined ? "●" : "○"} ${defaultLabel(before.model, before.providerId)}`,
       "Use: /effort <level|default>",
     ])
   }

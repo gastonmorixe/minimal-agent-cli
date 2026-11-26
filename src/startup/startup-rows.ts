@@ -19,7 +19,7 @@ import { findModel, findModelForProvider } from "@minimal-agent/core/host/model-
 import { printStartupRow } from "../ui/startup/tree.ts"
 import { c } from "../ui/style/ansi.ts"
 
-import { modelHidesReasoning } from "./provider-presentation.ts"
+import { modelDefaultEffort, modelHidesReasoning } from "./provider-presentation.ts"
 
 /** The subset of a stdout stream the terminal-viewport row reads. */
 export interface StdoutSize {
@@ -58,9 +58,14 @@ function cacheTtlProvenance(source: CacheTtlSource): string {
 /**
  * Print the model / service-tier / thinking / effort / cache-ttl startup rows.
  *
+ * @param providerId - The selected provider. Scopes the lookup of the
+ *   model's default effort (a bare model id can be in more than one catalog).
  * @param cfg - The resolved request configuration.
  */
-export function printStartupConfigRows(cfg: StartupConfigRows): void {
+export function printStartupConfigRows(
+  providerId: string | undefined,
+  cfg: StartupConfigRows,
+): void {
   // Fast mode gets a ⚡ on the model row so the premium dispatch tier is
   // visible at a glance. Capability-gated per provider downstream; the bolt
   // reflects the resolved request intent, not whether the model honors it.
@@ -87,7 +92,7 @@ export function printStartupConfigRows(cfg: StartupConfigRows): void {
     ? c.dim("off")
     : cfg.effort
       ? `${cfg.effort} ${c.dim(effortProvenance(cfg.effortSource))}`
-      : `medium ${c.dim("(default)")}`
+      : `${modelDefaultEffort(cfg.selectedModel, providerId)} ${c.dim("(default)")}`
   printStartupRow("thinking", thinkingLabel)
   printStartupRow("effort", effortLabel)
   printStartupRow("cache ttl", `${cfg.cacheTtl} ${c.dim(cacheTtlProvenance(cfg.cacheTtlSource))}`)
@@ -136,18 +141,24 @@ export function validateStartupEffort(
  * (the wire field is suppressed, so the footer must not claim one).
  *
  * @param hidesReasoning - Whether the model suppresses reasoning fields.
- * @param effort - The resolved effort (defaults to "medium" when reasoning).
+ * @param effort - The resolved effort. Undefined: the model's own default
+ *   effort ("medium" when the registry has no default).
  * @param speedFast - Whether fast mode is engaged.
+ * @param model - The selected model id, to find its default effort.
+ * @param providerId - The selected provider, to scope that lookup.
  */
 export function publishResolvedRequestEnv(
   hidesReasoning: boolean,
   effort: string | undefined,
   speedFast: boolean,
+  model?: string,
+  providerId?: string,
 ): void {
   if (hidesReasoning) {
     delete process.env.MINIMAL_AGENT_EFFORT
   } else {
-    process.env.MINIMAL_AGENT_EFFORT = effort ?? "medium"
+    process.env.MINIMAL_AGENT_EFFORT =
+      effort ?? (model !== undefined ? modelDefaultEffort(model, providerId) : "medium")
   }
   if (speedFast) {
     process.env.MINIMAL_AGENT_FAST = "1"

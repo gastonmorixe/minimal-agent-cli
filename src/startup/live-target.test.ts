@@ -71,8 +71,8 @@ describe("followLiveTarget", () => {
     })
 
     core.setEffort(undefined)
-    // The model default shows as "medium", the same as at boot.
-    expect(env.MINIMAL_AGENT_EFFORT).toBe("medium")
+    // The model default shows as the model's own default ("low"), not "medium".
+    expect(env.MINIMAL_AGENT_EFFORT).toBe("low")
 
     // A provider change with no credential name: the old name is removed.
     core.switchTarget({ providerId: "beta", model: "model-x" })
@@ -125,5 +125,11 @@ describe("publishTargetEnv", () => {
     }
     publishTargetEnv(env, { model: "m" }, () => true)
     expect(env).toEqual({ MINIMAL_AGENT_MODEL: "m" })
+  })
+
+  it("falls back to medium when the registry does not know the model", () => {
+    const env: NodeJS.ProcessEnv = {}
+    publishTargetEnv(env, { model: "unknown-model", providerId: "nobody" }, () => false)
+    expect(env.MINIMAL_AGENT_EFFORT).toBe("medium")
   })
 })

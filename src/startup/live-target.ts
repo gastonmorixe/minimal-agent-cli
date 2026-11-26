@@ -19,7 +19,7 @@
 import type { TargetSnapshot } from "@minimal-agent/core/plugin-api/types/plugin"
 import type { AgentCore } from "@minimal-agent/core/sdk/agent-core"
 
-import { modelHidesReasoning } from "./provider-presentation.ts"
+import { modelDefaultEffort, modelHidesReasoning } from "./provider-presentation.ts"
 
 /** Plugin bus event sent after each change of the live target. */
 export const TARGET_DID_SWITCH = "target.didSwitch"
@@ -57,7 +57,8 @@ const set = (env: NodeJS.ProcessEnv, key: string, value: string | undefined): vo
 /**
  * Write the target into the env. The effort var keeps the boot rule
  * (`publishResolvedRequestEnv`): removed for a model that hides reasoning,
- * else the level, or "medium" for the model default.
+ * else the level, or the model's own default effort ("medium" when the
+ * registry has no default).
  */
 export function publishTargetEnv(
   env: NodeJS.ProcessEnv,
@@ -70,7 +71,9 @@ export function publishTargetEnv(
   set(
     env,
     "MINIMAL_AGENT_EFFORT",
-    hidesReasoning(target.model) ? undefined : (target.effort ?? "medium"),
+    hidesReasoning(target.model)
+      ? undefined
+      : (target.effort ?? modelDefaultEffort(target.model, target.providerId)),
   )
 }
 

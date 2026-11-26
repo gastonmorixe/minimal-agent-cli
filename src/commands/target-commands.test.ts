@@ -377,6 +377,17 @@ describe("/effort", () => {
     expect(h.core.getTarget().effort).toBeUndefined()
   })
 
+  it("shows the model's own default level, not a fixed medium", async () => {
+    registerProviders()
+    const h = harness(CREDS, { effort: undefined })
+    // EFFORT declares default "low" for the alpha models.
+    expect(lines(await h.run("effort"))).toContain("● default (low)")
+    await h.run("effort", "high")
+    const changed = lines(await h.run("effort", "default"))
+    expect(changed).toContain("effort default (low)")
+    expect(changed).not.toContain("medium")
+  })
+
   it("accepts a quoted level", async () => {
     registerProviders()
     const h = harness(CREDS)

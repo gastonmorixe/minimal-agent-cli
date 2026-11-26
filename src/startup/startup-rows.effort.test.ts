@@ -17,7 +17,13 @@ import { clearModelRegistry, registerModel } from "@minimal-agent/core/host/mode
 import { defaultCapabilities } from "@minimal-agent/core/plugin-api/llm/capabilities"
 import { makeCharRatioEstimator } from "@minimal-agent/core/plugin-api/llm/token-estimate"
 
-import { validateStartupEffort } from "./startup-rows.ts"
+import { setStartupTreeVisible } from "../ui/startup/tree.ts"
+import { modelDefaultEffort } from "./provider-presentation.ts"
+import {
+  printStartupConfigRows,
+  publishResolvedRequestEnv,
+  validateStartupEffort,
+} from "./startup-rows.ts"
 
 const RATE = {
   inputUSD: 1,
@@ -84,5 +90,80 @@ describe("validateStartupEffort provider scoping", () => {
 
   it("no-ops when hidesReasoning is true", () => {
     expect(() => validateStartupEffort(true, SHARED, "low", "gateway")).not.toThrow()
+  })
+
+  it("allows effort=xhigh when the selected model declares it", () => {
+    registerModel({
+      id: "xhigh-model",
+      providerId: "firstparty",
+      surfaceId: "responses",
+      displayName: "XHigh",
+      capabilities: {
+        ...defaultCapabilities(),
+        effort: { levels: ["low", "medium", "high", "xhigh"], default: "high" },
+      },
+      pricing: RATE,
+      estimateTokens: makeCharRatioEstimator(3.5),
+    })
+    expect(() => validateStartupEffort(false, "xhigh-model", "xhigh", "firstparty")).not.toThrow()
+  })
+})
+
+describe("model default effort display", () => {
+  const savedEffort = process.env.MINIMAL_AGENT_EFFORT
+  beforeEach(() => {
+    clearModelRegistry()
+    registerDual()
+  })
+  afterEach(() => {
+    clearModelRegistry()
+    setStartupTreeVisible(false)
+    if (savedEffort === undefined) delete process.env.MINIMAL_AGENT_EFFORT
+    else process.env.MINIMAL_AGENT_EFFORT = savedEffort
+  })
+
+  it("reads the default of the selected provider's model", () => {
+    expect(modelDefaultEffort(SHARED, "firstparty")).toBe("high")
+    expect(modelDefaultEffort(SHARED, "gateway")).toBe("medium")
+  })
+
+  it("falls back to medium for an unknown model", () => {
+    expect(modelDefaultEffort("no-such-model", "firstparty")).toBe("medium")
+  })
+
+  it("the effort row prints the model default, not a fixed medium", () => {
+    setStartupTreeVisible(true)
+    const rows: string[] = []
+    const original = console.error
+    console.error = (...args: unknown[]) => {
+      rows.push(args.map(String).join(" "))
+    }
+    try {
+      printStartupConfigRows("firstparty", {
+        selectedModel: SHARED,
+        speedFast: false,
+        serviceTier: undefined,
+        thinkingDisplay: undefined,
+        effort: undefined,
+        effortSource: undefined,
+        cacheTtl: "5m",
+        cacheTtlSource: "default",
+      })
+    } finally {
+      console.error = original
+    }
+    const effortRow = rows.find((r) => r.includes("effort   ")) ?? ""
+    expect(effortRow).toContain("high")
+    expect(effortRow).toContain("(default)")
+    expect(effortRow).not.toContain("medium")
+  })
+
+  it("publishes the model default effort into the env", () => {
+    publishResolvedRequestEnv(false, undefined, false, SHARED, "firstparty")
+    expect(process.env.MINIMAL_AGENT_EFFORT).toBe("high")
+    publishResolvedRequestEnv(false, "xhigh", false, SHARED, "firstparty")
+    expect(process.env.MINIMAL_AGENT_EFFORT).toBe("xhigh")
+    publishResolvedRequestEnv(false, undefined, false)
+    expect(process.env.MINIMAL_AGENT_EFFORT).toBe("medium")
   })
 })
