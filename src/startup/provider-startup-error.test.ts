@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import {
+  credentialError,
   formatProviderStartupError,
   selectionError,
   unknownTargetError,
@@ -33,6 +34,25 @@ test("shows one row per saved provider without printing credential labels", () =
     ].join("\n"),
   )
   expect(err.message).toContain("first (work@example.test)")
+})
+
+test("a named credential: the protocol message is the stderr summary, not the store hint", () => {
+  // The core text says "no credentials" and lists the store, which is false
+  // when the store holds other credentials. stream-json reads `message`.
+  const coreText =
+    'no credentials for provider "openai" (model "gpt-4.1"). Run minimal-agent provider openai login. No provider credentials found.'
+  const err = credentialError(new Error("core"), coreText, "openai", "gpt-4.1", "missing", true)
+  expect(err.summary).toBe('no usable credential "missing" for provider "openai"')
+  expect(err.message).toBe(err.summary)
+  expect(err.cause).toBeInstanceOf(Error)
+  // No name, but a saved credential of the provider: "no credentials" is false.
+  expect(
+    credentialError(new Error("core"), coreText, "openai", "gpt-4.1", undefined, true).message,
+  ).toBe('no usable credentials for provider "openai" (model "gpt-4.1")')
+  // No name and no saved credential: the core text is true and stays.
+  expect(
+    credentialError(new Error("core"), coreText, "openai", "gpt-4.1", undefined, false),
+  ).toMatchObject({ message: coreText })
 })
 
 test("shows a close model match for the selected provider", () => {

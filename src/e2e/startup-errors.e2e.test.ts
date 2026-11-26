@@ -1,4 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { isolatedCliEnv } from "../test-utils/isolated-cli-env.ts"
 
 const iso = isolatedCliEnv({ prefix: "ma-e2e-startup-errors-" })
@@ -60,6 +62,97 @@ describe("startup errors", () => {
     expect(run.stderr).toBe(
       'fatal: no usable credential "missing" for provider "openai"\n  Clear the credential name to use the default.\n  Sign in: minimal-agent provider openai login\n',
     )
+  })
+
+  it("stream-json: the error line names the missing credential, as stderr does", async () => {
+    const run = await runStartup(
+      "--provider",
+      "openai",
+      "--model",
+      "gpt-4.1",
+      "--credential-name",
+      "missing",
+      "--output-format",
+      "stream-json",
+      "--prompt",
+      "hi",
+    )
+    expect(run.code).toBe(1)
+    expect(run.stderr.split("\n")[0]).toBe(
+      'fatal: no usable credential "missing" for provider "openai"',
+    )
+    const lines = run.stdout
+      .split("\n")
+      .filter((l) => l.length > 0)
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+    const error = lines.find((l) => l.type === "error")
+    expect(error?.message).toBe('no usable credential "missing" for provider "openai"')
+    expect(lines.at(-1)).toMatchObject({ type: "run_finished", outcome: "failed" })
+  })
+
+  it("stream-json: a saved credential of another name is not reported as no credentials", async () => {
+    // One saved openai API key named "work". The run asks for "missing".
+    const store = isolatedCliEnv({ prefix: "ma-e2e-startup-cred-" })
+    try {
+      mkdirSync(store.agentHome, { recursive: true })
+      const now = new Date(0).toISOString()
+      writeFileSync(
+        join(store.agentHome, "auth.jsonc"),
+        JSON.stringify({
+          version: 1,
+          entries: [
+            {
+              id: "openai-api-key",
+              name: "work",
+              secrets: { tokenType: "api-key", apiKey: "sk-test-not-real" },
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        }),
+      )
+      const child = Bun.spawn(
+        [
+          "bun",
+          "src/index.ts",
+          "--bare",
+          "--skip-quota",
+          "--provider",
+          "openai",
+          "--model",
+          "gpt-4.1",
+          "--credential-name",
+          "missing",
+          "--output-format",
+          "stream-json",
+          "--prompt",
+          "hi",
+        ],
+        {
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "pipe",
+          timeout: 15_000,
+          env: { ...store.env, MINIMAL_AGENT_HEADER: "1", NO_COLOR: "1" },
+        },
+      )
+      const [code, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ])
+      expect(code).toBe(1)
+      expect(stderr).toBe(
+        'fatal: no usable credential "missing" for provider "openai"\n' +
+          "  Check credentials: minimal-agent auth-status\n" +
+          "  Clear the credential name to use the default.\n" +
+          "  Or select a saved name with --credential-name <name>.\n",
+      )
+      expect(stdout).toContain('no usable credential \\"missing\\" for provider \\"openai\\"')
+      expect(stdout).not.toContain("No provider credentials found")
+    } finally {
+      store.cleanup()
+    }
   })
 
   it("shows the selected provider's model catalog for an unknown model", async () => {

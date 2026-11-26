@@ -126,7 +126,15 @@ export function unknownTargetError(
   )
 }
 
-/** Show a saved credential problem without dumping unrelated providers. */
+/**
+ * Show a saved credential problem without dumping unrelated providers.
+ *
+ * `message` is the core text, and the stream-json `error` line reads it. The
+ * core text says "no credentials" and does not know the credential name. So
+ * for a named credential (`ref`), or when the provider has a saved credential
+ * (`saved`), that text is false, and the protocol message is the stderr
+ * summary. Only an unnamed run with no saved credential keeps the core text.
+ */
 export function credentialError(
   cause: Error,
   message: string,
@@ -147,5 +155,6 @@ export function credentialError(
     if (saved) next.push("Or select a saved name with --credential-name <name>.")
   }
   if (!saved || ref === undefined) next.push(login)
-  return new ProviderStartupError(message, summary, next, { cause })
+  const protocolMessage = ref !== undefined || saved ? summary : message
+  return new ProviderStartupError(protocolMessage, summary, next, { cause })
 }
