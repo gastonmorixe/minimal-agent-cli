@@ -60,6 +60,15 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Fixed
 
+- The session title call now uses the credential of the session (core fix:
+  side calls read the loader `targetSource`). Before, with 2 stored
+  credentials of one provider and `--credential-name` set to the second
+  one, the title call sent the store default and the API could refuse it.
+  New e2e test `src/e2e/title-credential.e2e.test.ts`: the real CLI in a
+  PTY REPL, a fixture provider
+  (`src/e2e/fixtures/ma-llm-title-cred-fixture-plugin`) that accepts only
+  the pinned fake key, and the real title plugin. It checks the key of the
+  title request and the `kind:"title"` line in `index-meta.jsonl`.
 - `prompt.inject` now sends `prompt.submitted` with `source: "inject"` (was
   `"user"`). Intercom, background-job, sub-agent, cron and cloud wakes then do
   not look like typed text, so the title plugin makes no title from them. A
