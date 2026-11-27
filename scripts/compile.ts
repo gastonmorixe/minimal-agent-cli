@@ -29,6 +29,13 @@
  *     `MA_PLUGINS_SHA`) into `tmp/`, the same as core. A dirty plugins tree
  *     does not leak into a release. The sha is `pluginsSha` in the build info.
  *
+ * A darwin target also embeds the computer-use helper: swiftc builds it from
+ * the same plugins tree into `tmp/cu-helper/<target id>/`, and the table
+ * adds it as the file `native/build/ComputerUseHelper` of
+ * `ma-computer-use-plugin` (see `scripts/computer-use-helper.ts`). A release
+ * fails when it cannot build the helper. A dev build prints a warning and
+ * embeds no helper.
+ *
  * Where core comes from
  * ---------------------
  * The CLI imports `@minimal-agent/core/SUBPATH`. A build-time resolver
@@ -72,7 +79,15 @@ import {
 import { tmpdir } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 
-import { writeEmbeddedPluginsModule } from "./gen-embedded-plugins.ts"
+import {
+  buildComputerUseHelper,
+  defaultToolchainGap,
+  HELPER_KEY,
+  HELPER_PACKAGE,
+  HelperBuildError,
+  hasRosetta,
+} from "./computer-use-helper.ts"
+import { type ExtraFiles, writeEmbeddedPluginsModule } from "./gen-embedded-plugins.ts"
 import { findReleaseTarget, RELEASE_TARGET_IDS, RELEASE_TARGETS } from "./release/targets.ts"
 
 const CLI_DIR = resolve(import.meta.dir, "..")
@@ -405,7 +420,7 @@ async function buildTo(
   target: string | undefined,
 ): Promise<void> {
   const info = buildInfo(opts, target)
-  const table = generateTable(info)
+  const table = await generateTable(info, opts.mode, target)
   const before = new Set(bunBuildLeftovers())
   let result: Bun.BuildOutput
   try {
@@ -432,20 +447,71 @@ const PLUGINS_CHECKOUT = resolve(
 /** Where the generated table is written (gitignored `tmp/`). */
 const TABLE_FILE = join(CLI_DIR, "tmp", "embedded-plugins.gen.ts")
 
+/** The root of the computer-use helper builds (gitignored `tmp/`). */
+const HELPER_OUT_ROOT = join(CLI_DIR, "tmp", "cu-helper")
+
+/**
+ * Build the computer-use helper for a darwin target and name it as an extra
+ * plugin file. Undefined for a non-darwin target, and for a dev build that
+ * cannot build it (with a warning). A release that cannot build it fails.
+ */
+async function computerUseHelperFiles(
+  mode: Mode,
+  dir: string,
+  target: string,
+): Promise<ExtraFiles | undefined> {
+  let r: Awaited<ReturnType<typeof buildComputerUseHelper>>
+  try {
+    r = await buildComputerUseHelper(
+      { target, mode, pluginsDir: dir, outRoot: HELPER_OUT_ROOT },
+      {
+        run: (cmd, timeoutMs) => runChild(cmd, { capture: true, timeoutMs }),
+        toolchainGap: defaultToolchainGap,
+        host: { platform: process.platform, arch: process.arch },
+        rosetta: hasRosetta,
+      },
+    )
+  } catch (e) {
+    if (e instanceof HelperBuildError) fail(e.message)
+    throw e
+  }
+  const id = target.replace(/^bun-/, "")
+  if (r.kind === "not-darwin") {
+    console.log(`compile: computer-use helper: none for ${id}`)
+    return undefined
+  }
+  if (r.kind === "missing") {
+    console.warn(`compile: warning: no computer-use helper for ${id}: ${r.reason}`)
+    return undefined
+  }
+  cleanupPaths.add(dirname(r.path))
+  console.log(
+    `compile: computer-use helper ${r.id} ${r.arch} ${r.size} bytes, codesign flags=${r.flags}, ` +
+      `${r.selftest} -> ${r.path}`,
+  )
+  return { [HELPER_PACKAGE]: { [HELPER_KEY]: r.path } }
+}
+
 /**
  * Write the embedded plugin table for this build. Dev: the plugins working
  * tree. Release: the archive at {@link pluginsSha}. The table's `buildId`
  * names the three trees, so a new build never reuses old extracted files.
+ * A darwin target also gets the computer-use helper as an extra file.
  */
-function generateTable(info: Record<string, unknown>): string {
+async function generateTable(
+  info: Record<string, unknown>,
+  mode: Mode,
+  target: string | undefined,
+): Promise<string> {
   const dir = pluginsDir ?? PLUGINS_CHECKOUT
+  const extraFiles = await computerUseHelperFiles(mode, dir, target ?? HOST_TARGET)
   const short = (v: unknown): string => String(v).slice(0, 12)
   const buildId =
     `${short(info.cliSha)}-${short(info.coreSha)}-${short(info.pluginsSha)}` +
     (info.dirty
       ? `-dirty${contentHash(pluginsDir === undefined ? [CLI_DIR, dir] : [CLI_DIR])}`
       : "")
-  const r = writeEmbeddedPluginsModule(dir, TABLE_FILE, buildId)
+  const r = writeEmbeddedPluginsModule(dir, TABLE_FILE, buildId, { extraFiles })
   cleanupPaths.add(TABLE_FILE)
   console.log(
     `compile: embedded plugins ${r.packages} packages, ${r.modules} modules, ${r.texts} texts, ` +

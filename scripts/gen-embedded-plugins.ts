@@ -32,7 +32,11 @@
  *     module (today `ma-env-info-plugin/gather.sh`). Imported
  *     `with { type: "file" }`, so core can extract it before exec. A file is
  *     never imported both as text and as file (the file import would turn
- *     into text, W2 probe 4).
+ *     into text, W2 probe 4). A caller can add more files with
+ *     `extraFiles` (package name to key to absolute path), for a file that
+ *     the build makes and that is not in the plugins tree. `scripts/compile.ts`
+ *     adds the computer-use helper (`ma-computer-use-plugin`,
+ *     `native/build/ComputerUseHelper`) for a darwin target.
  *
  * Keys are `normalizePackagePath(rel)` of the path as written, the same
  * function core uses to look them up. Output is deterministic: sorted
@@ -42,7 +46,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
-import { dirname, join, resolve } from "node:path"
+import { dirname, isAbsolute, join, resolve } from "node:path"
 
 import { normalizePackagePath } from "@minimal-agent/core/host-kit/embedded-plugins"
 
@@ -240,6 +244,63 @@ export function collectPackages(pluginsDir: string): CollectedPackage[] {
   return out
 }
 
+/**
+ * Extra run files for some packages: package dir name to package key to
+ * absolute path. For a file that the build makes and that is not in the
+ * plugins tree (the computer-use helper of a darwin target).
+ */
+export type ExtraFiles = Readonly<Record<string, Readonly<Record<string, string>>>>
+
+/** Options of {@link writeEmbeddedPluginsModule}. */
+export interface EmbedOptions {
+  /** Files to add to the `files` of a package. See {@link ExtraFiles}. */
+  readonly extraFiles?: ExtraFiles
+}
+
+/**
+ * Add `extra` to the `files` of each named package. The input packages do
+ * not change: a package with extra files is a new object. A key that is
+ * also a text drops out of `texts` (one import style per file).
+ *
+ * @param packages - the collected packages
+ * @param extra - package name to key to absolute path
+ * @returns the packages, in the same order, with the extra files merged
+ * @throws EmbedGenError when a package is absent, a key is not inside its
+ *   package or is already a module, or a path is not an absolute file
+ */
+export function addExtraFiles(
+  packages: readonly CollectedPackage[],
+  extra: ExtraFiles,
+): CollectedPackage[] {
+  const names = new Set(packages.map((p) => p.name))
+  for (const name of Object.keys(extra).sort()) {
+    if (!names.has(name)) {
+      throw new EmbedGenError(`extra files name package ${name}, which is not in the plugins dir`)
+    }
+  }
+  return packages.map((pkg) => {
+    const add = Object.hasOwn(extra, pkg.name) ? extra[pkg.name] : undefined
+    if (add === undefined) return pkg
+    const texts = new Map(pkg.texts)
+    const files = new Map(pkg.files)
+    for (const [rel, abs] of Object.entries(add)) {
+      const key = keyOf(pkg.name, rel, "extra file")
+      if (!isAbsolute(abs)) {
+        throw new EmbedGenError(`${pkg.name}: extra file ${key} path ${abs} is not absolute`)
+      }
+      if (!isFile(abs)) {
+        throw new EmbedGenError(`${pkg.name}: extra file ${key} path ${abs} does not exist`)
+      }
+      if (pkg.modules.has(key)) {
+        throw new EmbedGenError(`${pkg.name}: extra file ${key} is already a module`)
+      }
+      files.set(key, abs)
+      texts.delete(key)
+    }
+    return { ...pkg, texts, files }
+  })
+}
+
 /** Sorted entries of a map. */
 function sorted(map: ReadonlyMap<string, string>): [string, string][] {
   return [...map.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -326,13 +387,19 @@ export function scriptIds(packages: readonly CollectedPackage[]): string[] {
   return ids.sort()
 }
 
-/** Collect `pluginsDir`, render, and write `outFile` (parent dirs created). */
+/**
+ * Collect `pluginsDir`, merge `opts.extraFiles` (see {@link addExtraFiles}),
+ * render, and write `outFile` (parent dirs created).
+ */
 export function writeEmbeddedPluginsModule(
   pluginsDir: string,
   outFile: string,
   buildId: string,
+  opts: EmbedOptions = {},
 ): GeneratedTable {
-  const packages = collectPackages(resolve(pluginsDir))
+  const collected = collectPackages(resolve(pluginsDir))
+  const packages =
+    opts.extraFiles === undefined ? collected : addExtraFiles(collected, opts.extraFiles)
   mkdirSync(dirname(outFile), { recursive: true })
   writeFileSync(outFile, renderEmbeddedPluginsModule(packages, buildId))
   const count = (pick: (p: CollectedPackage) => ReadonlyMap<string, string>): number =>

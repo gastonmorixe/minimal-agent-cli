@@ -6,6 +6,8 @@
     "includes": [
       "src/**",
       "scripts/compile.ts",
+      "scripts/computer-use-helper.ts",
+      "scripts/computer-use-helper.test.ts",
       "scripts/gen-embedded-plugins.ts",
       "scripts/gen-embedded-plugins.test.ts",
       "scripts/release/**",

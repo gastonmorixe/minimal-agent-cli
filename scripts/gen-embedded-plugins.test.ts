@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -15,10 +15,12 @@ import {
   clearEmbeddedPlugins,
   embeddedPluginPackages,
   findEmbeddedScript,
+  pluginPackageFor,
   registerEmbeddedPlugins,
 } from "@minimal-agent/core/host-kit/embedded-plugins"
 
 import {
+  addExtraFiles,
   collectPackages,
   EmbedGenError,
   manifestRefs,
@@ -306,5 +308,116 @@ describe("the generated module works with core", () => {
     const mod = (await run?.()) as { main: (argv: string[]) => Promise<number> }
     expect(await mod.main(["a", "b"])).toBe(2)
     expect(findEmbeddedScript("../ma-x-plugin/bin/run.ts")).toBeUndefined()
+  })
+})
+
+describe("extraFiles", () => {
+  const HELPER_KEY = "native/build/ComputerUseHelper"
+  let built: string
+
+  beforeEach(() => {
+    // A build output outside the plugins tree, as compile.ts writes it.
+    built = join(root, "out", "ComputerUseHelper")
+    mkdirSync(join(root, "out"), { recursive: true })
+    writeFileSync(built, "#!/bin/sh\necho helper\n")
+  })
+
+  test("an extra file joins the package files; the input packages do not change", () => {
+    const collected = collectPackages(root)
+    const merged = addExtraFiles(collected, { "ma-x-plugin": { [`./${HELPER_KEY}`]: built } })
+    const x = merged.find((p) => p.name === "ma-x-plugin")
+    expect([...(x?.files.entries() ?? [])].sort(([a], [b]) => a.localeCompare(b))).toEqual([
+      ["gather.sh", join(root, "ma-x-plugin", "gather.sh")],
+      [HELPER_KEY, built],
+    ])
+    expect(collected.find((p) => p.name === "ma-x-plugin")?.files.size).toBe(1)
+    // The other packages are the same objects, in the same order.
+    expect(merged.map((p) => p.name)).toEqual(collected.map((p) => p.name))
+    for (const [i, p] of merged.entries()) {
+      if (p.name !== "ma-x-plugin") expect(p).toBe(collected[i] as (typeof collected)[number])
+    }
+  })
+
+  test("the render adds one file import, sorted by key", () => {
+    const text = renderEmbeddedPluginsModule(
+      addExtraFiles(collectPackages(root), { "ma-x-plugin": { [HELPER_KEY]: built } }),
+      "b1",
+    )
+    expect(text).toContain(`import f0 from ${JSON.stringify(join(root, "ma-x-plugin/gather.sh"))}`)
+    expect(text).toContain(`import f1 from ${JSON.stringify(built)} with { type: "file" }`)
+    expect(text).toContain(`        "gather.sh": f0,\n        "${HELPER_KEY}": f1,\n`)
+    expect(text.match(/with \{ type: "file" \}/g)?.length).toBe(2)
+  })
+
+  test("an extra file with a text key drops the text", () => {
+    const merged = addExtraFiles(collectPackages(root), { "ma-x-plugin": { "PROMPT.md": built } })
+    const x = merged.find((p) => p.name === "ma-x-plugin")
+    expect(x?.texts.has("PROMPT.md")).toBe(false)
+    expect(x?.files.get("PROMPT.md")).toBe(built)
+  })
+
+  test("an absent package fails", () => {
+    expect(() =>
+      addExtraFiles(collectPackages(root), { "ma-nope-plugin": { [HELPER_KEY]: built } }),
+    ).toThrow(/ma-nope-plugin, which is not in the plugins dir/)
+  })
+
+  test("an absent path fails", () => {
+    const missing = join(root, "out", "missing")
+    expect(() =>
+      addExtraFiles(collectPackages(root), { "ma-x-plugin": { [HELPER_KEY]: missing } }),
+    ).toThrow(/does not exist/)
+  })
+
+  test("a dir, a relative path, a key outside the package, or a module key fails", () => {
+    const add = (key: string, abs: string) => () =>
+      addExtraFiles(collectPackages(root), { "ma-x-plugin": { [key]: abs } })
+    expect(add(HELPER_KEY, join(root, "out"))).toThrow(/does not exist/)
+    expect(add(HELPER_KEY, "out/ComputerUseHelper")).toThrow(/is not absolute/)
+    expect(add("../x", built)).toThrow(/not inside the package/)
+    expect(add("handlers/t.ts", built)).toThrow(/already a module/)
+    expect(add("../x", built)).toThrow(EmbedGenError)
+    expect(add(HELPER_KEY, built)).not.toThrow()
+  })
+
+  test("no extraFiles, or an empty map, gives the same bytes as before", () => {
+    const outA = join(root, "gen-a.ts")
+    const outB = join(root, "gen-b.ts")
+    const outC = join(root, "gen-c.ts")
+    writeEmbeddedPluginsModule(root, outA, "b1")
+    writeEmbeddedPluginsModule(root, outB, "b1", {})
+    writeEmbeddedPluginsModule(root, outC, "b1", { extraFiles: {} })
+    const a = readFileSync(outA, "utf8")
+    expect(readFileSync(outB, "utf8")).toBe(a)
+    expect(readFileSync(outC, "utf8")).toBe(a)
+    expect(a).toBe(renderEmbeddedPluginsModule(collectPackages(root), "b1"))
+  })
+
+  test("the counts include the extra file", () => {
+    const out = join(root, "gen-extra.ts")
+    const r = writeEmbeddedPluginsModule(root, out, "b1", {
+      extraFiles: { "ma-x-plugin": { [HELPER_KEY]: built } },
+    })
+    expect(r).toMatchObject({ packages: 3, modules: 10, texts: 5, files: 2 })
+  })
+
+  test("the table serves the extra file, and execPath extracts it with mode 755", async () => {
+    // A literal import path (the core-boundary check bans computed ones).
+    const out = join(import.meta.dir, "..", "tmp", "gen-embedded-plugins.extra.test.gen.ts")
+    writeEmbeddedPluginsModule(root, out, "b3", {
+      extraFiles: { "ma-x-plugin": { [HELPER_KEY]: built } },
+    })
+    const { TABLE } = (await import("../tmp/gen-embedded-plugins.extra.test.gen.ts")) as {
+      TABLE: Parameters<typeof registerEmbeddedPlugins>[0]
+    }
+    rmSync(out, { force: true })
+    registerEmbeddedPlugins(TABLE, { cacheRoot: join(root, "cache") })
+    const x = embeddedPluginPackages().find((p) => p.name === "ma-x-plugin")
+    expect(x?.hasFile(HELPER_KEY)).toBe(true)
+    const dir = x?.dir ?? ""
+    const path = pluginPackageFor(dir).execPath(HELPER_KEY)
+    expect(path).toBe(join(root, "cache", "b3", "ma-x-plugin", HELPER_KEY))
+    expect(readFileSync(path, "utf8")).toBe("#!/bin/sh\necho helper\n")
+    expect(statSync(path).mode & 0o777).toBe(0o755)
   })
 })
