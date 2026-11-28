@@ -33,6 +33,17 @@
 #      SubAgentsSpawnAgent. The job log shows the command ran with no
 #      BUN_BE_BUN and no bun. The child agent (the binary spawning itself)
 #      calls the model. The run uses `--formatter cat` (plain text output).
+#  10. macOS only, a darwin binary with an embedded computer-use helper:
+#      against a second mock model (`compile-e2e-mock-computer.ts`), one turn
+#      calls `Computer` `{"action":"ping"}` with a test MINIMAL_AGENT_HOME and
+#      test CUD_SOCK, CUD_DIR, CUD_LOG and CUD_ACTION_LOG. The helper is
+#      extracted to `<home>/cache/embedded/<buildId>/ma-computer-use-plugin/
+#      native/build/ComputerUseHelper` with mode 755, passes `codesign --verify
+#      --strict`, answers the ping (protocol 2, its own path), and passes
+#      `--selftest` when the host runs the arch natively. The check stops only
+#      the helper pid that the ping gave. A ping needs no TCC grant. Skipped
+#      on other hosts, with MA_COMPILE_NO_HELPER=1, or when the binary embeds
+#      no helper.
 #
 # Every output is also scanned for crash text (CRASH_RE). Each command has a
 # time limit. Exit codes: 0 all checks passed, 1 a check failed, 2 bad usage
@@ -53,6 +64,11 @@ CRASH_RE='Cannot find package|ENOENT|at .*\(/\$bunfs/|^error: |panic'
 SESSION="ma-e2e-$$-$RANDOM"
 CHILD=""
 WATCHER=""
+# Check 10: the helper pid from our own ping, the extracted file, and a
+# socket dir outside WORK (only when the path in WORK is too long).
+CU_PID=""
+CU_FILE=""
+CU_SOCK_DIR=""
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/minimal-agent-e2e-XXXXXX")" || exit 2
 WORK="$(cd "$WORK" && pwd -P)"
@@ -61,10 +77,34 @@ cleanup() {
   [[ -n "$CHILD" ]] && kill -KILL "$CHILD" 2>/dev/null
   [[ -n "$MOCK_PID" ]] && kill -KILL "$MOCK_PID" 2>/dev/null
   [[ -n "$WATCHER" ]] && kill "$WATCHER" 2>/dev/null
+  cu_stop
   if command -v tmux >/dev/null 2>&1; then
     tmux kill-session -t "$SESSION" 2>/dev/null
   fi
+  [[ -n "$CU_SOCK_DIR" ]] && rm -rf "$CU_SOCK_DIR"
   rm -rf "$WORK"
+}
+
+# cu_running: true while CU_PID runs CU_FILE (so a reused pid is never hit).
+cu_running() {
+  [[ -n "$CU_PID" && -n "$CU_FILE" ]] || return 1
+  local cmd
+  cmd="$(ps -ww -p "$CU_PID" -o command= 2>/dev/null)"
+  [[ "$cmd" == "$CU_FILE"* ]]
+}
+
+# cu_stop: stop the check 10 helper, the pid that our own ping gave, and no
+# other process. SIGTERM, then SIGKILL after 5 s.
+cu_stop() {
+  if cu_running; then
+    kill -TERM "$CU_PID" 2>/dev/null
+    for _ in $(seq 1 20); do
+      cu_running || break
+      sleep 0.25
+    done
+    cu_running && kill -KILL "$CU_PID" 2>/dev/null
+  fi
+  CU_PID=""
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -410,7 +450,209 @@ else
   fi
 fi
 kill -KILL "$MOCK_PID" 2>/dev/null
+# Reap it, so bash prints no "Killed: 9" job notice while check 10 runs.
+wait "$MOCK_PID" 2>/dev/null
 MOCK_PID=""
+
+# 10. The embedded computer-use helper (macOS host, darwin binary), against
+# a second mock model: one turn calls Computer {"action":"ping"}. A test
+# MINIMAL_AGENT_HOME and test CUD_* paths, never the default socket.
+CU_HOME="$WORK/cu-home"
+CU_SOCK=""
+
+# cu_own_ping SOCK: the pid that the helper on SOCK gives to a ping, or
+# nothing. Only for a run that ended before its ping result reached the mock.
+cu_own_ping() {
+  env -i "PATH=/usr/bin:/bin" BUN_BE_BUN=1 "$BIN" -e '
+    fetch("http://localhost/ping", {
+      unix: process.argv[1], method: "POST", body: "{}",
+      headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(5000),
+    }).then((r) => r.json()).then((j) => console.log(j.pid ?? ""), () => console.log(""))
+  ' "$1" 2>/dev/null
+}
+
+# cu_selftest: run the extracted helper with --selftest (60 s limit). Sets
+# OUT and CODE (124 on timeout).
+cu_selftest() {
+  local out_file="$WORK/cu/selftest.out"
+  env -i "PATH=/usr/bin:/bin" "HOME=$CU_HOME" "$CU_FILE" --selftest >"$out_file" 2>&1 &
+  local pid=$!
+  for _ in $(seq 1 240); do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.25
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -KILL "$pid" 2>/dev/null
+    wait "$pid" 2>/dev/null
+    CODE=124
+  else
+    wait "$pid"
+    CODE=$?
+  fi
+  OUT="$(cat "$out_file")"
+}
+
+# cu_check TARGET: check 10 for a darwin binary that embeds the helper.
+cu_check() {
+  local target="$1"
+  local dir="$WORK/cu"
+  mkdir -p "$dir/state" "$dir/mock" "$CU_HOME"
+  CU_SOCK="$dir/cud.sock"
+  # sun_path holds 104 bytes with the NUL.
+  if (($(printf '%s' "$CU_SOCK" | wc -c) >= 104)); then
+    CU_SOCK_DIR="$(mktemp -d "$(dirname "$WORK")/ma-cu-XXXXXX")" || exit 2
+    CU_SOCK="$CU_SOCK_DIR/cud.sock"
+  fi
+  if (($(printf '%s' "$CU_SOCK" | wc -c) >= 104)); then
+    failed "computer-use: socket path $CU_SOCK is 104 bytes or more; set TMPDIR to a shorter dir"
+    return
+  fi
+  cp "$CLI_DIR/scripts/compile-e2e-mock-computer.ts" "$dir/mock/mock-computer.ts" || exit 2
+  (cd "$dir/mock" && exec env -i "PATH=/usr/bin:/bin" BUN_BE_BUN=1 "$BIN" mock-computer.ts \
+    "$dir/mock/port" "$dir/mock/log") >"$dir/mock/stdout" 2>&1 &
+  MOCK_PID=$!
+  for _ in $(seq 1 40); do
+    [[ -s "$dir/mock/port" ]] && break
+    sleep 0.25
+  done
+  if [[ ! -s "$dir/mock/port" ]]; then
+    failed "computer-use: mock model did not start" "$(cat "$dir/mock/stdout")"
+    return
+  fi
+  local saved=("${ENV[@]}")
+  ENV=(env -i "PATH=/usr/bin:/bin" "HOME=$CU_HOME" "LANG=$UTF8_LANG"
+    "MINIMAL_AGENT_HOME=$CU_HOME/.minimal-agent" "MINIMAL_AGENT_NO_PLUGIN_SYNC=1"
+    "MINIMAL_AGENT_NO_BINARY_SETUP=1" "CUD_SOCK=$CU_SOCK" "CUD_DIR=$dir/state"
+    "CUD_LOG=$dir/daemon.log" "CUD_ACTION_LOG=$dir/actions.log")
+  local ran=0
+  RUN_TIMEOUT=90 run "-p Computer ping (mock model)" --skip-quota --formatter cat \
+    --provider generic-endpoint --endpoint "http://127.0.0.1:$(cat "$dir/mock/port")" \
+    --format openai-chat-completions --auth-type none --model mock-model --mode none \
+    -p "go" && ran=1
+  ENV=("${saved[@]}")
+  local run_out="$OUT" run_code="$CODE"
+  local mock_log ping_line ping_path f n=0
+  mock_log="$(cat "$dir/mock/log" 2>/dev/null)"
+  ping_line="$(grep -m 1 '^ping pid=' <<<"$mock_log")"
+  ping_path="${ping_line##* path=}"
+  [[ "$ping_line" =~ pid=([0-9]+) ]] && CU_PID="${BASH_REMATCH[1]}"
+  for f in "$CU_HOME"/.minimal-agent/cache/embedded/*/ma-computer-use-plugin/native/build/ComputerUseHelper; do
+    [[ -f "$f" ]] || continue
+    CU_FILE="$f"
+    n=$((n + 1))
+  done
+  # cu_stop needs a path to match the pid against.
+  [[ -z "$CU_FILE" && -n "$ping_line" ]] && CU_FILE="$ping_path"
+  if [[ -z "$CU_PID" && -S "$CU_SOCK" && -n "$CU_FILE" ]]; then
+    CU_PID="$(cu_own_ping "$CU_SOCK")"
+    [[ "$CU_PID" =~ ^[0-9]+$ ]] || CU_PID=""
+  fi
+
+  if [[ "$ran" == 1 && "$run_code" != "0" ]]; then
+    failed "computer-use run: exit $run_code" "$(printf '%s\n%s' "$run_out" "$mock_log")"
+  fi
+  if grep -qx 'request 1 computer=true' <<<"$mock_log"; then
+    pass "computer-use: the request carries the embedded Computer tool"
+  else
+    failed "computer-use: the first request lacks the Computer tool" "$mock_log"
+  fi
+  if [[ "$n" != "1" ]]; then
+    failed "computer-use: want 1 extracted helper in the test home, found $n" \
+      "$(find "$CU_HOME/.minimal-agent/cache" -maxdepth 6 2>/dev/null | head -n 20)"
+  else
+    pass "computer-use: helper extracted to cache/embedded/<buildId>/ma-computer-use-plugin/native/build/ComputerUseHelper"
+    local mode
+    mode="$(stat -f %Lp "$CU_FILE" 2>&1)"
+    if [[ "$mode" == "755" ]]; then
+      pass "computer-use: the extracted helper has mode 755"
+    else
+      failed "computer-use: the extracted helper has mode $mode, want 755"
+    fi
+    local sig
+    if sig="$(codesign --verify --strict "$CU_FILE" 2>&1)"; then
+      pass "computer-use: codesign --verify --strict passes on the extracted helper"
+    else
+      failed "computer-use: codesign --verify --strict fails on the extracted helper" "$sig"
+    fi
+    local arch
+    arch="$(uname -m)"
+    if [[ ("$arch" == "arm64" && "$target" == "darwin-arm64") ||
+      ("$arch" == "x86_64" && "$target" == "darwin-x64") ]]; then
+      cu_selftest
+      if [[ "$CODE" == "0" ]] && grep -qE 'selftest: ([0-9]+)/\1 passed' <<<"$OUT"; then
+        pass "computer-use: the extracted helper passes --selftest ($(grep -oE '[0-9]+/[0-9]+ passed' <<<"$OUT" | head -n 1))"
+      else
+        failed "computer-use: --selftest of the extracted helper: exit $CODE" "$OUT"
+      fi
+    else
+      echo "e2e: skip  computer-use --selftest (a $target helper on a $arch host)"
+    fi
+  fi
+  if [[ -z "$ping_line" ]]; then
+    failed "computer-use: no ping result reached the mock model" \
+      "$(printf '%s\n%s\n%s' "$run_out" "$mock_log" "$(cat "$dir/daemon.log" 2>/dev/null)")"
+  else
+    if grep -q ' protocol=2 ' <<<"$ping_line"; then
+      pass "computer-use: Computer ping answered by the helper (pid $CU_PID, protocol 2)"
+    else
+      failed "computer-use: the ping does not give protocol 2" "$ping_line"
+    fi
+    if [[ "$n" == "1" && "$ping_path" == "$CU_FILE" ]]; then
+      pass "computer-use: the helper that answers runs the extracted file"
+    else
+      failed "computer-use: the ping binary.path is not the extracted file" \
+        "$(printf 'ping: %s\nfile: %s' "$ping_path" "$CU_FILE")"
+    fi
+  fi
+  if grep -qF "listening on $CU_SOCK" "$dir/daemon.log" 2>/dev/null; then
+    pass "computer-use: the helper listens on the test socket (CUD_SOCK) and logs to CUD_LOG"
+  else
+    failed "computer-use: CUD_LOG has no 'listening on' line for the test socket" \
+      "$(cat "$dir/daemon.log" 2>/dev/null)"
+  fi
+  if [[ -n "$CU_PID" ]]; then
+    local pid="$CU_PID"
+    cu_stop
+    CU_PID="$pid"
+    if cu_running; then
+      failed "computer-use: helper pid $pid did not stop"
+    else
+      CU_PID=""
+      rm -f "$CU_SOCK"
+      pass "computer-use: helper pid $pid stopped, test socket removed"
+    fi
+  fi
+}
+
+# The embedded file name of the helper in the binary: Bun names an extra
+# file `/$bunfs/root/ComputerUseHelper-<hash>.`. A binary with no helper has
+# no such name.
+CU_EMBED_NAME="/\$bunfs/root/ComputerUseHelper-"
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "e2e: skip  computer-use helper (not a macOS host)"
+elif run_empty "--version --json" --version --json; then
+  cu_target="$(sed -n 's/^  "target": "\([^"]*\)".*/\1/p' <<<"$OUT" | head -n 1)"
+  if [[ "$CODE" != "0" || -z "$cu_target" ]]; then
+    failed "--version --json: exit $CODE, no target" "$OUT"
+  elif [[ "$cu_target" != darwin-* ]]; then
+    echo "e2e: skip  computer-use helper (the binary target is $cu_target)"
+  elif ! LC_ALL=C grep -a -q -F "$CU_EMBED_NAME" "$BIN"; then
+    if [[ "${MA_COMPILE_NO_HELPER:-}" == "1" ]]; then
+      echo "e2e: skip  computer-use helper (MA_COMPILE_NO_HELPER=1, the binary embeds no helper)"
+    else
+      echo "e2e: skip  computer-use helper (the binary embeds no helper: no toolchain or no sources, see the compile log)"
+    fi
+  else
+    cu_check "$cu_target"
+  fi
+fi
+if [[ -n "$MOCK_PID" ]]; then
+  kill -KILL "$MOCK_PID" 2>/dev/null
+  wait "$MOCK_PID" 2>/dev/null
+fi
+MOCK_PID=""
+cu_stop
+[[ -n "$CU_SOCK" ]] && rm -f "$CU_SOCK"
 
 if [[ "$failures" -gt 0 ]]; then
   echo "e2e: $failures check(s) failed for $SRC_BIN" >&2
