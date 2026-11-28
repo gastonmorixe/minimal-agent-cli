@@ -356,6 +356,19 @@ describe("extraFiles", () => {
     expect(x?.files.get("PROMPT.md")).toBe(built)
   })
 
+  test("an extra file with a key that is already a file: another path fails, the same path is OK", () => {
+    const gather = join(root, "ma-x-plugin", "gather.sh")
+    const add = (key: string, abs: string) => () =>
+      addExtraFiles(collectPackages(root), { "ma-x-plugin": { [key]: abs } })
+    expect(add("gather.sh", built)).toThrow(
+      `ma-x-plugin: extra file gather.sh is already a file at ${gather}, not ${built}`,
+    )
+    expect(add("./gather.sh", built)).toThrow(EmbedGenError)
+    expect(add("gather.sh", gather)).not.toThrow()
+    const x = add("./gather.sh", gather)().find((p) => p.name === "ma-x-plugin")
+    expect([...(x?.files.entries() ?? [])]).toEqual([["gather.sh", gather]])
+  })
+
   test("an absent package fails", () => {
     expect(() =>
       addExtraFiles(collectPackages(root), { "ma-nope-plugin": { [HELPER_KEY]: built } }),

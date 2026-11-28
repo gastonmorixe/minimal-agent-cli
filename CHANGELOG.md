@@ -6,7 +6,7 @@ status: living
 scope: cli
 working-dir: "."
 created-at: "2026-08-07T13:45:26-0400"
-updated-at: "2026-11-23T00:00:00-0500"
+updated-at: "2026-11-27T00:00:00-0500"
 format: "Keep a Changelog (pragmatic, date-stamped)"
 ---
 
@@ -21,6 +21,21 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Added
 
+- A compiled darwin binary embeds the computer-use helper of
+  `ma-computer-use-plugin` (`scripts/computer-use-helper.ts`). `compile.ts`
+  builds it with `xcrun swiftc` from `native/Sources` into
+  `tmp/cu-helper/<target id>/`, checks it with `codesign --verify --strict`,
+  runs `--selftest` when the host can run the arch, and adds it as the
+  package file `native/build/ComputerUseHelper`. So the darwin targets of
+  `compile:release` and `compile:release:all` need a Mac with Xcode or the
+  Command Line Tools. The Linux targets need nothing new. A release stops
+  when it cannot build the helper. A dev build warns and embeds no helper.
+- `MA_COMPILE_NO_HELPER=1` skips the helper in a dev build, with a log line.
+  A release ignores it and still needs the helper.
+- The helper result has a selftest status, `passed` or `skipped: <reason>`.
+  The compile log line shows it, and the build info (`MA_BUILD_INFO`) of a
+  binary with a helper gets it as `helperSelftest`. A build with no helper
+  has no new field.
 - `sessions dump` shows sideband refs in user text through the display
   handlers (`loadSidebandOnly` with `display`). A paste ref becomes its chip
   label and, when the file is there, the file text in a fenced block. The
@@ -60,6 +75,22 @@ terminal client is being moved out of `minimal-agent-core` into this repo
 
 ### Fixed
 
+- Computer-use helper build (`compile.ts`, `computer-use-helper.ts`,
+  `gen-embedded-plugins.ts`):
+  1. The helper dir `tmp/cu-helper/<target id>/` goes into the compile
+     cleanup before the build. Before, a failed swiftc, codesign or
+     selftest, or a Ctrl-C during swiftc, left the dir behind.
+  2. The toolchain check needs a swiftc file under the developer dir
+     (`DEVELOPER_DIR` or `xcode-select -p`):
+     `Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc` (Xcode) or
+     `usr/bin/swiftc` (Command Line Tools). A stale setting that names a
+     deleted Xcode is now "no toolchain", and the build never runs `xcrun`
+     for it.
+  3. A helper step that cannot start (`Bun.spawn` throws ENOENT) now fails
+     as `compile: computer-use helper for <id>: <step> failed (exit 127)`,
+     not as a raw stack trace.
+  4. `addExtraFiles` fails when the package `files` already has the key with
+     another path. Before, the extra file replaced it with no error.
 - The session title call now uses the credential of the session (core fix:
   side calls read the loader `targetSource`). Before, with 2 stored
   credentials of one provider and `--credential-name` set to the second

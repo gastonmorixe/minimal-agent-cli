@@ -266,7 +266,8 @@ export interface EmbedOptions {
  * @param extra - package name to key to absolute path
  * @returns the packages, in the same order, with the extra files merged
  * @throws EmbedGenError when a package is absent, a key is not inside its
- *   package or is already a module, or a path is not an absolute file
+ *   package, is already a module, or is already a file with another path,
+ *   or a path is not an absolute file
  */
 export function addExtraFiles(
   packages: readonly CollectedPackage[],
@@ -293,6 +294,13 @@ export function addExtraFiles(
       }
       if (pkg.modules.has(key)) {
         throw new EmbedGenError(`${pkg.name}: extra file ${key} is already a module`)
+      }
+      // A run file of the plugins tree (a subprocess command) keeps its path.
+      const have = files.get(key)
+      if (have !== undefined && have !== abs) {
+        throw new EmbedGenError(
+          `${pkg.name}: extra file ${key} is already a file at ${have}, not ${abs}`,
+        )
       }
       files.set(key, abs)
       texts.delete(key)

@@ -528,7 +528,7 @@ Build one `minimal-agent` executable with Bun's `--compile`:
 ```sh
 bun run compile:dev          # core from ../minimal-agent-core (working tree, uncommitted edits included)
 bun run compile:release      # core from the commit pinned in package.json
-bun run compile:release:all  # release build for all 7 macOS and Linux targets in scripts/release/targets.ts
+bun run compile:release:all  # release build for all 7 targets in scripts/release/targets.ts (darwin targets: Mac with Xcode or CLT)
 ```
 
 From the monorepo root, use `bun run cli:compile:dev` or
@@ -540,6 +540,18 @@ release build reads the pinned core commit, and the plugins commit that is
 checked out, with `git archive`: uncommitted edits in core or plugins do not
 go into a release. A release build stops when this repo has uncommitted
 tracked changes.
+
+A darwin target also embeds the computer-use helper of
+`ma-computer-use-plugin`. The build compiles it with `xcrun swiftc`, so the
+darwin targets need a Mac with Xcode or the Command Line Tools. The Linux
+targets need nothing new. So `compile:release:all` builds all 7 targets only
+on a Mac: on Linux, or on a Mac with no swiftc, the release stops at the
+first darwin target. A dev build with no toolchain prints a warning and
+embeds no helper. `MA_COMPILE_NO_HELPER=1` skips the helper in a dev build
+(no swiftc run). A release ignores it. The build info of a binary with a
+helper gets `helperSelftest`: `passed`, or `skipped: <reason>` when the build
+host cannot run the helper arch (for example darwin-x64 on arm64 with no
+Rosetta).
 
 Options go after the script name, for example
 `bun run compile:dev -- --outfile /path/to/minimal-agent`:

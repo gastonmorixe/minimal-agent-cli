@@ -34,7 +34,9 @@
  * adds it as the file `native/build/ComputerUseHelper` of
  * `ma-computer-use-plugin` (see `scripts/computer-use-helper.ts`). A release
  * fails when it cannot build the helper. A dev build prints a warning and
- * embeds no helper.
+ * embeds no helper. `MA_COMPILE_NO_HELPER=1` skips the helper in a dev build
+ * (a release ignores it). The build info gets `helperSelftest` (`passed` or
+ * `skipped: <reason>`) when the binary embeds a helper.
  *
  * Where core comes from
  * ---------------------
@@ -85,7 +87,13 @@ import {
   HELPER_KEY,
   HELPER_PACKAGE,
   HelperBuildError,
+  type HelperResult,
   hasRosetta,
+  helperInfo,
+  helperLogLine,
+  helperOutDir,
+  NO_HELPER_ENV,
+  noHelperRequested,
 } from "./computer-use-helper.ts"
 import { type ExtraFiles, writeEmbeddedPluginsModule } from "./gen-embedded-plugins.ts"
 import { findReleaseTarget, RELEASE_TARGET_IDS, RELEASE_TARGETS } from "./release/targets.ts"
@@ -452,18 +460,30 @@ const HELPER_OUT_ROOT = join(CLI_DIR, "tmp", "cu-helper")
 
 /**
  * Build the computer-use helper for a darwin target and name it as an extra
- * plugin file. Undefined for a non-darwin target, and for a dev build that
- * cannot build it (with a warning). A release that cannot build it fails.
+ * plugin file. No files for a non-darwin target, for a dev build with
+ * `MA_COMPILE_NO_HELPER=1`, and for a dev build that cannot build it (with a
+ * warning). A release that cannot build it fails. `result` gives the
+ * selftest status to the build info.
  */
 async function computerUseHelperFiles(
   mode: Mode,
   dir: string,
   target: string,
-): Promise<ExtraFiles | undefined> {
-  let r: Awaited<ReturnType<typeof buildComputerUseHelper>>
+): Promise<{ extraFiles: ExtraFiles | undefined; result: HelperResult }> {
+  const noHelper = noHelperRequested(process.env)
+  const outDir = helperOutDir(HELPER_OUT_ROOT, target)
+  // Register the output dir before the build: a failed swiftc, codesign or
+  // selftest, or a Ctrl-C during swiftc, then leaves no `tmp/cu-helper/<id>/`.
+  if (outDir !== undefined && !(noHelper && mode === "dev")) cleanupPaths.add(outDir)
+  if (noHelper && mode === "release" && outDir !== undefined) {
+    console.log(
+      `compile: ${NO_HELPER_ENV}=1 is ignored in release mode: a release embeds the helper`,
+    )
+  }
+  let r: HelperResult
   try {
     r = await buildComputerUseHelper(
-      { target, mode, pluginsDir: dir, outRoot: HELPER_OUT_ROOT },
+      { target, mode, pluginsDir: dir, outRoot: HELPER_OUT_ROOT, noHelper },
       {
         run: (cmd, timeoutMs) => runChild(cmd, { capture: true, timeoutMs }),
         toolchainGap: defaultToolchainGap,
@@ -478,25 +498,26 @@ async function computerUseHelperFiles(
   const id = target.replace(/^bun-/, "")
   if (r.kind === "not-darwin") {
     console.log(`compile: computer-use helper: none for ${id}`)
-    return undefined
+    return { extraFiles: undefined, result: r }
+  }
+  if (r.kind === "skipped") {
+    console.log(`compile: computer-use helper: skipped for ${id} (${r.reason}, dev mode)`)
+    return { extraFiles: undefined, result: r }
   }
   if (r.kind === "missing") {
     console.warn(`compile: warning: no computer-use helper for ${id}: ${r.reason}`)
-    return undefined
+    return { extraFiles: undefined, result: r }
   }
-  cleanupPaths.add(dirname(r.path))
-  console.log(
-    `compile: computer-use helper ${r.id} ${r.arch} ${r.size} bytes, codesign flags=${r.flags}, ` +
-      `${r.selftest} -> ${r.path}`,
-  )
-  return { [HELPER_PACKAGE]: { [HELPER_KEY]: r.path } }
+  console.log(`compile: ${helperLogLine(r)}`)
+  return { extraFiles: { [HELPER_PACKAGE]: { [HELPER_KEY]: r.path } }, result: r }
 }
 
 /**
  * Write the embedded plugin table for this build. Dev: the plugins working
  * tree. Release: the archive at {@link pluginsSha}. The table's `buildId`
  * names the three trees, so a new build never reuses old extracted files.
- * A darwin target also gets the computer-use helper as an extra file.
+ * A darwin target also gets the computer-use helper as an extra file, and
+ * `info` gets its selftest status (`helperSelftest`, see {@link helperInfo}).
  */
 async function generateTable(
   info: Record<string, unknown>,
@@ -504,7 +525,9 @@ async function generateTable(
   target: string | undefined,
 ): Promise<string> {
   const dir = pluginsDir ?? PLUGINS_CHECKOUT
-  const extraFiles = await computerUseHelperFiles(mode, dir, target ?? HOST_TARGET)
+  const helper = await computerUseHelperFiles(mode, dir, target ?? HOST_TARGET)
+  const extraFiles = helper.extraFiles
+  Object.assign(info, helperInfo(helper.result))
   const short = (v: unknown): string => String(v).slice(0, 12)
   const buildId =
     `${short(info.cliSha)}-${short(info.coreSha)}-${short(info.pluginsSha)}` +
