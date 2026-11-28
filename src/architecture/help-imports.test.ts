@@ -58,12 +58,14 @@ const ALLOWED_HOST_MODULES: ReadonlyMap<string, RegExp> = new Map([
 
 /**
  * A file of a plugin package (`ma-*-plugin/`) or the plugin loader. Help
- * must not load one. The catalog uses three loader leaf files: `roots.ts`
- * (root tiers), `helpers.ts` (`discoverPackageDirs`), and `PROMPTS.ts`
- * (string helpers that `helpers.ts` imports). None of them imports a plugin.
+ * must not load one. The catalog uses four loader leaf files: `roots.ts`
+ * (root tiers), `helpers.ts` (`discoverPackageDirs`), `PROMPTS.ts` (string
+ * helpers that `helpers.ts` imports), and `subprocess-json.ts` (a pure JSON
+ * parse of a subprocess tool result that `helpers.ts` imports; its one
+ * import is type-only). None of them imports a plugin.
  */
 const PLUGIN_CODE =
-  /\/ma-[a-z0-9-]+-plugin\/|\/src\/plugins\/loader\/(?!helpers\.ts$|roots\.ts$|PROMPTS\.ts$)/u
+  /\/ma-[a-z0-9-]+-plugin\/|\/src\/plugins\/loader\/(?!helpers\.ts$|roots\.ts$|PROMPTS\.ts$|subprocess-json\.ts$)/u
 
 /** Root files: every file that matches {@link ROOT_PATTERNS}, no tests. */
 function rootFiles(): string[] {
